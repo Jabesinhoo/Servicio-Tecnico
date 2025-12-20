@@ -32,7 +32,7 @@ export default function Register() {
 
           <p className="text-center text-sm text-gray-600 dark:text-gray-300">
             ¿Ya tienes cuenta?{" "}
-            <Link className="font-semibold text-blue-600 hover:underline" to="/login">
+            <Link className="font-semibold text-blue-600 hover:underline" to="/inicio">
               Inicia sesión
             </Link>
           </p>
