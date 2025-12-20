@@ -7,7 +7,6 @@ import { useState } from "react";
 export default function Register() {
   useDocumentTitle("Sistema Técnicos | Registro");
 
-  // Campos iguales a Usuario.js (rol NO se pide: queda por defecto "usuario")
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [celular, setCelular] = useState("");
@@ -15,14 +14,12 @@ export default function Register() {
 
   const onSubmit = (e) => {
     e.preventDefault();
-    // Luego: POST /api/auth/register con { nombre, email, celular, password }
-    // rol NO se envía (o si se envía, el backend lo ignora y pone "usuario")
     console.log({ nombre, email, celular, password });
   };
 
   return (
     <AuthLayout>
-      <AuthCard title="Registro" subtitle="Crea tu cuenta (rol por defecto: usuario)">
+      <AuthCard title="Registro" subtitle="Crea tu cuenta">
         <form onSubmit={onSubmit} className="space-y-4">
           <input className="input" placeholder="Nombre completo" value={nombre} onChange={(e) => setNombre(e.target.value)} />
           <input className="input" placeholder="Correo" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
