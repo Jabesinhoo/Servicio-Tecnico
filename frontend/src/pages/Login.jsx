@@ -1,46 +1,123 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../layouts/AuthLayout";
 import AuthCard from "../components/AuthCard";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function Login() {
   useDocumentTitle("Sistema Técnicos | Iniciar sesión");
+  const navigate = useNavigate();
 
-  const [identifier, setIdentifier] = useState(""); // nombre o correo
-  const [password, setPassword] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const passwordRef = useRef(null);
 
-  const onSubmit = (e) => {
+  const [loading, setLoading] = useState(false);
+
+  // ✅ Mensajes
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Auto-ocultar mensajes (opcional)
+  useEffect(() => {
+    if (!error && !success) return;
+    const t = setTimeout(() => {
+      setError("");
+      setSuccess("");
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [error, success]);
+
+  const onSubmit = async (e) => {
     e.preventDefault();
-    // Luego: POST /api/auth/login con { identifier, password }
-    console.log({ identifier, password });
+    setError("");
+    setSuccess("");
+
+    const password = passwordRef.current?.value || "";
+
+    if (!identifier.trim() || !password) {
+      setError("Completa usuario/correo y contraseña.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Si luego migras a cookie httpOnly: agrega -> credentials: "include",
+        body: JSON.stringify({ identifier, password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data?.message || "Credenciales inválidas.");
+        return;
+      }
+
+      // Si usas token en JSON:
+      if (data?.token) localStorage.setItem("token", data.token);
+      if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
+
+      setSuccess("Sesión iniciada correctamente. Redirigiendo...");
+
+      // Limpieza de contraseña del input
+      if (passwordRef.current) passwordRef.current.value = "";
+
+      // Pequeña pausa para que el usuario vea el mensaje
+      setTimeout(() => navigate("/dashboard"), 700);
+    } catch {
+      setError("Error de red o backend apagado.");
+    } finally {
+      setLoading(false);
+      // Limpieza extra por higiene
+      if (passwordRef.current) passwordRef.current.value = "";
+    }
   };
 
   return (
     <AuthLayout>
-      <AuthCard
-        title="Iniciar sesión"
-        subtitle="Ingresa con tu nombre de usuario o tu correo"
-      >
+      <AuthCard title="Iniciar sesión" subtitle="Ingresa con tu nombre de usuario o tu correo">
+        {/* ✅ Mensajes */}
+        {(error || success) && (
+          <div className="mb-4 space-y-2">
+            {error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
+                {success}
+              </div>
+            )}
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="space-y-4">
           <input
             className="input"
-            placeholder="Nombre o correo"
+            placeholder="Usuario o correo"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             autoComplete="username"
           />
+
+          {/* ✅ Uncontrolled (sin value={password}) */}
           <input
+            ref={passwordRef}
             className="input"
             type="password"
             placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
           />
 
-          <button className="w-full rounded-lg bg-blue-600 py-2 font-semibold text-white hover:bg-blue-700">
-            Entrar
+          <button
+            disabled={loading}
+            className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {loading ? "Entrando..." : "Entrar"}
           </button>
 
           <p className="text-center text-sm text-gray-600 dark:text-gray-300">
