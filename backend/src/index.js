@@ -34,6 +34,8 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+// Agrega esta ruta
+app.use('/api/dashboard', require('./routes/dashboard.routes'));
 
 app.get("/", (req, res) => {
   res.send("Backend firme");

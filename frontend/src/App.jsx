@@ -1,4 +1,4 @@
-import AppRouter from "../../backend/src/routes/AppRouter";
+import AppRouter from "./AppRouter";
 
 export default function App() {
   return <AppRouter />;

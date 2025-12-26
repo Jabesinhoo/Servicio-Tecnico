@@ -3,23 +3,52 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 const ThemeContext = createContext(null);
 
 function getInitialTheme() {
+  // 1. Verificar localStorage
   const saved = localStorage.getItem("theme");
   if (saved === "dark" || saved === "light") return saved;
-  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+  
+  // 2. Verificar preferencia del sistema
+  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  
+  // 3. Por defecto
+  return "light";
 }
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(getInitialTheme);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const root = window.document.documentElement;
+    
+    // Remover clases anteriores
+    root.classList.remove("light", "dark");
+    
+    // Agregar nueva clase
+    root.classList.add(theme);
+    
+    // Guardar en localStorage
     localStorage.setItem("theme", theme);
-  }, [theme]);
+    
+    console.log("Tema aplicado:", theme); // Para debug
+  }, [theme, mounted]);
 
   const value = useMemo(
     () => ({
       theme,
-      toggleTheme: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
+      toggleTheme: () => {
+        console.log("Cambiando tema de", theme, "a", theme === "dark" ? "light" : "dark");
+        setTheme((t) => (t === "dark" ? "light" : "dark"));
+      },
+      setTheme,
     }),
     [theme]
   );
