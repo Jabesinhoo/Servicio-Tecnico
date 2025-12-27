@@ -1,7 +1,8 @@
+import { Outlet } from "react-router-dom";
 import ThemeToggle from "../components/ThemeToggle";
 import { Cog, Wrench, Hammer } from "lucide-react";
 
-export default function AuthLayout({ children }) {
+export default function AuthLayout() {
   return (
     <div
       className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden
@@ -18,8 +19,10 @@ export default function AuthLayout({ children }) {
         <Hammer className="absolute right-16 bottom-10 h-44 w-44 -rotate-6" />
       </div>
 
-      {/* Contenido */}
-      <div className="relative z-10 w-full px-4 py-10">{children}</div>
+      {/* ⬇️ AQUÍ SE RENDERIZA LOGIN / REGISTER */}
+      <div className="relative z-10 w-full px-4 py-10">
+        <Outlet />
+      </div>
     </div>
   );
 }

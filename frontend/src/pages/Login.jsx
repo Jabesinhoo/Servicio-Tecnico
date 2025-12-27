@@ -1,5 +1,4 @@
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "../layouts/AuthLayout";
 import AuthCard from "../components/AuthCard";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useEffect, useRef, useState } from "react";
@@ -62,72 +61,66 @@ export default function Login() {
 
       setSuccess("Sesión iniciada correctamente. Redirigiendo...");
 
-      // Limpieza de contraseña del input
       if (passwordRef.current) passwordRef.current.value = "";
 
-      // Pequeña pausa para que el usuario vea el mensaje
       setTimeout(() => navigate("/dashboard"), 700);
     } catch {
       setError("Error de red o backend apagado.");
     } finally {
       setLoading(false);
-      // Limpieza extra por higiene
       if (passwordRef.current) passwordRef.current.value = "";
     }
   };
 
   return (
-    <AuthLayout>
-      <AuthCard title="Iniciar sesión" subtitle="Ingresa con tu nombre de usuario o tu correo">
-        {/* ✅ Mensajes */}
-        {(error || success) && (
-          <div className="mb-4 space-y-2">
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
-                {success}
-              </div>
-            )}
-          </div>
-        )}
+    <AuthCard title="Iniciar sesión" subtitle="Ingresa con tu nombre de usuario o tu correo">
+      {/* ✅ Mensajes */}
+      {(error || success) && (
+        <div className="mb-4 space-y-2">
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
+              {success}
+            </div>
+          )}
+        </div>
+      )}
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <input
-            className="input"
-            placeholder="Usuario o correo"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            autoComplete="username"
-          />
+      <form onSubmit={onSubmit} className="space-y-4">
+        <input
+          className="input"
+          placeholder="Usuario o correo"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          autoComplete="username"
+        />
 
-          {/* ✅ Uncontrolled (sin value={password}) */}
-          <input
-            ref={passwordRef}
-            className="input"
-            type="password"
-            placeholder="Contraseña"
-            autoComplete="current-password"
-          />
+        <input
+          ref={passwordRef}
+          className="input"
+          type="password"
+          placeholder="Contraseña"
+          autoComplete="current-password"
+        />
 
-          <button
-            disabled={loading}
-            className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </button>
+        <button
+          disabled={loading}
+          className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {loading ? "Entrando..." : "Entrar"}
+        </button>
 
-          <p className="text-center text-sm text-gray-600 dark:text-gray-300">
-            ¿No tienes cuenta?{" "}
-            <Link className="font-semibold text-blue-600 hover:underline" to="/registro">
-              Regístrate
-            </Link>
-          </p>
-        </form>
-      </AuthCard>
-    </AuthLayout>
+        <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+          ¿No tienes cuenta?{" "}
+          <Link className="font-semibold text-blue-600 hover:underline" to="/register">
+            Regístrate
+          </Link>
+        </p>
+      </form>
+    </AuthCard>
   );
 }
