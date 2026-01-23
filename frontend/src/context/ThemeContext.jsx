@@ -38,14 +38,12 @@ export function ThemeProvider({ children }) {
     // Guardar en localStorage
     localStorage.setItem("theme", theme);
     
-    console.log("Tema aplicado:", theme); // Para debug
   }, [theme, mounted]);
 
   const value = useMemo(
     () => ({
       theme,
       toggleTheme: () => {
-        console.log("Cambiando tema de", theme, "a", theme === "dark" ? "light" : "dark");
         setTheme((t) => (t === "dark" ? "light" : "dark"));
       },
       setTheme,

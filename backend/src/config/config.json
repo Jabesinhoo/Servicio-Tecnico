@@ -1,11 +1,13 @@
-{
+  {
   "development": {
-    "username": "root",
-    "password": null,
-    "database": "database_development",
+    "username": "postgres",
+    "password": "Diosmio07",
+    "database": "tecnicos",
     "host": "127.0.0.1",
-    "dialect": "mysql"
+    "port": 5432,
+    "dialect": "postgres"
   },
+
   "test": {
     "username": "root",
     "password": null,

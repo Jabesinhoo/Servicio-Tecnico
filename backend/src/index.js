@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const sequelize = require("./config/database");
+
 require("dotenv").config();
 
 const authRoutes = require("./routes/auth.routes");
@@ -36,10 +38,14 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 // Agrega esta ruta
 app.use('/api/dashboard', require('./routes/dashboard.routes'));
+app.use("/api", require("./routes/catalog.routes"));
 
 app.get("/", (req, res) => {
   res.send("Backend firme");
 });
+sequelize.authenticate()
+  .then(() => console.log("✅ PostgreSQL conectado (Sequelize)"))
+  .catch((err) => console.error("❌ Error conexión DB:", err));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`BACKEND firme en http://localhost:${PORT}`));

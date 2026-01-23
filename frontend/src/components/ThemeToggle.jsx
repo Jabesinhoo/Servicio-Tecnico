@@ -9,14 +9,19 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="fixed right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-xl
-                 border border-gray-300 bg-white/70 text-gray-800 backdrop-blur
-                 hover:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500
-                 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-100 dark:hover:bg-gray-900"
+      className="fixed right-6 top-6 z-50 inline-flex h-12 w-12 items-center justify-center rounded-xl
+                 border border-gray-200 bg-white/80 text-gray-800 backdrop-blur-md shadow-lg
+                 hover:bg-white hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-500
+                 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-100 dark:hover:bg-gray-800
+                 transition-all duration-300"
       aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
       title={isDark ? "Modo claro" : "Modo oscuro"}
     >
-      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      {isDark ? (
+        <Sun className="h-6 w-6 transform transition-transform duration-300" />
+      ) : (
+        <Moon className="h-6 w-6 transform transition-transform duration-300" />
+      )}
     </button>
   );
 }

@@ -1,197 +1,254 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../hooks/useAuth';
-import api from '../../services/api';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
+import api from "../../services/api";
+import {
+  Activity,
+  AlertTriangle,
+  Clock,
+  Package,
+  ShoppingCart,
+  Wrench,
+} from "lucide-react";
 
 const Dashboard = () => {
-    const { user } = useAuth();
-    const [stats, setStats] = useState({
-        totalVentas: 0,
-        totalServicios: 0,
-        serviciosPendientes: 0,
-        stockBajo: 0,
-    });
-    const [loading, setLoading] = useState(true);
-    const [recentActivities, setRecentActivities] = useState([]);
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-    useEffect(() => {
-        fetchDashboardData();
-    }, []);
+  const [stats, setStats] = useState({
+    totalVentas: 0,
+    totalServicios: 0,
+    serviciosPendientes: 0,
+    stockBajo: 0,
+  });
 
-    const fetchDashboardData = async () => {
-        try {
-            setLoading(true);
-            
-            // En un sistema real, harías una sola llamada al backend que devuelva todos los datos
-            const [statsRes, activitiesRes] = await Promise.all([
-                api.get('/dashboard/stats'),
-                api.get('/dashboard/recent-activities')
-            ]);
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-            setStats(statsRes.data);
-            setRecentActivities(activitiesRes.data);
-        } catch (error) {
-            console.error('Error fetching dashboard data:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const welcomeName = useMemo(() => {
+    // Ajusta esto según tu user real
+    return user?.nombres || user?.usuario || user?.email || "Usuario";
+  }, [user]);
 
-    const getWelcomeMessage = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Buenos días';
-        if (hour < 19) return 'Buenas tardes';
-        return 'Buenas noches';
-    };
+  useEffect(() => {
+    fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-            </div>
-        );
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      // ✅ importante: tus rutas reales son /api/dashboard/...
+      const [statsRes, activitiesRes] = await Promise.all([
+        api.get("/api/dashboard/stats"),
+        api.get("/api/dashboard/recent-activities"),
+      ]);
+
+      setStats(statsRes.data);
+      setRecentActivities(activitiesRes.data);
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+
+      // Si el backend responde 401/403, mandamos a login
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        navigate("/login");
+        return;
+      }
+
+      setError("No se pudo cargar la información del dashboard.");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const getWelcomeMessage = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Buenos días";
+    if (hour < 19) return "Buenas tardes";
+    return "Buenas noches";
+  };
+
+  const StatCard = ({ title, value, icon: Icon, accent = "sky" }) => {
+    const accentStyles =
+      accent === "emerald"
+        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
+        : accent === "amber"
+        ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+        : accent === "rose"
+        ? "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
+        : "bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300";
 
     return (
-        <div>
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-900">
-                    {getWelcomeMessage()}, {user?.nombres}!
-                </h1>
-                <p className="mt-2 text-gray-600">
-                    Aquí tienes un resumen de tu actividad en el sistema.
-                </p>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm hover:shadow-md transition overflow-hidden">
+        <div className="p-5">
+          <div className="flex items-center gap-4">
+            <div
+              className={`w-11 h-11 rounded-xl flex items-center justify-center ${accentStyles}`}
+            >
+              <Icon className="w-5 h-5" />
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                        <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                                <svg className="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt className="text-sm font-medium text-gray-500 truncate">
-                                        Ventas Totales
-                                    </dt>
-                                    <dd className="text-lg font-medium text-gray-900">
-                                        {stats.totalVentas}
-                                    </dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                        <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                                <svg className="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                </svg>
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt className="text-sm font-medium text-gray-500 truncate">
-                                        Servicios Activos
-                                    </dt>
-                                    <dd className="text-lg font-medium text-gray-900">
-                                        {stats.totalServicios}
-                                    </dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                        <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                                <svg className="h-6 w-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt className="text-sm font-medium text-gray-500 truncate">
-                                        Pendientes
-                                    </dt>
-                                    <dd className="text-lg font-medium text-gray-900">
-                                        {stats.serviciosPendientes}
-                                    </dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                        <div className="flex items-center">
-                            <div className="flex-shrink-0">
-                                <svg className="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.998-.833-2.732 0L4.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                                </svg>
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt className="text-sm font-medium text-gray-500 truncate">
-                                        Stock Bajo
-                                    </dt>
-                                    <dd className="text-lg font-medium text-gray-900">
-                                        {stats.stockBajo}
-                                    </dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">
+                {title}
+              </p>
+              <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                {value}
+              </p>
             </div>
-
-            {/* Recent Activities */}
-            <div className="bg-white shadow rounded-lg">
-                <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-                    <h3 className="text-lg font-medium leading-6 text-gray-900">
-                        Actividad Reciente
-                    </h3>
-                </div>
-                <div className="px-4 py-5 sm:p-6">
-                    {recentActivities.length > 0 ? (
-                        <ul className="divide-y divide-gray-200">
-                            {recentActivities.map((activity, index) => (
-                                <li key={index} className="py-4">
-                                    <div className="flex space-x-3">
-                                        <div className="flex-shrink-0">
-                                            <svg className="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={activity.icon} />
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <div className="flex items-center justify-between">
-                                                <h3 className="text-sm font-medium">{activity.title}</h3>
-                                                <p className="text-sm text-gray-500">{activity.time}</p>
-                                            </div>
-                                            <p className="text-sm text-gray-500">{activity.description}</p>
-                                            {activity.user && (
-                                                <p className="text-xs text-gray-400">Por: {activity.user}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className="text-gray-500 text-center py-4">No hay actividades recientes</p>
-                    )}
-                </div>
-            </div>
+          </div>
         </div>
+
+        <div className="h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500" />
+      </div>
     );
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-500" />
+          <span className="font-semibold">Cargando dashboard...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500" />
+        <div className="p-6 sm:p-7 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+              {getWelcomeMessage()}, {welcomeName}!
+            </h1>
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
+              Aquí tienes un resumen general del sistema técnico.
+            </p>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <Activity className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+            <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+              Panel de control
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-2xl p-4 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5" />
+          <span className="font-semibold">{error}</span>
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Ventas Totales"
+          value={stats.totalVentas}
+          icon={ShoppingCart}
+          accent="emerald"
+        />
+
+        <StatCard
+          title="Servicios Activos"
+          value={stats.totalServicios}
+          icon={Wrench}
+          accent="sky"
+        />
+
+        <StatCard
+          title="Pendientes"
+          value={stats.serviciosPendientes}
+          icon={Clock}
+          accent="amber"
+        />
+
+        <StatCard
+          title="Stock Bajo"
+          value={stats.stockBajo}
+          icon={Package}
+          accent="rose"
+        />
+      </div>
+
+      {/* Recent Activities */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500" />
+
+        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+            <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+              Actividad Reciente
+            </h3>
+          </div>
+
+          <button
+            onClick={fetchDashboardData}
+            className="text-sm font-bold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition"
+          >
+            Actualizar
+          </button>
+        </div>
+
+        <div className="p-6">
+          {recentActivities?.length > 0 ? (
+            <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+              {recentActivities.map((activity, index) => (
+                <li key={index} className="py-4">
+                  <div className="flex gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                      <Activity className="w-5 h-5 text-slate-500 dark:text-slate-300" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white truncate">
+                          {activity.title || "Actividad"}
+                        </h4>
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {activity.time || ""}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                        {activity.description || "Sin descripción"}
+                      </p>
+
+                      {activity.user && (
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                          Por: <span className="font-semibold">{activity.user}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-center py-10">
+              <p className="text-slate-500 dark:text-slate-400 font-semibold">
+                No hay actividades recientes
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Dashboard;
