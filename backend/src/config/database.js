@@ -1,13 +1,23 @@
 const { Sequelize } = require("sequelize");
-require("dotenv").config();
 
+// 🔎 DEBUG DURO
+console.log("ENV CHECK →", {
+  DB_HOST: process.env.DB_HOST,
+  DB_PORT: process.env.DB_PORT,
+  DB_USER: process.env.DB_USER,
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_NAME: process.env.DB_NAME,
+  TYPE_PASSWORD: typeof process.env.DB_PASSWORD,
+});
+
+// ⚠️ FUERZA string (blindaje)
 const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
+  String(process.env.DB_NAME),
+  String(process.env.DB_USER),
+  String(process.env.DB_PASSWORD),
   {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT || 5432,
+    host: String(process.env.DB_HOST),
+    port: Number(process.env.DB_PORT),
     dialect: "postgres",
     logging: false,
   }
