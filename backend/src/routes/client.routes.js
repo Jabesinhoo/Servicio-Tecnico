@@ -4,11 +4,11 @@ const router = express.Router();
 const { authRequired } = require('../middlewares/auth.middleware');
 const clientController = require('../controllers/client.controller');
 
-// Todas las rutas requieren autenticación
 router.use(authRequired);
 
 // Rutas GET
 router.get('/clients', clientController.getAll);
+router.get('/clients/search', clientController.search);
 router.get('/clients/:id', clientController.getById);
 router.get('/clients/:id/stats', clientController.getClientStats);
 router.get('/clients/:id/service-orders', clientController.getClientServiceOrders);

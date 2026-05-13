@@ -1,9 +1,9 @@
 // src/pages/Dashboard/servicios/AssignTechModal.jsx
 import React, { useState, useEffect } from 'react';
 import api from '../../../services/api';  // ← Ruta corregida
-import { X } from 'lucide-react';
+import { X, UserCheck } from 'lucide-react';
 
-const AssignTechModal = ({ isOpen, onClose, onSubmit }) => {
+const AssignTechModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
   const [tecnicos, setTecnicos] = useState([]);
   const [selectedTech, setSelectedTech] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,16 +21,24 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit }) => {
       setTecnicos(res.data || []);
     } catch (error) {
       console.error('Error fetching tecnicos:', error);
-      setTecnicos([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (selectedTech) {
-      onSubmit(selectedTech);
+    if (!selectedTech) return;
+    
+    setLoading(true);
+    try {
+      await onSubmit(servicioId, selectedTech);
+      onClose();
+      setSelectedTech('');
+    } catch (error) {
+      console.error('Error assigning tech:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -51,8 +59,11 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit }) => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Seleccionar Técnico
             </label>
-            {loading ? (
-              <div className="text-center py-4">Cargando técnicos...</div>
+            {loading && tecnicos.length === 0 ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-sm text-gray-500 mt-2">Cargando técnicos...</p>
+              </div>
             ) : (
               <select
                 value={selectedTech}
@@ -74,15 +85,16 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={!selectedTech || loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
+              <UserCheck className="w-4 h-4" />
               Asignar
             </button>
           </div>

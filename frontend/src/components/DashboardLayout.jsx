@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import ThemeToggle from './ThemeToggle';
+import { Calendar } from 'lucide-react';
+
 import { 
   LayoutDashboard, 
   Wrench, 
@@ -10,6 +12,8 @@ import {
   BarChart3,
   Users,
   UserCog,
+  UserCheck,
+  FileText,  // ← Agregar FileText aquí
   Menu, 
   LogOut, 
   User,
@@ -46,18 +50,22 @@ const DashboardLayout = () => {
       { name: 'Servicios', href: '/dashboard/servicios', icon: Wrench },
       { name: 'Clientes', href: '/dashboard/clientes', icon: Users },
       { name: 'Inventarios', href: '/dashboard/inventarios', icon: Package },
+      { name: 'Tipos de Servicio', href: '/dashboard/tipos-servicio', icon: FileText },
       { name: 'Reportes', href: '/dashboard/reportes', icon: BarChart3 },
+      { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar },
+
     ];
 
-    // Solo admin puede ver Usuarios
+    // Solo admin puede ver Usuarios y Técnicos
     if (user?.rol === 'admin') {
       return [
         ...commonNav,
+        { name: 'Técnicos', href: '/dashboard/tecnicos', icon: UserCheck },
         { name: 'Usuarios', href: '/dashboard/usuarios', icon: UserCog },
       ];
     }
 
-    // Técnicos ven sus cosas
+    // Técnicos ven solo lo suyo
     if (user?.rol === 'tecnico') {
       return commonNav;
     }

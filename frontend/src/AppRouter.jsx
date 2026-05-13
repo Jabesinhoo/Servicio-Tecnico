@@ -16,9 +16,11 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import Servicios from './pages/Dashboard/Servicios';
 import Inventarios from './pages/Dashboard/Inventarios';
 import Reportes from './pages/Dashboard/Reportes';
-import Clientes from './pages/Dashboard/Clientes';  
+import Clientes from './pages/Dashboard/Clientes';
 import Tecnicos from './pages/Dashboard/Tecnicos';
 import Usuarios from './pages/Dashboard/Usuarios';
+import TiposServicio from './pages/Dashboard/TiposServicio';
+import Agenda from './pages/Dashboard/Agenda';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -53,10 +55,12 @@ const AppRouter = () => {
           <Route index element={<Dashboard />} />
           <Route path="servicios" element={<Servicios />} />
           <Route path="inventarios" element={<Inventarios />} />
-          <Route path="tecnicos" element={<Tecnicos />} />
           <Route path="reportes" element={<Reportes />} />
           <Route path="clientes" element={<Clientes />} />
+          <Route path="tecnicos" element={<Tecnicos />} />
           <Route path="usuarios" element={<Usuarios />} />
+          <Route path="tipos-servicio" element={<TiposServicio />} />
+          <Route path="agenda" element={<Agenda />} />
 
         </Route>
 

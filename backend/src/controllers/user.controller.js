@@ -6,16 +6,24 @@ const bcrypt = require('bcryptjs');
 exports.getAll = async (req, res) => {
   try {
     const { rol } = req.query;
+    
+    // Roles válidos en la base de datos
+    const validRoles = ['admin', 'tecnico', 'usuario', 'ventas', 'inventario', 'facturacion'];
+    
     let query = `
       SELECT id, nombre1, nombre2, apellidos, usuario, email, cedula, celular, rol, activo, "createdAt"
       FROM usuarios 
       WHERE 1=1
     `;
     const params = [];
+    let paramIndex = 1;
     
-    if (rol) {
-      query += ` AND rol = $1`;
+    if (rol && validRoles.includes(rol)) {
+      query += ` AND rol = $${paramIndex++}`;
       params.push(rol);
+    } else if (rol && !validRoles.includes(rol)) {
+      // Si el rol no es válido, devolver array vacío
+      return res.json([]);
     }
     
     query += ` ORDER BY nombre1 ASC`;

@@ -1,5 +1,4 @@
-// src/pages/Dashboard/Servicios.jsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import ServicioTable from './servicios/ServicioTable';
@@ -7,55 +6,37 @@ import ServicioFilters from './servicios/ServicioFilters';
 import ServicioDetail from './servicios/ServicioDetail';
 import ServicioForm from './servicios/ServicioForm';
 import AssignTechModal from './servicios/AssignTechModal';
+import AddPartModal from './servicios/components/AddPartModal'; 
+import ConfirmModal from '../../components/ui/ConfirmModal';
 import { Plus, RefreshCw } from 'lucide-react';
+import { useServicios } from './servicios/hooks/useServicios';
 
 const Servicios = () => {
   const { user } = useAuth();
-  const [servicios, setServicios] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ estado: '', search: '' });
+  const {
+    servicios,
+    loading,
+    total,
+    filters,
+    setFilters,
+    fetchServicios,
+    createServicio,
+    changeStatus,
+    assignTech,
+    deleteServicio
+  } = useServicios();
+
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);  // ← CORREGIDO: faltaba el =
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showAddPartModal, setShowAddPartModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedServicio, setSelectedServicio] = useState(null);
   const [selectedServicioId, setSelectedServicioId] = useState(null);
 
-  const fetchServicios = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (filters.estado) params.append('estado', filters.estado);
-      
-      const res = await api.get(`/api/service-orders?${params.toString()}`);
-      let data = res.data.data || [];
-      
-      if (filters.search) {
-        data = data.filter(s => 
-          s.codigo_os?.toLowerCase().includes(filters.search.toLowerCase()) ||
-          s.cliente_nombre?.toLowerCase().includes(filters.search.toLowerCase())
-        );
-      }
-      
-      setServicios(data);
-    } catch (error) {
-      console.error('Error fetching servicios:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
-
-  useEffect(() => {
-    fetchServicios();
-  }, [fetchServicios]);
-
-  const handleViewDetail = async (id) => {
-    try {
-      const res = await api.get(`/api/service-orders/${id}`);
-      setSelectedServicio(res.data);
-      setShowDetailModal(true);
-    } catch (error) {
-      console.error('Error fetching servicio detail:', error);
-    }
+  const handleViewDetail = (id) => {
+    setSelectedServicioId(id);
+    setShowDetailModal(true);
   };
 
   const handleAssignTech = (id) => {
@@ -63,41 +44,21 @@ const Servicios = () => {
     setShowAssignModal(true);
   };
 
-  const handleAssignTechSubmit = async (tecnicoId) => {
-    try {
-      await api.patch(`/api/service-orders/${selectedServicioId}/assign`, { tecnico_id: tecnicoId });
-      await fetchServicios();
-      setShowAssignModal(false);
-    } catch (error) {
-      console.error('Error assigning tech:', error);
-    }
+  const handleAddPart = (id) => {
+    setSelectedServicioId(id);
+    setShowAddPartModal(true);
   };
 
-  const handleStartService = async (id) => {
-    try {
-      await api.patch(`/api/service-orders/${id}/status`, { estado: 'en_ejecucion' });
-      await fetchServicios();
-    } catch (error) {
-      console.error('Error starting service:', error);
-    }
+  const handleDeleteClick = (servicio) => {
+    setSelectedServicio(servicio);
+    setShowConfirmModal(true);
   };
 
-  const handleCompleteService = async (id) => {
-    try {
-      await api.patch(`/api/service-orders/${id}/status`, { estado: 'cerrada' });
-      await fetchServicios();
-    } catch (error) {
-      console.error('Error completing service:', error);
-    }
-  };
-
-  const handleCreateService = async (data) => {
-    try {
-      await api.post('/api/service-orders', data);
-      await fetchServicios();
-      setShowCreateModal(false);
-    } catch (error) {
-      console.error('Error creating service:', error);
+  const handleConfirmDelete = async () => {
+    if (selectedServicio) {
+      await deleteServicio(selectedServicio.id);
+      setShowConfirmModal(false);
+      setSelectedServicio(null);
     }
   };
 
@@ -110,7 +71,9 @@ const Servicios = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Órdenes de Servicio</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Gestiona los servicios técnicos</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            Gestiona los servicios técnicos - Total: {total} servicios
+          </p>
         </div>
         <div className="flex gap-3">
           <button
@@ -136,7 +99,7 @@ const Servicios = () => {
       <ServicioFilters
         filters={filters}
         onFilterChange={setFilters}
-        onClearFilters={() => setFilters({ estado: '', search: '' })}
+        onClearFilters={() => setFilters({ estado: '', tecnico_id: '', page: 1, limit: 20 })}
         onSearch={fetchServicios}
       />
 
@@ -147,8 +110,9 @@ const Servicios = () => {
           loading={loading}
           onViewDetail={handleViewDetail}
           onAssignTech={handleAssignTech}
-          onStartService={handleStartService}
-          onCompleteService={handleCompleteService}
+          onAddPart={handleAddPart}
+          onChangeStatus={changeStatus}
+          onDelete={handleDeleteClick}
           userRole={userRole}
         />
       </div>
@@ -157,20 +121,57 @@ const Servicios = () => {
       <ServicioForm
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreateService}
+        onSubmit={createServicio}
       />
 
       <ServicioDetail
         isOpen={showDetailModal}
-        onClose={() => setShowDetailModal(false)}
-        servicio={selectedServicio}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedServicioId(null);
+        }}
+        servicioId={selectedServicioId}
         onRefresh={fetchServicios}
+        onAssignTech={handleAssignTech}
+        onAddPart={handleAddPart}
+        onChangeStatus={changeStatus}
       />
 
       <AssignTechModal
         isOpen={showAssignModal}
-        onClose={() => setShowAssignModal(false)}
-        onSubmit={handleAssignTechSubmit}
+        onClose={() => {
+          setShowAssignModal(false);
+          setSelectedServicioId(null);
+        }}
+        onSubmit={assignTech}
+        servicioId={selectedServicioId}
+      />
+
+      <AddPartModal
+        isOpen={showAddPartModal}
+        onClose={() => {
+          setShowAddPartModal(false);
+          setSelectedServicioId(null);
+        }}
+        onSubmit={async (id, data) => {
+          await api.post(`/api/service-orders/${id}/parts`, data);
+          await fetchServicios();
+        }}
+        servicioId={selectedServicioId}
+      />
+
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        onClose={() => {
+          setShowConfirmModal(false);
+          setSelectedServicio(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Orden de Servicio"
+        message={`¿Estás seguro de eliminar la OS "${selectedServicio?.codigo_os}"?`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
       />
     </div>
   );

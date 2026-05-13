@@ -1,238 +1,429 @@
 // src/pages/Dashboard/servicios/ServicioDetail.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { X, User, Calendar, Clock, Package, Wrench, CheckCircle, AlertCircle, MapPin, Building, Phone, Mail, FileText, DollarSign } from 'lucide-react';
 import api from '../../../services/api';
-import { X, User, Clock, Calendar, CheckCircle, AlertCircle, Wrench, Package } from 'lucide-react';
-import StatusBadge from './StatusBadge';
+import StatusBadge from './components/StatusBadge';
+import MaterialesPanel from './components/MaterialesPanel';
 
-const ServicioDetail = ({ isOpen, onClose, servicio, onRefresh }) => {
-  const [loading, setLoading] = useState(false);
-  const [repuestos, setRepuestos] = useState([]);
-  const [showAddPart, setShowAddPart] = useState(false);
-  const [newPart, setNewPart] = useState({ product_id: '', cantidad: 1, observaciones: '' });
+const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
+  const [servicio, setServicio] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('info');
+  const [tecnicos, setTecnicos] = useState([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showAgendarModal, setShowAgendarModal] = useState(false);
+  const [agendamiento, setAgendamiento] = useState({
+    fecha_agendada: '',
+    hora_inicio: '09:00',
+    duracion_estimada: 60
+  });
 
-  if (!isOpen || !servicio) return null;
+  useEffect(() => {
+    if (isOpen && servicioId) {
+      fetchServicio();
+      fetchTecnicos();
+    }
+  }, [isOpen, servicioId]);
 
-  const handleAddPart = async (e) => {
-    e.preventDefault();
+  const fetchServicio = async () => {
     try {
       setLoading(true);
-      await api.post(`/api/service-orders/${servicio.id}/parts`, newPart);
-      setShowAddPart(false);
-      setNewPart({ product_id: '', cantidad: 1, observaciones: '' });
-      onRefresh();
+      const res = await api.get(`/api/service-orders/${servicioId}`);
+      setServicio(res.data);
     } catch (error) {
-      console.error('Error adding part:', error);
-      alert('Error al agregar repuesto');
+      console.error('Error fetching servicio:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTecnicos = async () => {
+    try {
+      const res = await api.get('/api/users?rol=tecnico');
+      setTecnicos(res.data || []);
+    } catch (error) {
+      console.error('Error fetching tecnicos:', error);
+    }
+  };
+
+  const handleAssignTech = async (tecnicoId) => {
+    try {
+      await api.patch(`/api/service-orders/${servicioId}/assign`, { tecnico_id: tecnicoId });
+      await fetchServicio();
+      setShowAssignModal(false);
+      onRefresh();
+    } catch (error) {
+      console.error('Error assigning tech:', error);
+    }
+  };
+
+  const handleAgendar = async () => {
+    try {
+      await api.put(`/api/agenda/servicio/${servicioId}`, agendamiento);
+      await fetchServicio();
+      setShowAgendarModal(false);
+      onRefresh();
+    } catch (error) {
+      console.error('Error agendando:', error);
     }
   };
 
   const handleChangeStatus = async (newStatus) => {
     try {
-      setLoading(true);
-      await api.patch(`/api/service-orders/${servicio.id}/status`, { estado: newStatus });
+      await api.patch(`/api/service-orders/${servicioId}/status`, { estado: newStatus });
+      await fetchServicio();
       onRefresh();
     } catch (error) {
       console.error('Error changing status:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
+  const tabs = [
+    { id: 'info', label: 'Información', icon: FileText },
+    { id: 'materiales', label: 'Materiales', icon: Package },
+    { id: 'tiempos', label: 'Tiempos', icon: Clock },
+  ];
+
+  if (!isOpen) return null;
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full p-8">
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!servicio) return null;
+
+  const esAdmin = true; // TODO: obtener del usuario
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {servicio.codigo_os}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Creado: {new Date(servicio.createdAt).toLocaleString()}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <StatusBadge status={servicio.estado} />
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {servicio.codigo_os}
+                </h3>
+                <StatusBadge status={servicio.estado} />
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Creado: {new Date(servicio.createdAt).toLocaleString()}
+              </p>
+            </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Información del Cliente */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-              <User className="w-4 h-4" />
-              Cliente
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Nombre/Razón Social</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.cliente_nombre || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Documento</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.cliente_documento || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Teléfono</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.cliente_telefono || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Email</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.cliente_email || '—'}</p>
-              </div>
-              <div className="md:col-span-2">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Dirección</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.cliente_direccion || '—'}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Información del Servicio */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-              <Wrench className="w-4 h-4" />
-              Información del Servicio
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Técnico Asignado</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.tecnico_nombre || 'Sin asignar'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Fecha Asignación</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {servicio.fecha_asignacion ? new Date(servicio.fecha_asignacion).toLocaleString() : '—'}
-                </p>
-              </div>
-              <div className="md:col-span-2">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Descripción Inicial</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.descripcion_inicial || '—'}</p>
-              </div>
-              {servicio.diagnostico_final && (
-                <div className="md:col-span-2">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Diagnóstico Final</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.diagnostico_final}</p>
-                </div>
-              )}
-              {servicio.observaciones && (
-                <div className="md:col-span-2">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Observaciones</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{servicio.observaciones}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Acciones según estado */}
-          <div className="flex flex-wrap gap-3">
-            {servicio.estado === 'pendiente' && (
-              <button
-                onClick={() => handleChangeStatus('asignada')}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
-              >
-                Asignar Servicio
-              </button>
-            )}
-            {servicio.estado === 'asignada' && (
-              <button
-                onClick={() => handleChangeStatus('en_ejecucion')}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
-              >
-                Iniciar Servicio
-              </button>
-            )}
-            {servicio.estado === 'en_ejecucion' && (
-              <>
+        {/* Tabs */}
+        <div className="px-6 pt-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex gap-4">
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              return (
                 <button
-                  onClick={() => setShowAddPart(true)}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium"
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`pb-2 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+                    activeTab === tab.id
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                  }`}
                 >
-                  <Package className="w-4 h-4 inline mr-1" />
-                  Agregar Repuesto
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
                 </button>
-                <button
-                  onClick={() => handleChangeStatus('cerrada')}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
-                >
-                  <CheckCircle className="w-4 h-4 inline mr-1" />
-                  Completar Servicio
-                </button>
-              </>
-            )}
+              );
+            })}
           </div>
         </div>
 
-        {/* Modal para agregar repuesto */}
-        {showAddPart && (
+        {/* Contenido */}
+        <div className="p-6">
+          {/* Tab Información */}
+          {activeTab === 'info' && (
+            <div className="space-y-6">
+              {/* Datos del Cliente */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <Building className="w-4 h-4 text-blue-600" />
+                  Cliente
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500">Nombre</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {servicio.cliente_nombre || '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Documento</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {servicio.cliente_documento || '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Teléfono</p>
+                    <div className="flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-gray-400" />
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {servicio.cliente_telefono || '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Email</p>
+                    <div className="flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-gray-400" />
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {servicio.cliente_email || '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-gray-500">Dirección</p>
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-gray-400" />
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {servicio.cliente_direccion || '—'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Asignación y Agenda */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <User className="w-4 h-4 text-blue-600" />
+                  Asignación y Agenda
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500">Técnico Asignado</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {servicio.tecnico_nombre || 'Sin asignar'}
+                      </p>
+                      {esAdmin && !servicio.tecnico_nombre && (
+                        <button
+                          onClick={() => setShowAssignModal(true)}
+                          className="text-xs text-blue-600 hover:text-blue-700"
+                        >
+                          Asignar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Fecha Agendada</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {servicio.fecha_agendada 
+                          ? new Date(servicio.fecha_agendada).toLocaleDateString()
+                          : 'No agendado'}
+                      </p>
+                      {esAdmin && (
+                        <button
+                          onClick={() => setShowAgendarModal(true)}
+                          className="text-xs text-blue-600 hover:text-blue-700"
+                        >
+                          {servicio.fecha_agendada ? 'Reagendar' : 'Agendar'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Hora de Inicio</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {servicio.hora_inicio_agendada || '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Duración Estimada</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {servicio.duracion_estimada ? `${servicio.duracion_estimada} minutos` : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Descripción del Servicio */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <Wrench className="w-4 h-4 text-blue-600" />
+                  Descripción del Servicio
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                  {servicio.descripcion_inicial || 'Sin descripción'}
+                </p>
+                {servicio.diagnostico_final && (
+                  <>
+                    <div className="border-t border-gray-200 dark:border-gray-700 my-3 pt-3">
+                      <p className="text-xs text-gray-500 mb-1">Diagnóstico Final</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        {servicio.diagnostico_final}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Notas */}
+              {servicio.observaciones && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    Observaciones
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {servicio.observaciones}
+                  </p>
+                </div>
+              )}
+
+              {/* Botones de acción */}
+              <div className="flex flex-wrap gap-3 pt-4">
+                {servicio.estado === 'pendiente' && (
+                  <button
+                    onClick={() => handleChangeStatus('asignada')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Asignar Servicio
+                  </button>
+                )}
+                {servicio.estado === 'asignada' && (
+                  <button
+                    onClick={() => handleChangeStatus('en_ejecucion')}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Iniciar Servicio
+                  </button>
+                )}
+                {servicio.estado === 'en_ejecucion' && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('materiales')}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    >
+                      Registrar Materiales
+                    </button>
+                    <button
+                      onClick={() => handleChangeStatus('cerrada')}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      Completar Servicio
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tab Materiales */}
+          {activeTab === 'materiales' && (
+            <MaterialesPanel 
+              servicioId={servicioId}
+              tecnicoId={servicio.tecnico_id}
+              isAdmin={esAdmin}
+              onRefresh={fetchServicio}
+            />
+          )}
+
+          {/* Tab Tiempos */}
+          {activeTab === 'tiempos' && (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-center">
+              <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">Módulo de tiempos en desarrollo</p>
+              <p className="text-xs text-gray-400 mt-1">Próximamente: registro de horas trabajadas</p>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Asignar Técnico */}
+        {showAssignModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Agregar Repuesto</h3>
-                <button onClick={() => setShowAddPart(false)} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-5 h-5" />
-                </button>
+              <div className="px-6 py-4 border-b flex justify-between">
+                <h3 className="text-lg font-semibold">Asignar Técnico</h3>
+                <button onClick={() => setShowAssignModal(false)}>✕</button>
               </div>
-              <form onSubmit={handleAddPart}>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Producto ID
-                    </label>
-                    <input
-                      type="text"
-                      value={newPart.product_id}
-                      onChange={(e) => setNewPart({ ...newPart, product_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Cantidad
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={newPart.cantidad}
-                      onChange={(e) => setNewPart({ ...newPart, cantidad: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Observaciones
-                    </label>
-                    <textarea
-                      value={newPart.observaciones}
-                      onChange={(e) => setNewPart({ ...newPart, observaciones: e.target.value })}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900"
-                    />
-                  </div>
+              <div className="p-6">
+                <select
+                  onChange={(e) => handleAssignTech(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  defaultValue=""
+                >
+                  <option value="" disabled>Seleccionar técnico...</option>
+                  {tecnicos.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre1} {t.apellidos || ''} - {t.usuario}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Agendar */}
+        {showAgendarModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
+              <div className="px-6 py-4 border-b flex justify-between">
+                <h3 className="text-lg font-semibold">Agendar Servicio</h3>
+                <button onClick={() => setShowAgendarModal(false)}>✕</button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={agendamiento.fecha_agendada}
+                    onChange={(e) => setAgendamiento({ ...agendamiento, fecha_agendada: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
                 </div>
-                <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddPart(false)}
-                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
-                  >
-                    Agregar
-                  </button>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Hora de Inicio</label>
+                  <input
+                    type="time"
+                    value={agendamiento.hora_inicio}
+                    onChange={(e) => setAgendamiento({ ...agendamiento, hora_inicio: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
                 </div>
-              </form>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Duración Estimada</label>
+                  <select
+                    value={agendamiento.duracion_estimada}
+                    onChange={(e) => setAgendamiento({ ...agendamiento, duracion_estimada: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value={30}>30 minutos</option>
+                    <option value={60}>1 hora</option>
+                    <option value={90}>1.5 horas</option>
+                    <option value={120}>2 horas</option>
+                    <option value={180}>3 horas</option>
+                    <option value={240}>4 horas</option>
+                  </select>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t flex justify-end gap-3">
+                <button onClick={() => setShowAgendarModal(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
+                <button onClick={handleAgendar} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button>
+              </div>
             </div>
           </div>
         )}

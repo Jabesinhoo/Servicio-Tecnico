@@ -12,9 +12,19 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const root = document.documentElement;
+    
+    // Eliminar clases anteriores
     root.classList.remove('light', 'dark');
+    
+    // Agregar nueva clase
     root.classList.add(theme);
+    
+    // Guardar en localStorage
     localStorage.setItem('theme', theme);
+    
+    // Debug
+    console.log('Tema cambiado a:', theme);
+    console.log('Clases en html:', root.className);
   }, [theme]);
 
   const toggleTheme = () => {
