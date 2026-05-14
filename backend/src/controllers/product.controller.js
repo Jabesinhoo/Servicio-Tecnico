@@ -98,54 +98,7 @@ exports.create = async (req, res) => {
   }
 };
 
-exports.update = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const {
-      codigo, nombre, descripcion, tipo, precio_venta, costo,
-      stock_actual, stock_minimo, proveedor, categoria_id, imagenes, estado
-    } = req.body;
 
-    // Manejar categoria_id: si es string vacío o null, poner null
-    const categoriaIdValue = (categoria_id && categoria_id !== '') ? categoria_id : null;
-
-    // Limpiar las imágenes
-    const imagenesLimpias = (imagenes || []).map(img => ({
-      id: img.id,
-      url: img.url,
-      name: img.name
-    }));
-
-    const result = await pool.query(`
-      UPDATE products 
-      SET codigo = COALESCE($1, codigo),
-          nombre = COALESCE($2, nombre),
-          descripcion = COALESCE($3, descripcion),
-          tipo = COALESCE($4, tipo),
-          precio_venta = COALESCE($5, precio_venta),
-          costo = COALESCE($6, costo),
-          stock_actual = COALESCE($7, stock_actual),
-          stock_minimo = COALESCE($8, stock_minimo),
-          proveedor = COALESCE($9, proveedor),
-          categoria_id = $10,
-          imagenes = $11,
-          estado = COALESCE($12, estado),
-          "updatedAt" = NOW()
-      WHERE id = $13
-      RETURNING *
-    `, [codigo, nombre, descripcion, tipo, precio_venta, costo,
-        stock_actual, stock_minimo, proveedor, categoriaIdValue, JSON.stringify(imagenesLimpias), estado, id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Producto no encontrado' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error updating product:', error);
-    res.status(500).json({ message: 'Error al actualizar producto: ' + error.message });
-  }
-};
 
 exports.update = async (req, res) => {
   try {

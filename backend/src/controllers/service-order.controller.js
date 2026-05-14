@@ -1,10 +1,11 @@
 // backend/src/controllers/service-order.controller.js
 const pool = require('../db/pool');
 
-// Listar OS con filtros
+
+
 exports.list = async (req, res) => {
   try {
-    const { estado, tecnico_id, page = 1, limit = 20 } = req.query;
+    const { estado, tecnico_id, fecha_inicio, fecha_fin, search, page = 1, limit = 20 } = req.query;
     const userId = req.user.id;
     const userRole = req.user.rol;
 
@@ -22,6 +23,21 @@ exports.list = async (req, res) => {
       params.push(tecnico_id);
     }
 
+    if (fecha_inicio) {
+      whereClauses.push(`so.fecha_agendada >= $${paramIndex++}`);
+      params.push(fecha_inicio);
+    }
+
+    if (fecha_fin) {
+      whereClauses.push(`so.fecha_agendada <= $${paramIndex++}`);
+      params.push(fecha_fin);
+    }
+
+    if (search) {
+      whereClauses.push(`(so.codigo_os ILIKE $${paramIndex++} OR c.razon_social ILIKE $${paramIndex++} OR CONCAT(c.primer_nombre, ' ', c.primer_apellido) ILIKE $${paramIndex++})`);
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
     if (userRole === 'tecnico') {
       whereClauses.push(`so.tecnico_id = $${paramIndex++}`);
       params.push(userId);
@@ -33,7 +49,10 @@ exports.list = async (req, res) => {
     const query = `
       SELECT 
         so.*,
-        c.nombre_razon_social as cliente_nombre,
+        CASE 
+          WHEN c.tipo_persona = 'juridica' THEN c.razon_social
+          ELSE CONCAT(c.primer_nombre, ' ', c.primer_apellido)
+        END as cliente_nombre,
         u.usuario as tecnico_nombre
       FROM service_orders so
       LEFT JOIN clients c ON so.client_id = c.id
@@ -50,6 +69,7 @@ exports.list = async (req, res) => {
     const countQuery = `
       SELECT COUNT(*)::int as total 
       FROM service_orders so
+      LEFT JOIN clients c ON so.client_id = c.id
       ${whereSql}
     `;
     const countResult = await pool.query(countQuery, params.slice(0, -2));
@@ -69,7 +89,9 @@ exports.list = async (req, res) => {
   }
 };
 
-// Obtener OS por ID
+// backend/src/controllers/service-order.controller.js
+// Modificar la función getById
+
 exports.getById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -77,11 +99,15 @@ exports.getById = async (req, res) => {
     const osQuery = `
       SELECT 
         so.*,
-        c.nombre_razon_social as cliente_nombre,
+        CASE 
+          WHEN c.tipo_persona = 'juridica' THEN c.razon_social
+          ELSE CONCAT(c.primer_nombre, ' ', c.primer_apellido)
+        END as cliente_nombre,
         c.documento as cliente_documento,
         c.telefono as cliente_telefono,
         c.email as cliente_email,
         c.direccion as cliente_direccion,
+        c.ciudad as cliente_ciudad,
         u.usuario as tecnico_nombre
       FROM service_orders so
       LEFT JOIN clients c ON so.client_id = c.id
@@ -89,50 +115,252 @@ exports.getById = async (req, res) => {
       WHERE so.id = $1
     `;
     const osResult = await pool.query(osQuery, [id]);
-
+    
     if (osResult.rows.length === 0) {
       return res.status(404).json({ message: 'Orden de servicio no encontrada' });
     }
-
-    res.json(osResult.rows[0]);
+    
+    // Obtener los servicios asociados - CORREGIDO: usar "createdAt" no "created_at"
+    const serviciosQuery = `
+      SELECT * FROM service_order_services 
+      WHERE service_order_id = $1
+      ORDER BY "createdAt" ASC
+    `;
+    const serviciosResult = await pool.query(serviciosQuery, [id]);
+    
+    res.json({
+      ...osResult.rows[0],
+      servicios: serviciosResult.rows
+    });
   } catch (error) {
     console.error('Error getting service order:', error);
     res.status(500).json({ message: 'Error al obtener la orden de servicio' });
   }
 };
 
-// Crear nueva OS
+// backend/src/controllers/service-order.controller.js
+// Agregar nuevas funciones
+
+// Aprobar servicio
+exports.aprobar = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { observaciones } = req.body;
+    const userId = req.user.id;
+    
+    const query = `
+      UPDATE service_orders 
+      SET estado = 'aprobado',
+          aprobado_por = $1,
+          fecha_aprobacion = NOW(),
+          observaciones = COALESCE($2, observaciones),
+          "updatedAt" = NOW()
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await pool.query(query, [userId, observaciones, id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Orden no encontrada' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error aprobando servicio:', error);
+    res.status(500).json({ message: 'Error al aprobar el servicio' });
+  }
+};
+
+// Rechazar servicio
+exports.rechazar = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+    const userId = req.user.id;
+    
+    if (!motivo) {
+      return res.status(400).json({ message: 'Debe especificar el motivo del rechazo' });
+    }
+    
+    const query = `
+      UPDATE service_orders 
+      SET estado = 'rechazado',
+          rechazado_por = $1,
+          fecha_rechazo = NOW(),
+          motivo_rechazo = $2,
+          "updatedAt" = NOW()
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await pool.query(query, [userId, motivo, id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Orden no encontrada' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error rechazando servicio:', error);
+    res.status(500).json({ message: 'Error al rechazar el servicio' });
+  }
+};
+
+// backend/src/controllers/service-order.controller.js
+// Asegurar que approve cambia el estado correctamente
+
+exports.approve = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { observaciones } = req.body || {};
+    const userId = req.user.id;
+    
+    console.log('Aprobando servicio:', id, 'por usuario:', userId);
+    
+    const query = `
+      UPDATE service_orders 
+      SET estado = 'aprobado',
+          aprobado_por = $1,
+          fecha_aprobacion = NOW(),
+          observaciones = COALESCE($2, observaciones),
+          "updatedAt" = NOW()
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await pool.query(query, [userId, observaciones || null, id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Orden no encontrada' });
+    }
+    
+    console.log('Servicio aprobado:', result.rows[0].codigo_os, 'nuevo estado:', result.rows[0].estado);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error aprobando servicio:', error);
+    res.status(500).json({ message: 'Error al aprobar el servicio: ' + error.message });
+  }
+};
+exports.reject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+    const userId = req.user.id;
+    
+    if (!motivo || motivo.trim() === '') {
+      return res.status(400).json({ message: 'Debe especificar el motivo del rechazo' });
+    }
+    
+    const query = `
+      UPDATE service_orders 
+      SET estado = 'rechazado',
+          rechazado_por = $1,
+          fecha_rechazo = NOW(),
+          motivo_rechazo = $2,
+          "updatedAt" = NOW()
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await pool.query(query, [userId, motivo, id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Orden no encontrada' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error rechazando servicio:', error);
+    res.status(500).json({ message: 'Error al rechazar el servicio: ' + error.message });
+  }
+};
+
+
+
+
 exports.create = async (req, res) => {
   try {
-    const { client_id, descripcion_inicial, origen_tipo = 'tecnico', origen_id = null } = req.body;
-
+    const {
+      client_id,
+      descripcion_inicial,
+      origen_tipo = 'tecnico',
+      origen_id = null,
+      programacion = {},
+      servicios = [],
+      notas = {}
+    } = req.body;
+    
+    console.log('Datos recibidos:', { 
+      client_id, 
+      descripcion_inicial, 
+      programacion, 
+      servicios: servicios.length 
+    });
+    
     if (!client_id) {
       return res.status(400).json({ message: 'El cliente es requerido' });
     }
-
+    
+    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [client_id]);
+    if (clientCheck.rows.length === 0) {
+      return res.status(400).json({ message: 'Cliente no encontrado' });
+    }
+    
     const year = new Date().getFullYear();
     const countQuery = `SELECT COUNT(*)::int as count FROM service_orders WHERE EXTRACT(YEAR FROM "createdAt") = $1`;
     const countResult = await pool.query(countQuery, [year]);
     const nextNumber = (countResult.rows[0]?.count || 0) + 1;
     const codigo_os = `OS-${year}-${String(nextNumber).padStart(4, '0')}`;
-
+    
     const query = `
       INSERT INTO service_orders (
         codigo_os, client_id, origen_tipo, origen_id,
-        descripcion_inicial, estado, "createdAt", "updatedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        descripcion_inicial, prioridad, tecnico_id,
+        fecha_agendada, hora_inicio_agendada, duracion_estimada,
+        observaciones, notas_internas,
+        estado, "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
       RETURNING *
     `;
-
+    
     const result = await pool.query(query, [
       codigo_os, client_id, origen_tipo, origen_id,
-      descripcion_inicial || null, 'pendiente'
+      descripcion_inicial || null,
+      programacion.prioridad || 'normal',
+      programacion.tecnico_id || null,
+      programacion.fecha_agendada || null,
+      programacion.hora_inicio || null,
+      programacion.duracion_estimada || 60,
+      notas.observaciones_tecnico || null,
+      notas.notas_internas || null,
+      'pendiente'
     ]);
-
+    
+    if (servicios && servicios.length > 0) {
+      for (const servicio of servicios) {
+        await pool.query(`
+          INSERT INTO service_order_services (
+            service_order_id, tipo_servicio_id, tipo_servicio_nombre,
+            descripcion_problema, observaciones, precio_estimado,
+            equipo_relacionado, requiere_diagnostico, requiere_repuestos,
+            repuestos_necesarios, "createdAt", "updatedAt"
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+        `, [
+          result.rows[0].id,
+          servicio.tipo_servicio_id,
+          servicio.tipo_servicio_nombre,
+          servicio.descripcion_problema,
+          servicio.observaciones,
+          servicio.precio_estimado,
+          servicio.equipo_relacionado,
+          servicio.requiere_diagnostico,
+          servicio.requiere_repuestos,
+          servicio.repuestos_necesarios
+        ]);
+      }
+    }
+    
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating service order:', error);
-    res.status(500).json({ message: 'Error al crear la orden de servicio' });
+    res.status(500).json({ message: 'Error al crear la orden de servicio: ' + error.message });
   }
 };
 

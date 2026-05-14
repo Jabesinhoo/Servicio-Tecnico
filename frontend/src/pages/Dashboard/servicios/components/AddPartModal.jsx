@@ -1,34 +1,60 @@
 // src/pages/Dashboard/servicios/components/AddPartModal.jsx
 import React, { useState, useEffect } from 'react';
 import api from '../../../../services/api';
-import { X, Package, Search } from 'lucide-react';
+import { X, Package, Search, Loader2 } from 'lucide-react';
 
 const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cantidad, setCantidad] = useState(1);
   const [observaciones, setObservaciones] = useState('');
   const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       fetchProducts();
     }
-  }, [isOpen, searchTerm]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const term = searchTerm.toLowerCase();
+      const filtered = products.filter(p =>
+        p.nombre?.toLowerCase().includes(term) ||
+        p.codigo?.toLowerCase().includes(term)
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [searchTerm, products]);
 
   const fetchProducts = async () => {
+    setSearching(true);
     try {
-      const res = await api.get(`/api/products?search=${searchTerm}&tipo=repuesto`);
-      setProducts(res.data || []);
+      // Traer productos de tipo repuesto y herramienta que tengan stock
+      const res = await api.get('/api/products?tipo=repuesto,herramienta');
+      const productosConStock = (res.data || []).filter(p => p.stock_actual > 0);
+      setProducts(productosConStock);
+      setFilteredProducts(productosConStock);
     } catch (error) {
       console.error('Error fetching products:', error);
+    } finally {
+      setSearching(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedProduct || !cantidad) return;
+    
+    if (cantidad > selectedProduct.stock_actual) {
+      alert(`Solo hay ${selectedProduct.stock_actual} unidades disponibles en stock`);
+      return;
+    }
     
     setLoading(true);
     try {
@@ -43,6 +69,7 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
       setObservaciones('');
     } catch (error) {
       console.error('Error adding part:', error);
+      alert(error.response?.data?.message || 'Error al agregar el repuesto');
     } finally {
       setLoading(false);
     }
@@ -78,9 +105,14 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
               </div>
             </div>
 
-            {products.length > 0 && (
+            {searching ? (
+              <div className="text-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" />
+                <p className="text-sm text-gray-500 mt-2">Cargando productos...</p>
+              </div>
+            ) : filteredProducts.length > 0 ? (
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <button
                     key={product.id}
                     type="button"
@@ -90,14 +122,32 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
                     }`}
                   >
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{product.nombre}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Código: {product.codigo} | Stock: {product.stock_actual}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Código: {product.codigo} | Stock: {product.stock_actual} | Precio: ${product.precio_venta?.toLocaleString()}
+                    </p>
                   </button>
                 ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                No hay productos con stock disponible
               </div>
             )}
 
             {selectedProduct && (
               <>
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">{selectedProduct.nombre}</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    Stock disponible: {selectedProduct.stock_actual} unidades
+                  </p>
+                  {selectedProduct.precio_venta > 0 && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      Precio unitario: ${selectedProduct.precio_venta.toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Cantidad
@@ -110,7 +160,9 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
                     onChange={(e) => setCantidad(parseInt(e.target.value))}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Stock disponible: {selectedProduct.stock_actual}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Máximo disponible: {selectedProduct.stock_actual}
+                  </p>
                 </div>
 
                 <div>
@@ -143,7 +195,7 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
               <Package className="w-4 h-4" />
-              Agregar Repuesto
+              {loading ? 'Agregando...' : 'Agregar Repuesto'}
             </button>
           </div>
         </form>

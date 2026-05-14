@@ -1,10 +1,12 @@
 // src/pages/Dashboard/servicios/ServicioFilters.jsx
 import React from 'react';
-import { Filter, X, Search } from 'lucide-react';
+import { Filter, X, Search, Calendar } from 'lucide-react';
 
 const statusOptions = [
   { value: '', label: 'Todos' },
   { value: 'pendiente', label: 'Pendiente' },
+  { value: 'aprobado', label: 'Aprobado' },
+  { value: 'rechazado', label: 'Rechazado' },
   { value: 'asignada', label: 'Asignada' },
   { value: 'en_ejecucion', label: 'En Ejecución' },
   { value: 'en_espera', label: 'En Espera' },
@@ -22,21 +24,15 @@ const ServicioFilters = ({ filters, onFilterChange, onClearFilters, onSearch }) 
     onSearch();
   };
 
-  const hasFilters =
-    filters.estado !== '' ||
-    filters.search !== '' ||
-    filters.fecha !== '';
+  const hasFilters = filters.estado !== '' || filters.search !== '' || filters.fecha_inicio !== '' || filters.fecha_fin !== '';
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Filtros
-          </h3>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Filtros</h3>
         </div>
-
         {hasFilters && (
           <button
             onClick={onClearFilters}
@@ -47,46 +43,52 @@ const ServicioFilters = ({ filters, onFilterChange, onClearFilters, onSearch }) 
           </button>
         )}
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-            Estado
-          </label>
-
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Estado</label>
           <select
             name="estado"
             value={filters.estado || ''}
             onChange={handleChange}
             className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
-            {statusOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+            {statusOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         </div>
-
+        
         <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-            Fecha Agenda
-          </label>
-
-          <input
-            type="date"
-            name="fecha"
-            value={filters.fecha || ''}
-            onChange={handleChange}
-            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fecha Desde</label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="date"
+              name="fecha_inicio"
+              value={filters.fecha_inicio || ''}
+              onChange={handleChange}
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+            />
+          </div>
         </div>
-
+        
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fecha Hasta</label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="date"
+              name="fecha_fin"
+              value={filters.fecha_fin || ''}
+              onChange={handleChange}
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+            />
+          </div>
+        </div>
+        
         <form onSubmit={handleSearchSubmit}>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-            Buscar
-          </label>
-
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Buscar</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -96,7 +98,6 @@ const ServicioFilters = ({ filters, onFilterChange, onClearFilters, onSearch }) 
               placeholder="Código o cliente..."
               className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-
             <button
               type="submit"
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"

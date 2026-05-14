@@ -1,9 +1,9 @@
 // src/pages/Dashboard/servicios/components/MaterialesPanel.jsx
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Trash2, Save, CheckCircle, XCircle } from 'lucide-react';
+import { Package, Plus, Trash2, Save, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import api from '../../../../services/api';
 
-const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
+const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false, onRefresh }) => {
   const [materiales, setMateriales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -43,6 +43,10 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
   };
 
   const solicitarMaterial = async () => {
+    if (!newMaterial.product_id) {
+      alert('Seleccione un producto');
+      return;
+    }
     try {
       await api.post(`/api/materiales/servicio/${servicioId}/solicitar`, {
         materiales: [newMaterial]
@@ -52,15 +56,23 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
       fetchMateriales();
     } catch (error) {
       console.error('Error:', error);
+      alert(error.response?.data?.message || 'Error al solicitar material');
     }
   };
 
   const entregarMaterial = async (materialId, cantidad) => {
+    const producto = productos.find(p => p.id === materiales.find(m => m.id === materialId)?.product_id);
+    if (cantidad > (producto?.stock_actual || 0)) {
+      alert(`Solo hay ${producto?.stock_actual || 0} unidades disponibles`);
+      return;
+    }
     try {
       await api.put(`/api/materiales/${materialId}/entregar`, { cantidad_entregada: cantidad });
       fetchMateriales();
+      onRefresh();
     } catch (error) {
       console.error('Error:', error);
+      alert(error.response?.data?.message || 'Error al entregar material');
     }
   };
 
@@ -69,8 +81,10 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
       await api.put(`/api/materiales/${materialId}/usar`, data);
       fetchMateriales();
       setSelectedMaterial(null);
+      onRefresh();
     } catch (error) {
       console.error('Error:', error);
+      alert(error.response?.data?.message || 'Error al reportar uso');
     }
   };
 
@@ -113,20 +127,22 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
         </button>
       </div>
 
-      {/* Lista de materiales */}
-      <div className="space-y-3">
-        {materiales.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">No hay materiales solicitados</p>
-        ) : (
-          materiales.map((material) => {
+      {materiales.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-4">No hay materiales solicitados</p>
+      ) : (
+        <div className="space-y-3">
+          {materiales.map((material) => {
             const estado = getEstadoMaterial(material);
+            const producto = productos.find(p => p.id === material.product_id);
             
             return (
               <div key={material.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-gray-900">{material.producto_nombre}</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {material.producto_nombre || producto?.nombre || 'Producto'}
+                      </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${estadoColors[estado]}`}>
                         {estadoLabels[estado]}
                       </span>
@@ -153,6 +169,12 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
                     
                     {material.observaciones && (
                       <p className="text-xs text-gray-500 mt-2">{material.observaciones}</p>
+                    )}
+
+                    {producto && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Stock disponible: {producto.stock_actual} unidades
+                      </p>
                     )}
                   </div>
                   
@@ -183,9 +205,9 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* Modal para solicitar material */}
       {showForm && (
@@ -205,7 +227,9 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false }) => {
                 >
                   <option value="">Seleccionar...</option>
                   {productos.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} (Stock: {p.stock_actual})</option>
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} (Stock: {p.stock_actual})
+                    </option>
                   ))}
                 </select>
               </div>

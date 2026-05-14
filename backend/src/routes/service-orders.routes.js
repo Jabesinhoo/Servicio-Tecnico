@@ -30,5 +30,9 @@ router.post('/service-orders/:id/parts', serviceOrderController.addPart);
 
 // Eliminar OS
 router.delete('/service-orders/:id', allowRoles('admin'), serviceOrderController.delete);
-
+// backend/src/routes/service-orders.routes.js
+// Agregar estas rutas
+router.patch('/service-orders/:id/approve', allowRoles('admin'), serviceOrderController.approve);
+router.patch('/service-orders/:id/reject', allowRoles('admin'), serviceOrderController.reject);
+router.put('/service-orders/:id', allowRoles('admin', 'tecnico'), serviceOrderController.update);
 module.exports = router;

@@ -1,6 +1,15 @@
 // src/pages/Dashboard/servicios/ServicioTable.jsx
 import React from 'react';
-import { Eye, User, Play, CheckCircle } from 'lucide-react';
+import {
+  Eye,
+  User,
+  Play,
+  CheckCircle,
+  Edit,
+  Trash2,
+  CheckCircle as ApproveIcon,
+  XCircle,
+} from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 const ServicioTable = ({
@@ -10,7 +19,12 @@ const ServicioTable = ({
   onAssignTech,
   onStartService,
   onCompleteService,
-  userRole
+  onEdit,
+  onDelete,
+  onApprove,
+  onReject,
+  userRole,
+  isAdmin = false,
 }) => {
   if (loading) {
     return (
@@ -24,10 +38,23 @@ const ServicioTable = ({
   if (!servicios || servicios.length === 0) {
     return (
       <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-        <p className="text-gray-500 dark:text-gray-400">No hay órdenes de servicio</p>
+        <p className="text-gray-500 dark:text-gray-400">
+          No hay órdenes de servicio
+        </p>
       </div>
     );
   }
+
+  const getPrioridadColor = (prioridad) => {
+    const colores = {
+      baja: 'bg-green-100 text-green-800',
+      normal: 'bg-blue-100 text-blue-800',
+      alta: 'bg-orange-100 text-orange-800',
+      urgente: 'bg-red-100 text-red-800',
+    };
+
+    return colores[prioridad] || 'bg-gray-100 text-gray-800';
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -37,21 +64,31 @@ const ServicioTable = ({
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Código
             </th>
+
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Cliente
             </th>
+
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Técnico
             </th>
+
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Estado
             </th>
+
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Prioridad
+            </th>
+
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Fecha
             </th>
+
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Fecha Agenda
             </th>
+
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Acciones
             </th>
@@ -80,6 +117,16 @@ const ServicioTable = ({
                 <StatusBadge status={servicio.estado} />
               </td>
 
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${getPrioridadColor(
+                    servicio.prioridad
+                  )}`}
+                >
+                  {servicio.prioridad?.toUpperCase() || 'NORMAL'}
+                </span>
+              </td>
+
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {new Date(servicio.createdAt).toLocaleDateString()}
               </td>
@@ -91,44 +138,93 @@ const ServicioTable = ({
               </td>
 
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-2 flex-wrap">
+                  {/* Ver detalle */}
                   <button
                     onClick={() => onViewDetail(servicio.id)}
-                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 transition-colors"
+                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 transition-colors p-1"
                     title="Ver detalle"
                   >
                     <Eye className="w-4 h-4" />
                   </button>
 
-                  {userRole === 'admin' &&
+                  {/* Editar solo admin */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => onEdit(servicio)}
+                      className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors p-1"
+                      title="Editar"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Aprobar solo admin para servicios pendientes */}
+                  {isAdmin && servicio.estado === 'pendiente' && (
+                    <button
+                      onClick={() => onApprove(servicio.id)}
+                      className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors p-1"
+                      title="Aprobar"
+                    >
+                      <ApproveIcon className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Rechazar solo admin para servicios pendientes */}
+                  {isAdmin && servicio.estado === 'pendiente' && (
+                    <button
+                      onClick={() => onReject(servicio.id)}
+                      className="text-red-600 hover:text-red-800 dark:text-red-400 transition-colors p-1"
+                      title="Rechazar"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Asignar técnico */}
+                  {isAdmin &&
                     !servicio.tecnico_nombre &&
-                    servicio.estado === 'pendiente' && (
+                    servicio.estado === 'aprobado' && (
                       <button
                         onClick={() => onAssignTech(servicio.id)}
-                        className="text-purple-600 hover:text-purple-800 dark:text-purple-400 transition-colors"
+                        className="text-purple-600 hover:text-purple-800 dark:text-purple-400 transition-colors p-1"
                         title="Asignar técnico"
                       >
                         <User className="w-4 h-4" />
                       </button>
                     )}
 
+                  {/* Iniciar servicio */}
                   {userRole === 'tecnico' && servicio.estado === 'asignada' && (
                     <button
                       onClick={() => onStartService(servicio.id)}
-                      className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors"
+                      className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors p-1"
                       title="Iniciar servicio"
                     >
                       <Play className="w-4 h-4" />
                     </button>
                   )}
 
-                  {userRole === 'tecnico' && servicio.estado === 'en_ejecucion' && (
+                  {/* Completar servicio */}
+                  {userRole === 'tecnico' &&
+                    servicio.estado === 'en_ejecucion' && (
+                      <button
+                        onClick={() => onCompleteService(servicio.id)}
+                        className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors p-1"
+                        title="Completar servicio"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+
+                  {/* Eliminar solo admin */}
+                  {isAdmin && (
                     <button
-                      onClick={() => onCompleteService(servicio.id)}
-                      className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors"
-                      title="Completar servicio"
+                      onClick={() => onDelete(servicio)}
+                      className="text-red-600 hover:text-red-800 dark:text-red-400 transition-colors p-1"
+                      title="Eliminar"
                     >
-                      <CheckCircle className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
