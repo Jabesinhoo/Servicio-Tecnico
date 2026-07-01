@@ -21,6 +21,7 @@ import Tecnicos from './pages/Dashboard/Tecnicos';
 import Usuarios from './pages/Dashboard/Usuarios';
 import TiposServicio from './pages/Dashboard/TiposServicio';
 import Agenda from './pages/Dashboard/Agenda';
+import Facturas from './pages/Dashboard/Facturas';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -61,6 +62,7 @@ const AppRouter = () => {
           <Route path="usuarios" element={<Usuarios />} />
           <Route path="tipos-servicio" element={<TiposServicio />} />
           <Route path="agenda" element={<Agenda />} />
+          <Route path="facturas" element={<Facturas />} />
 
         </Route>
 

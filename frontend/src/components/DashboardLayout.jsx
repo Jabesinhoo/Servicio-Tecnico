@@ -13,7 +13,7 @@ import {
   Users,
   UserCog,
   UserCheck,
-  FileText,  // ← Agregar FileText aquí
+  FileText,  // ← Agregar esto
   Menu, 
   LogOut, 
   User,
@@ -53,6 +53,7 @@ const DashboardLayout = () => {
       { name: 'Tipos de Servicio', href: '/dashboard/tipos-servicio', icon: FileText },
       { name: 'Reportes', href: '/dashboard/reportes', icon: BarChart3 },
       { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar },
+      { name: 'Facturas', href: '/dashboard/facturas', icon: FileText },
 
     ];
 

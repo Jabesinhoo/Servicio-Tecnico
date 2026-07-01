@@ -1,34 +1,92 @@
-"use strict";
-
+'use strict';
 module.exports = (sequelize, DataTypes) => {
-  const ServiceTime = sequelize.define(
-    "ServiceTime",
-    {
-      id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true,
-      },
-
-      service_order_id: { type: DataTypes.UUID, allowNull: false },
-
-      tipo_tiempo: {
-        type: DataTypes.ENUM("trabajo", "desplazamiento"),
-        allowNull: false,
-      },
-
-      hora_inicio: { type: DataTypes.DATE, allowNull: false },
-      hora_fin: { type: DataTypes.DATE, allowNull: false },
+  const Invoice = sequelize.define('Invoice', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    {
-      tableName: "service_times",
-      timestamps: true,
-    }
-  );
+    numero_factura: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      unique: true,
+    },
+    prefijo: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+    },
+    fecha_emision: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    cliente_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
+    service_order_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    sales_order_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    tipo_documento: {
+      type: DataTypes.ENUM('factura', 'nota_credito', 'nota_debito'),
+      allowNull: false,
+      defaultValue: 'factura',
+    },
+    estado: {
+      type: DataTypes.ENUM('borrador', 'emitida', 'pagada', 'anulada'),
+      allowNull: false,
+      defaultValue: 'emitida',
+    },
+    total_base: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    total_iva: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    total_retencion: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    total_otros_impuestos: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    total_general: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    observaciones: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    resolution_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
+  }, {
+    tableName: 'invoices',
+    timestamps: true,
+  });
 
-  ServiceTime.associate = (models) => {
-    ServiceTime.belongsTo(models.ServiceOrder, { foreignKey: "service_order_id" });
+  Invoice.associate = (models) => {
+    Invoice.belongsTo(models.Client, { foreignKey: 'cliente_id' });
+    Invoice.belongsTo(models.ServiceOrder, { foreignKey: 'service_order_id' });
+    Invoice.belongsTo(models.SalesOrder, { foreignKey: 'sales_order_id' });
+    Invoice.belongsTo(models.Resolution, { foreignKey: 'resolution_id' });
+    Invoice.hasMany(models.InvoiceItem, { foreignKey: 'invoice_id' });
   };
 
-  return ServiceTime;
+  return Invoice;
 };

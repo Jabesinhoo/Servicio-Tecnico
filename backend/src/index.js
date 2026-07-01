@@ -20,6 +20,7 @@ const categoriaProductoRoutes = require('./routes/categoria-producto.routes');
 const reportRoutes = require('./routes/report.routes');
 const agendaRoutes = require('./routes/agenda.routes');
 const materialRoutes = require('./routes/material.routes');
+const invoiceRoutes = require('./routes/invoice.routes');
 
 
 
@@ -63,6 +64,7 @@ app.use("/api", categoriaProductoRoutes);
 app.use("/api", reportRoutes);
 app.use("/api", agendaRoutes);
 app.use("/api", materialRoutes);
+app.use("/api", invoiceRoutes);
 
 
 

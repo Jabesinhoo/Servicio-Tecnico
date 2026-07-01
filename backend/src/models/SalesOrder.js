@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "borrador",
       },
+      facturada: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
 
       total_productos: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
       total_servicios: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },

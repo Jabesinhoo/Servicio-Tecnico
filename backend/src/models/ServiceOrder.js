@@ -9,30 +9,28 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: DataTypes.UUIDV4,
         primaryKey: true,
       },
-
       codigo_os: { type: DataTypes.STRING(30), allowNull: false, unique: true },
       client_id: { type: DataTypes.UUID, allowNull: false },
-
       origen_tipo: {
         type: DataTypes.ENUM("venta", "tecnico", "otro"),
         allowNull: false,
       },
-
-      origen_id: { type: DataTypes.UUID, allowNull: true }, // id de la OV si origen_tipo = venta
+      origen_id: { type: DataTypes.UUID, allowNull: true },
       tecnico_id: { type: DataTypes.UUID, allowNull: true },
-
       descripcion_inicial: { type: DataTypes.TEXT, allowNull: true },
-
       estado: {
         type: DataTypes.ENUM("pendiente", "asignada", "en_ejecucion", "en_espera", "cerrada"),
         allowNull: false,
         defaultValue: "pendiente",
       },
-
+      facturada: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       fecha_asignacion: { type: DataTypes.DATE, allowNull: true },
       fecha_inicio: { type: DataTypes.DATE, allowNull: true },
       fecha_fin: { type: DataTypes.DATE, allowNull: true },
-
       diagnostico_final: { type: DataTypes.TEXT, allowNull: true },
       observaciones: { type: DataTypes.TEXT, allowNull: true },
     },
@@ -43,11 +41,13 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   ServiceOrder.associate = (models) => {
+    // Solo relaciones con modelos que existen
     ServiceOrder.belongsTo(models.Client, { foreignKey: "client_id" });
     ServiceOrder.belongsTo(models.Usuario, { foreignKey: "tecnico_id" });
-
-    ServiceOrder.hasMany(models.ServiceTime, { foreignKey: "service_order_id" });
-    ServiceOrder.hasMany(models.Invoice, { foreignKey: "service_order_id" });
+    
+    // Comentar las relaciones que causan error
+    // ServiceOrder.hasMany(models.ServiceTime, { foreignKey: "service_order_id" });
+    // ServiceOrder.hasMany(models.Invoice, { foreignKey: "service_order_id" });
   };
 
   return ServiceOrder;
