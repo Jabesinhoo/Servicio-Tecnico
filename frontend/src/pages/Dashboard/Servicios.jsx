@@ -1,3 +1,4 @@
+import "../responsive.css";
 // src/pages/Dashboard/Servicios.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -128,7 +129,7 @@ const Servicios = () => {
     const isAdmin = userRole === 'admin';
 
     return (
-        <div className="space-y-6">
+        <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -318,13 +319,13 @@ const Servicios = () => {
 
             {/* Modal de Edición */}
             {showEditModal && editingServicio && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+                <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
                     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="px-6 py-4 border-b flex justify-between">
+                        <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
                             <h3 className="text-lg font-semibold">Editar Servicio - {editingServicio.codigo_os}</h3>
                             <button onClick={() => setShowEditModal(false)}>✕</button>
                         </div>
-                        <div className="p-6 space-y-4">
+                        <div className="p-4 sm:p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium mb-1">Descripción</label>
                                 <textarea
@@ -334,7 +335,7 @@ const Servicios = () => {
                                     className="w-full px-3 py-2 border rounded-lg"
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Prioridad</label>
                                     <select
@@ -359,7 +360,7 @@ const Servicios = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t flex justify-end gap-3">
+                        <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                             <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
                             <button onClick={() => handleUpdateServicio(editingServicio)} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button>
                         </div>
@@ -369,13 +370,13 @@ const Servicios = () => {
 
             {/* Modal de Rechazo */}
             {showRejectModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+                <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
                     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-                        <div className="px-6 py-4 border-b flex justify-between">
+                        <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
                             <h3 className="text-lg font-semibold">Rechazar Servicio</h3>
                             <button onClick={() => setShowRejectModal(false)}>✕</button>
                         </div>
-                        <div className="p-6">
+                        <div className="p-4 sm:p-6">
                             <label className="block text-sm font-medium mb-2">Motivo del rechazo *</label>
                             <textarea
                                 value={rejectMotivo}
@@ -385,7 +386,7 @@ const Servicios = () => {
                                 placeholder="Especifique la razón por la que se rechaza este servicio..."
                             />
                         </div>
-                        <div className="px-6 py-4 border-t flex justify-end gap-3">
+                        <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                             <button onClick={() => setShowRejectModal(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
                             <button onClick={handleReject} className="px-4 py-2 bg-red-600 text-white rounded-lg">Rechazar</button>
                         </div>

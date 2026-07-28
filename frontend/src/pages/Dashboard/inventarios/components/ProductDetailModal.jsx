@@ -64,7 +64,7 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
         <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full p-8">
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -79,10 +79,10 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
   const imagenes = product.imagenes || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
           <div className="flex items-center gap-2">
             {getTipoIcon(product.tipo)}
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -94,7 +94,7 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6">
           {/* Imágenes del producto */}
           {imagenes.length > 0 && (
             <div className="bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
@@ -173,7 +173,7 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
               <DollarSign className="w-4 h-4 text-green-600" />
               Información de Precios
             </h4>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-gray-500">Precio de Venta</p>
                 <p className="text-xl font-bold text-green-600">
@@ -203,7 +203,7 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
               <Package className="w-4 h-4 text-blue-600" />
               Control de Stock
             </h4>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-gray-500">Stock Actual</p>
                 <p className={`text-xl font-bold ${getStockColor()}`}>
@@ -243,7 +243,7 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"

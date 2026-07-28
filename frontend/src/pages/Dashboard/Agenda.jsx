@@ -1,3 +1,4 @@
+import "../responsive.css";
 // src/pages/Dashboard/Agenda.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -111,7 +112,7 @@ const Agenda = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

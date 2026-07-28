@@ -21,8 +21,10 @@ const reportRoutes = require('./routes/report.routes');
 const agendaRoutes = require('./routes/agenda.routes');
 const materialRoutes = require('./routes/material.routes');
 const invoiceRoutes = require('./routes/invoice.routes');
-
-
+const productoSerialRoutes = require('./routes/producto-serial.routes');
+const alquilerRoutes = require('./routes/alquiler.routes');
+const syncRoutes = require('./routes/sync.routes');
+const notificacionesRoutes = require('./routes/notificaciones.routes');
 
 const app = express();
 
@@ -65,9 +67,12 @@ app.use("/api", reportRoutes);
 app.use("/api", agendaRoutes);
 app.use("/api", materialRoutes);
 app.use("/api", invoiceRoutes);
+app.use("/api", productoSerialRoutes);
+app.use("/api", alquilerRoutes);
+app.use("/api", notificacionesRoutes);
 
 
-
+app.use("/api/sync", syncRoutes);
 
 app.get("/", (req, res) => {
   res.send("Backend firme");
@@ -77,6 +82,16 @@ sequelize
   .authenticate()
   .then(() => console.log("PostgreSQL conectado"))
   .catch((err) => console.error("Error conexión DB:", err));
+
+
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    require('./scheduler');
+    console.log("Scheduler de tareas programadas iniciado");
+  } catch (error) {
+    console.error("Error al iniciar scheduler:", error.message);
+  }
+}
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () =>

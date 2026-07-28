@@ -1,3 +1,4 @@
+import "../responsive.css";
 // src/pages/Dashboard/clientes/ClienteForm.jsx
 import React, { useState, useEffect } from 'react';
 import { X, Save, User, Building, Phone, Mail, MapPin, FileText, CreditCard, Calendar, DollarSign } from 'lucide-react';
@@ -193,9 +194,9 @@ const ClienteForm = ({ isOpen, onClose, onSubmit, initialData }) => {
   const listasPrecios = ['General', 'Mayorista', 'Distribuidor', 'VIP'];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {initialData ? 'Editar Cliente' : 'Nuevo Cliente'}
           </h3>
@@ -204,7 +205,7 @@ const ClienteForm = ({ isOpen, onClose, onSubmit, initialData }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6">
           {/* Tipo de Persona */}
           <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">

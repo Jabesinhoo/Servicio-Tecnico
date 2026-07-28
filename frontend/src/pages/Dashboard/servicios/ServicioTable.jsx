@@ -57,39 +57,39 @@ const ServicioTable = ({
   };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+    <div className="responsive-table-wrap overflow-x-auto">
+      <table className="responsive-table min-w-full divide-y divide-gray-200 dark:divide-gray-800">
         <thead className="bg-gray-50 dark:bg-gray-900">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Código
             </th>
 
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Cliente
             </th>
 
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Técnico
             </th>
 
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Estado
             </th>
 
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Prioridad
             </th>
 
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Fecha
             </th>
 
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Fecha Agenda
             </th>
 
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Acciones
             </th>
           </tr>
@@ -101,23 +101,23 @@ const ServicioTable = ({
               key={servicio.id}
               className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                 {servicio.codigo_os}
               </td>
 
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                 {servicio.cliente_nombre || '—'}
               </td>
 
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                 {servicio.tecnico_nombre || 'Sin asignar'}
               </td>
 
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                 <StatusBadge status={servicio.estado} />
               </td>
 
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                 <span
                   className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${getPrioridadColor(
                     servicio.prioridad
@@ -127,17 +127,17 @@ const ServicioTable = ({
                 </span>
               </td>
 
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {new Date(servicio.createdAt).toLocaleDateString()}
               </td>
 
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {servicio.fecha_agendada
                   ? new Date(servicio.fecha_agendada).toLocaleDateString()
                   : '—'}
               </td>
 
-              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <div className="flex items-center justify-end gap-2 flex-wrap">
                   {/* Ver detalle */}
                   <button

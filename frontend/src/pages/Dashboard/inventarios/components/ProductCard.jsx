@@ -128,7 +128,7 @@ const ProductCard = ({ product, onEdit, onDelete, onViewDetail, canEdit }) => {
 
             {/* Modal de imágenes */}
             {showImageModal && selectedImage && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={() => setShowImageModal(false)}>
+                <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/80" onClick={() => setShowImageModal(false)}>
                     <div className="relative max-w-4xl w-full max-h-[90vh]">
                         <button
                             onClick={() => setShowImageModal(false)}

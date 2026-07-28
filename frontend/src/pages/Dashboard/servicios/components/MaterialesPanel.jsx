@@ -148,7 +148,7 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false, onRefresh }) 
                       </span>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-xs">
                       <div>
                         <span className="text-gray-500">Solicitado:</span>
                         <span className="ml-1 font-medium">{material.cantidad_solicitada}</span>
@@ -211,13 +211,13 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false, onRefresh }) 
 
       {/* Modal para solicitar material */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b flex justify-between">
+            <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
               <h3 className="text-lg font-semibold">Solicitar Material</h3>
               <button onClick={() => setShowForm(false)}>✕</button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Producto</label>
                 <select
@@ -253,7 +253,7 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false, onRefresh }) 
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t flex justify-end gap-3">
+            <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
               <button onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
               <button onClick={solicitarMaterial} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Solicitar</button>
             </div>
@@ -263,9 +263,9 @@ const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false, onRefresh }) 
 
       {/* Modal para reportar uso */}
       {selectedMaterial && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b flex justify-between">
+            <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
               <h3 className="text-lg font-semibold">Reportar Uso - {selectedMaterial.producto_nombre}</h3>
               <button onClick={() => setSelectedMaterial(null)}>✕</button>
             </div>
@@ -301,7 +301,7 @@ const ReporteUsoForm = ({ material, onSubmit, onCancel }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="p-6 space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         <div className="bg-blue-50 p-3 rounded-lg text-sm">
           Cantidad entregada: <strong>{totalEntregado}</strong>
         </div>
@@ -358,7 +358,7 @@ const ReporteUsoForm = ({ material, onSubmit, onCancel }) => {
         </div>
       </div>
       
-      <div className="px-6 py-4 border-t flex justify-end gap-3">
+      <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-600">Cancelar</button>
         <button type="submit" disabled={!isValid} className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50">
           Guardar Reporte

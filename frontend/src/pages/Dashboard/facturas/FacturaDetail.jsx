@@ -81,7 +81,7 @@ const FacturaDetail = ({ isOpen, onClose, facturaId, onRefresh }) => {
 
     if (loading) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
                 <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full p-8">
                     <div className="flex justify-center items-center h-64">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -104,10 +104,10 @@ const FacturaDetail = ({ isOpen, onClose, facturaId, onRefresh }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
+                <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <FileText className="w-6 h-6 text-blue-600" />
@@ -145,7 +145,7 @@ const FacturaDetail = ({ isOpen, onClose, facturaId, onRefresh }) => {
                     </div>
                 </div>
 
-                <div className="p-6 space-y-6">
+                <div className="p-4 sm:p-6 space-y-6">
                     {/* Información del Cliente */}
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
                         <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
@@ -202,27 +202,27 @@ const FacturaDetail = ({ isOpen, onClose, facturaId, onRefresh }) => {
                             Resumen de la Factura
                         </h4>
                         <div className="flex flex-col items-end space-y-2">
-                            <div className="flex justify-between w-64">
+                            <div className="flex justify-between w-full sm:w-64">
                                 <span className="text-sm text-gray-500">Base</span>
                                 <span className="text-sm font-medium text-gray-900 dark:text-white">
                                     ${Number(factura.total_base).toLocaleString()}
                                 </span>
                             </div>
-                            <div className="flex justify-between w-64">
+                            <div className="flex justify-between w-full sm:w-64">
                                 <span className="text-sm text-gray-500">IVA (19%)</span>
                                 <span className="text-sm font-medium text-gray-900 dark:text-white">
                                     ${Number(factura.total_iva).toLocaleString()}
                                 </span>
                             </div>
                             {factura.total_retencion > 0 && (
-                                <div className="flex justify-between w-64">
+                                <div className="flex justify-between w-full sm:w-64">
                                     <span className="text-sm text-gray-500">Retención</span>
                                     <span className="text-sm font-medium text-red-600">
                                         -${Number(factura.total_retencion).toLocaleString()}
                                     </span>
                                 </div>
                             )}
-                            <div className="flex justify-between w-64 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex justify-between w-full sm:w-64 pt-2 border-t border-gray-200 dark:border-gray-700">
                                 <span className="text-base font-bold text-gray-900 dark:text-white">Total</span>
                                 <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
                                     ${Number(factura.total_general).toLocaleString()}

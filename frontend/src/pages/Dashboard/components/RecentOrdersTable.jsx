@@ -24,7 +24,7 @@ const RecentOrdersTable = ({ orders, loading, onViewOrder }) => {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="responsive-table-wrap overflow-x-auto">
       <table className="w-full">
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-800">

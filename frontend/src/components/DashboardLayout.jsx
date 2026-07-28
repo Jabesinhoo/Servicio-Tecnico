@@ -1,23 +1,25 @@
-// src/components/DashboardLayout.jsx
+// frontend/src/components/DashboardLayout.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import ThemeToggle from './ThemeToggle';
+import NotificacionesCampana from './ui/NotificacionesCampana';
 import { Calendar } from 'lucide-react';
 
-import { 
-  LayoutDashboard, 
-  Wrench, 
-  Package, 
+import {
+  LayoutDashboard,
+  Wrench,
+  Package,
   BarChart3,
   Users,
   UserCog,
   UserCheck,
-  FileText,  // ← Agregar esto
-  Menu, 
-  LogOut, 
+  FileText,
+  Menu,
+  LogOut,
   User,
-  X
+  X,
+  Truck
 } from 'lucide-react';
 
 const DashboardLayout = () => {
@@ -37,13 +39,12 @@ const DashboardLayout = () => {
         setSidebarOpen(true);
       }
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Definir la navegación basada en el rol del usuario
   const navigation = useMemo(() => {
     const commonNav = [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -54,21 +55,15 @@ const DashboardLayout = () => {
       { name: 'Reportes', href: '/dashboard/reportes', icon: BarChart3 },
       { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar },
       { name: 'Facturas', href: '/dashboard/facturas', icon: FileText },
-
+      { name: 'Alquileres', href: '/dashboard/alquileres', icon: Truck },
     ];
 
-    // Solo admin puede ver Usuarios y Técnicos
     if (user?.rol === 'admin') {
       return [
         ...commonNav,
         { name: 'Técnicos', href: '/dashboard/tecnicos', icon: UserCheck },
         { name: 'Usuarios', href: '/dashboard/usuarios', icon: UserCog },
       ];
-    }
-
-    // Técnicos ven solo lo suyo
-    if (user?.rol === 'tecnico') {
-      return commonNav;
     }
 
     return commonNav;
@@ -86,6 +81,7 @@ const DashboardLayout = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950">
+      {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-lg transform transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -159,11 +155,13 @@ const DashboardLayout = () => {
         />
       )}
 
+      {/* Main content */}
       <div
         className={`min-h-screen transition-all duration-300 ${
           sidebarOpen && !isMobile ? 'ml-64' : 'ml-0'
         }`}
       >
+        {/* Header - SOLO UNA VEZ */}
         <header className="sticky top-0 z-30 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="h-16 px-4 flex items-center justify-between">
             <button
@@ -172,7 +170,10 @@ const DashboardLayout = () => {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <ThemeToggle />
+            <div className="flex items-center gap-3">
+              <NotificacionesCampana />
+              <ThemeToggle />
+            </div>
           </div>
         </header>
 

@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-07-28T17:03:53.669Z",
+  "clientes": [],
+  "productos": [],
+  "seriales": [],
+  "alquileres": [],
+  "inventario": [],
+  "totales": {
+    "clientes": 0,
+    "productos": 0,
+    "seriales": 0,
+    "alquileres": 0,
+    "inventario": 0
+  }
+}

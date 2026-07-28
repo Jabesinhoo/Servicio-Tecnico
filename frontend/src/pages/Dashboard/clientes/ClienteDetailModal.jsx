@@ -29,7 +29,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
         <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-8">
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -45,10 +45,10 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
   const esJuridico = cliente.tipo_persona === 'juridica';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
               {stats.cliente.nombre_completo || stats.cliente.razon_social}
@@ -71,7 +71,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6">
           {/* Información General */}
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
@@ -284,7 +284,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
               <DollarSign className="w-4 h-4 text-blue-600" />
               Estadísticas de Servicios
             </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalServicios}</p>
                 <p className="text-xs text-gray-500">Total Servicios</p>
@@ -302,7 +302,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
                 <p className="text-xs text-gray-500">Completados</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
               <div>
                 <p className="text-xs text-gray-500">Promedio por Servicio</p>
                 <p className="text-sm font-semibold">${stats.promedioPorServicio?.toLocaleString()}</p>

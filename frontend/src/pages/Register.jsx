@@ -1,3 +1,4 @@
+import "./responsive.css";
 import { Link, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -222,7 +223,7 @@ export default function Register() {
             <UserPlus className="w-9 h-9 text-white" />
           </div>
 
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Registro Técnico
           </h1>
 
@@ -235,7 +236,7 @@ export default function Register() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500" />
 
-          <div className="p-8 md:p-10">
+          <div className="p-5 sm:p-8 md:p-10">
             {/* FORM HEADER */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-4">

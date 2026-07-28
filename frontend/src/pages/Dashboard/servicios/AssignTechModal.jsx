@@ -45,9 +45,9 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Asignar Técnico</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
             <X className="w-5 h-5" />
@@ -55,7 +55,7 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
         </div>
         
         <form onSubmit={handleSubmit}>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Seleccionar Técnico
             </label>
@@ -81,7 +81,7 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
             )}
           </div>
           
-          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3">
+          <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <button
               type="button"
               onClick={onClose}

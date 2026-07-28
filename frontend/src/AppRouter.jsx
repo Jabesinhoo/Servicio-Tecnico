@@ -22,10 +22,11 @@ import Usuarios from './pages/Dashboard/Usuarios';
 import TiposServicio from './pages/Dashboard/TiposServicio';
 import Agenda from './pages/Dashboard/Agenda';
 import Facturas from './pages/Dashboard/Facturas';
+import Alquileres from './pages/Dashboard/Alquileres';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -33,7 +34,7 @@ const ProtectedRoute = ({ children }) => {
       </div>
     );
   }
-  
+
   return user ? children : <Navigate to="/login" />;
 };
 
@@ -63,6 +64,7 @@ const AppRouter = () => {
           <Route path="tipos-servicio" element={<TiposServicio />} />
           <Route path="agenda" element={<Agenda />} />
           <Route path="facturas" element={<Facturas />} />
+          <Route path="alquileres" element={<Alquileres />} />
 
         </Route>
 

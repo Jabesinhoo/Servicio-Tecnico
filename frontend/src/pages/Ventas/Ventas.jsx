@@ -1,3 +1,4 @@
+import "../responsive.css";
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../services/api";
 import {
@@ -203,11 +204,11 @@ const Ventas = () => {
   // UI
   // =========================
   return (
-    <div className="space-y-6">
+    <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500" />
-        <div className="p-6 sm:p-7 flex items-start justify-between gap-4">
+        <div className="p-4 sm:p-6 sm:p-7 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               Módulo de Ventas
@@ -254,7 +255,7 @@ const Ventas = () => {
         <div className="lg:col-span-2 space-y-6">
           {/* Buscar productos */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+            <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Search className="w-5 h-5 text-slate-500" />
                 <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -267,7 +268,7 @@ const Ventas = () => {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div className="relative">
                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                   <Package className="w-5 h-5 text-slate-400" />
@@ -368,14 +369,14 @@ const Ventas = () => {
         {/* Columna derecha: OV actual */}
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+            <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-slate-500" />
               <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
                 Orden de Venta
               </h2>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {/* client_id */}
               <div className="space-y-2">
                 <label className="text-sm font-extrabold text-slate-700 dark:text-slate-200">

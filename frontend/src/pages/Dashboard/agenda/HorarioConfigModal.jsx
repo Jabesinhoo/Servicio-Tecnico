@@ -70,9 +70,9 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Configurar Horario - {tecnicoNombre}
           </h3>
@@ -82,7 +82,7 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             {horarios.map((horario, idx) => (
               <div key={idx} className="flex gap-3 items-end p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <div className="flex-1">
@@ -103,7 +103,7 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
                     type="time"
                     value={horario.hora_inicio}
                     onChange={(e) => actualizarHorario(idx, 'hora_inicio', e.target.value)}
-                    className="w-32 px-3 py-2 border rounded-lg bg-white dark:bg-gray-900"
+                    className="w-full sm:w-32 px-3 py-2 border rounded-lg bg-white dark:bg-gray-900"
                   />
                 </div>
                 <div>
@@ -112,7 +112,7 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
                     type="time"
                     value={horario.hora_fin}
                     onChange={(e) => actualizarHorario(idx, 'hora_fin', e.target.value)}
-                    className="w-32 px-3 py-2 border rounded-lg bg-white dark:bg-gray-900"
+                    className="w-full sm:w-32 px-3 py-2 border rounded-lg bg-white dark:bg-gray-900"
                   />
                 </div>
                 <button
@@ -135,7 +135,7 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
             </button>
           </div>
 
-          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3">
+          <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <button
               type="button"
               onClick={onClose}

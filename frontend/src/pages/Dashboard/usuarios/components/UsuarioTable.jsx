@@ -40,30 +40,30 @@ const UsuarioTable = ({ usuarios, loading, onViewDetail, onEdit, onDelete, onTog
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+    <div className="responsive-table-wrap overflow-x-auto">
+      <table className="responsive-table min-w-full divide-y divide-gray-200 dark:divide-gray-800">
         <thead className="bg-gray-50 dark:bg-gray-900">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nombre</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Usuario</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Contacto</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Rol</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nombre</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Usuario</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Contacto</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Rol</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
+            <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
           {usuarios.map((usuario) => (
             <tr key={usuario.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <td className="px-6 py-4">
+              <td className="px-4 sm:px-6 py-4">
                 <div className="text-sm font-medium text-gray-900 dark:text-white">
                   {usuario.nombre1} {usuario.apellidos || ''}
                 </div>
                </td>
-              <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+              <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                 {usuario.usuario}
                </td>
-              <td className="px-6 py-4">
+              <td className="px-4 sm:px-6 py-4">
                 <div className="space-y-1">
                   {usuario.celular && (
                     <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
@@ -79,12 +79,12 @@ const UsuarioTable = ({ usuarios, loading, onViewDetail, onEdit, onDelete, onTog
                   )}
                 </div>
                </td>
-              <td className="px-6 py-4">
+              <td className="px-4 sm:px-6 py-4">
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleColors[usuario.rol]}`}>
                   {roleNames[usuario.rol] || usuario.rol}
                 </span>
                </td>
-              <td className="px-6 py-4">
+              <td className="px-4 sm:px-6 py-4">
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                   usuario.activo 
                     ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
@@ -93,7 +93,7 @@ const UsuarioTable = ({ usuarios, loading, onViewDetail, onEdit, onDelete, onTog
                   {usuario.activo ? 'Activo' : 'Inactivo'}
                 </span>
                </td>
-              <td className="px-6 py-4 text-right">
+              <td className="px-4 sm:px-6 py-4 text-right">
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={() => onViewDetail(usuario.id)}

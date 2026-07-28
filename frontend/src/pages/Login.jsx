@@ -1,3 +1,4 @@
+import "./responsive.css";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -71,7 +72,7 @@ export default function Login() {
             <ShieldCheck className="w-9 h-9 text-white" />
           </div>
 
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Sistema Técnicos
           </h1>
         </div>
@@ -81,7 +82,7 @@ export default function Login() {
           {/* Barra de estado superior */}
           <div className="h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500"></div>
 
-          <div className="p-8">
+          <div className="p-5 sm:p-8">
             {/* Encabezado del formulario */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-12 h-12 bg-sky-100 dark:bg-sky-900/30 rounded-full mb-4">
@@ -143,7 +144,7 @@ export default function Login() {
             )}
 
             {/* Formulario */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="responsive-page min-w-0 space-y-4 sm:space-y-6">
               <div className="space-y-5 min-w-0">
                 {/* Campo usuario/email */}
                 <div className="min-w-0 flex flex-col gap-2">

@@ -1,3 +1,4 @@
+import "../responsive.css";
 // src/pages/Dashboard/TiposServicio.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -117,7 +118,7 @@ const TiposServicio = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tipos de Servicio</h1>
@@ -197,16 +198,16 @@ const TiposServicio = () => {
       {/* Vista de Tabla */}
       {viewMode === 'table' && (
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+          <div className="responsive-table-wrap overflow-x-auto">
+            <table className="responsive-table min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nombre</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Categoría</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Valor Base</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Duración</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nombre</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Categoría</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Valor Base</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Duración</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
+                  <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
@@ -219,19 +220,19 @@ const TiposServicio = () => {
                 ) : (
                   filteredTipos.map((tipo) => (
                     <tr key={tipo.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                      <td className="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
                         {tipo.nombre}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                      <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                         {tipo.categoria || '—'}
                       </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
+                      <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
                         ${Number(tipo.valor_base).toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                      <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                         {tipo.duracion_estimada} min
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 sm:px-6 py-4">
                         <button
                           onClick={() => handleToggleStatus(tipo)}
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${
@@ -244,7 +245,7 @@ const TiposServicio = () => {
                           {tipo.activo ? 'Activo' : 'Inactivo'}
                         </button>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 sm:px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEdit(tipo)}

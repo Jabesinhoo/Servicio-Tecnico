@@ -1,6 +1,9 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const Usuario = require("../models/Usuario");
+const { Op } = require('sequelize');
+// Importa desde el índice de modelos, no directamente
+const db = require("../models");
+const Usuario = db.Usuario; // Obtén el modelo desde db
 
 const register = async (req, res) => {
   try {
@@ -23,10 +26,14 @@ const register = async (req, res) => {
       return res.status(400).json({ message: "La contraseña debe tener mínimo 6 caracteres." });
     }
 
-    // Validar existencia
+    // Validar existencia usando Op directamente
     const existe = await Usuario.findOne({
       where: {
-        [require("sequelize").Op.or]: [{ usuario }, { email }, { cedula }],
+        [Op.or]: [
+          { usuario: usuario },
+          { email: email },
+          { cedula: cedula }
+        ]
       },
     });
 
@@ -48,6 +55,7 @@ const register = async (req, res) => {
       email,
       celular: celular || null,
       password: hashed,
+      rol: 'usuario' // Valor por defecto
     });
 
     return res.status(201).json({
@@ -76,7 +84,10 @@ const login = async (req, res) => {
     // Buscar por usuario o email
     const user = await Usuario.findOne({
       where: {
-        [require("sequelize").Op.or]: [{ usuario: identifier }, { email: identifier }],
+        [Op.or]: [
+          { usuario: identifier },
+          { email: identifier },
+        ],
       },
     });
 
@@ -93,20 +104,36 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Usuario o contraseña incorrectos." });
     }
 
+    // Asegúrate de que JWT_SECRET esté definido
+    const jwtSecret = process.env.JWT_SECRET || 'secret_key_development';
     const token = jwt.sign(
-      { id: user.id, usuario: user.usuario, rol: user.rol },
-      process.env.JWT_SECRET,
+      { 
+        id: user.id, 
+        usuario: user.usuario, 
+        email: user.email,
+        rol: user.rol 
+      },
+      jwtSecret,
       { expiresIn: process.env.JWT_EXPIRES || "7d" }
     );
 
     return res.json({
       message: "Login exitoso.",
       token,
-      user: { id: user.id, usuario: user.usuario, email: user.email, rol: user.rol },
+      user: { 
+        id: user.id, 
+        usuario: user.usuario, 
+        email: user.email, 
+        rol: user.rol 
+      },
     });
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    return res.status(500).json({ message: "Error interno del servidor." });
+    console.error("Stack trace:", err.stack);
+    return res.status(500).json({ 
+      message: "Error interno del servidor.",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 

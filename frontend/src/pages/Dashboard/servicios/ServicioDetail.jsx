@@ -122,7 +122,7 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
         <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full p-8">
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -135,10 +135,10 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
   if (!servicio) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 flex-wrap">
@@ -166,7 +166,7 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
         </div>
 
         {/* Tabs */}
-        <div className="px-6 pt-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="px-4 sm:px-6 pt-4 border-b border-gray-200 dark:border-gray-800">
           <div className="flex gap-4 overflow-x-auto">
             {tabs.map(tab => {
               const Icon = tab.icon;
@@ -189,7 +189,7 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
         </div>
 
         {/* Contenido */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Tab Información */}
           {activeTab === 'info' && (
             <div className="space-y-6">
@@ -450,13 +450,13 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
 
         {/* Modal Asignar Técnico */}
         {showAssignModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-              <div className="px-6 py-4 border-b flex justify-between">
+              <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
                 <h3 className="text-lg font-semibold">Asignar Técnico</h3>
                 <button onClick={() => setShowAssignModal(false)}>✕</button>
               </div>
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <select
                   onChange={(e) => handleAssignTech(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg"
@@ -476,13 +476,13 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
 
         {/* Modal Agendar */}
         {showAgendarModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-              <div className="px-6 py-4 border-b flex justify-between">
+              <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
                 <h3 className="text-lg font-semibold">Agendar Servicio</h3>
                 <button onClick={() => setShowAgendarModal(false)}>✕</button>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Fecha</label>
                   <input
@@ -518,7 +518,7 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
                   </select>
                 </div>
               </div>
-              <div className="px-6 py-4 border-t flex justify-end gap-3">
+              <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                 <button onClick={() => setShowAgendarModal(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
                 <button onClick={handleAgendar} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button>
               </div>
@@ -528,17 +528,17 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
 
         {/* Modal Aprobar */}
         {showApproveModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-              <div className="px-6 py-4 border-b flex justify-between">
+              <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
                 <h3 className="text-lg font-semibold">Aprobar Servicio</h3>
                 <button onClick={() => setShowApproveModal(false)}>✕</button>
               </div>
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <p className="text-sm text-gray-600">¿Estás seguro de aprobar este servicio?</p>
                 <p className="text-xs text-gray-500 mt-2">Se podrá asignar un técnico después de la aprobación.</p>
               </div>
-              <div className="px-6 py-4 border-t flex justify-end gap-3">
+              <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                 <button onClick={() => setShowApproveModal(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
                 <button onClick={handleApprove} className="px-4 py-2 bg-green-600 text-white rounded-lg">Aprobar</button>
               </div>
@@ -548,13 +548,13 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
 
         {/* Modal Rechazar */}
         {showRejectModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
-              <div className="px-6 py-4 border-b flex justify-between">
+              <div className="px-4 sm:px-6 py-4 border-b flex justify-between">
                 <h3 className="text-lg font-semibold">Rechazar Servicio</h3>
                 <button onClick={() => setShowRejectModal(false)}>✕</button>
               </div>
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <label className="block text-sm font-medium mb-2">Motivo del rechazo *</label>
                 <textarea
                   value={rejectMotivo}
@@ -564,7 +564,7 @@ const ServicioDetail = ({ isOpen, onClose, servicioId, onRefresh }) => {
                   placeholder="Especifique la razón por la que se rechaza este servicio..."
                 />
               </div>
-              <div className="px-6 py-4 border-t flex justify-end gap-3">
+              <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                 <button onClick={() => setShowRejectModal(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
                 <button onClick={handleReject} className="px-4 py-2 bg-red-600 text-white rounded-lg">Rechazar</button>
               </div>

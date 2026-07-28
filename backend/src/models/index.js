@@ -16,7 +16,8 @@ if (config.use_env_variable) {
   sequelize = new Sequelize(config.database, config.username, config.password, config);
 }
 
-// Leer todos los archivos de la carpeta models
+
+
 fs
   .readdirSync(__dirname)
   .filter(file => {

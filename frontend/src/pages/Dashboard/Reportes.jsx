@@ -1,3 +1,4 @@
+import "../responsive.css";
 // src/pages/Dashboard/Reportes.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -328,7 +329,7 @@ const Reportes = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Reportes</h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">Visualiza y exporta reportes del sistema</p>
@@ -424,7 +425,7 @@ const Reportes = () => {
       {/* Vista previa del reporte */}
       {reporteData && reporteData.data && reporteData.data.length > 0 && (
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between flex-wrap gap-2">
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               {reporteData.nombre}
             </h3>
@@ -453,8 +454,8 @@ const Reportes = () => {
             </div>
           </div>
           
-          <div className="p-6 overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+          <div className="p-4 sm:p-6 overflow-x-auto">
+            <table className="responsive-table min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
                   {reporteData.columns.map((col) => (

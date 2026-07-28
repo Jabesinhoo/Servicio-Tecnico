@@ -37,16 +37,16 @@ const FacturaTable = ({ facturas, loading, onViewDetail, onCancel, onMarkPaid, c
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+    <div className="responsive-table-wrap overflow-x-auto">
+      <table className="responsive-table min-w-full divide-y divide-gray-200 dark:divide-gray-800">
         <thead className="bg-gray-50 dark:bg-gray-900">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">N° Factura</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cliente</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Total</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">N° Factura</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cliente</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Total</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
+            <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
+            <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
@@ -56,24 +56,24 @@ const FacturaTable = ({ facturas, loading, onViewDetail, onCancel, onMarkPaid, c
 
             return (
               <tr key={factura.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                <td className="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
                   {factura.numero_factura}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                   {clienteNombre}
                 </td>
-                <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
+                <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
                   ${Number(factura.total_general).toLocaleString()}
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-4 sm:px-6 py-4">
                   <span className={`inline-flex px-2 py-1 text-xs rounded-full ${estadoColors[factura.estado]}`}>
                     {estadoLabels[factura.estado]}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                   {new Date(factura.fecha_emision).toLocaleDateString()}
                 </td>
-                <td className="px-6 py-4 text-right">
+                <td className="px-4 sm:px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={() => onViewDetail(factura.id)}
