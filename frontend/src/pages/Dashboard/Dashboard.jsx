@@ -94,10 +94,10 @@ const Dashboard = () => {
           {getWelcomeMessage()}, {displayName}
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          {userRole === 'admin' && 'Panel de administración - Visión general del sistema'}
-          {userRole === 'tecnico' && 'Panel del técnico - Tus servicios asignados'}
-          {userRole === 'ventas' && 'Panel de ventas - Tus métricas'}
-          {userRole === 'inventario' && 'Panel de inventarios - Control de stock'}
+          {userRole === 'admin' && ''}
+          {userRole === 'tecnico' && ''}
+          {userRole === 'ventas' && ''}
+          {userRole === 'inventario' && ''}
         </p>
       </div>
 

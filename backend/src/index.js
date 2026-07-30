@@ -25,6 +25,7 @@ const productoSerialRoutes = require('./routes/producto-serial.routes');
 const alquilerRoutes = require('./routes/alquiler.routes');
 const syncRoutes = require('./routes/sync.routes');
 const notificacionesRoutes = require('./routes/notificaciones.routes');
+const iaRoutes = require('./routes/ia.routes');
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use("/api", invoiceRoutes);
 app.use("/api", productoSerialRoutes);
 app.use("/api", alquilerRoutes);
 app.use("/api", notificacionesRoutes);
+app.use("/api", iaRoutes);
 
 
 app.use("/api/sync", syncRoutes);

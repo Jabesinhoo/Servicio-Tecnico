@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # ============================================================
+  # 1. BASE DE DATOS - PostgreSQL
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: tecnicos_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1235
+      POSTGRES_DB: tecnicos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tecnicos_network
+
+  # ============================================================
+  # 2. BACKEND - Node.js
+  # ============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tecnicos_backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: 1235
+      DB_NAME: tecnicos
+      PORT: 3001
+      JWT_SECRET: una_clave_super_secreta
+      JWT_EXPIRES: 7d
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.2:3b
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - tecnicos_network
+
+  # ============================================================
+  # 3. FRONTEND - React/Vite
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tecnicos_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:3001
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - tecnicos_network
+
+  # ============================================================
+  # 4. IA OFFLINE - Ollama (SIN GPU)
+  # ============================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: tecnicos_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
+    networks:
+      - tecnicos_network
+
+# ============================================================
+# VOLÚMENES PARA DATOS PERSISTENTES
+# ============================================================
+volumes:
+  postgres_data:
+  ollama_data:
+
+# ============================================================
+# RED
+# ============================================================
+networks:
+  tecnicos_network:
+    driver: bridge
