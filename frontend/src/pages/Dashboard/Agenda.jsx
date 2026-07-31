@@ -1,4 +1,3 @@
-import "../responsive.css";
 // src/pages/Dashboard/Agenda.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';

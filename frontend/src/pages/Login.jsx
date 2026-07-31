@@ -1,4 +1,3 @@
-import "./responsive.css";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";

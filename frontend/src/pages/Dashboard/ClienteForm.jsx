@@ -1,4 +1,3 @@
-import "../responsive.css";
 // src/pages/Dashboard/clientes/ClienteForm.jsx
 import React, { useState, useEffect } from 'react';
 import { X, Save, User, Building, Phone, Mail, MapPin, FileText, CreditCard, Calendar, DollarSign } from 'lucide-react';

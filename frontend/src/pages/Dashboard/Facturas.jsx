@@ -1,4 +1,3 @@
-import "../responsive.css";
 // src/pages/Dashboard/Facturas.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';

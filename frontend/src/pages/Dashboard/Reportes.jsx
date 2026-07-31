@@ -1,4 +1,3 @@
-import "../responsive.css";
 // src/pages/Dashboard/Reportes.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';

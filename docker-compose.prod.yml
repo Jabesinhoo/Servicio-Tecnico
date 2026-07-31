@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: 1235
       POSTGRES_DB: tecnicos
     ports:
-      - "5432:5432"
+      - "5433:5432"  # Cambiado para evitar conflicto
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -36,6 +36,7 @@ services:
       JWT_EXPIRES: 7d
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: llama3.2:3b
+      CORS_ORIGIN: https://tecnicos.tecnonacho.com
     ports:
       - "3001:3001"
     depends_on:
@@ -50,13 +51,13 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod  # Necesitaremos crear este archivo
     container_name: tecnicos_frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:3001
+      VITE_API_URL: https://tecnicos.tecnonacho.com/api
     ports:
-      - "5173:5173"
+      - "8080:5173"  # Frontend en puerto 8080
     depends_on:
       - backend
     volumes:
@@ -84,13 +85,11 @@ services:
     container_name: tecnicos_n8n
     restart: unless-stopped
     environment:
-      #- N8N_BASIC_AUTH_ACTIVE=true
-      #- N8N_BASIC_AUTH_USER=admin
-      #- N8N_BASIC_AUTH_PASSWORD=admin123
-      - N8N_HOST=localhost
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_HOST=tecnicos.tecnonacho.com
+      - N8N_PORT=5679
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://tecnicos.tecnonacho.com:5679/
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
@@ -98,7 +97,7 @@ services:
       - DB_POSTGRESDB_USER=postgres
       - DB_POSTGRESDB_PASSWORD=1235
     ports:
-      - "5678:5678"
+      - "5679:5678"
     depends_on:
       postgres:
         condition: service_healthy
