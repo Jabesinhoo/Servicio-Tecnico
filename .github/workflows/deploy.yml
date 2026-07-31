@@ -51,25 +51,46 @@ jobs:
           USER_CLEAN="$(printf '%s' "$VPS_USER" | tr -d '\r\n' | xargs)"
           PORT_CLEAN="$(printf '%s' "$VPS_PORT" | tr -d '\r\n' | xargs)"
 
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p "$PORT_CLEAN" "$USER_CLEAN@$HOST_CLEAN" << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p "$PORT_CLEAN" "$USER_CLEAN@$HOST_CLEAN" << 'DEPLOY_SCRIPT'
             set -e
 
+            echo "========================================="
+            echo "🚀 INICIANDO DEPLOY - SISTEMA TÉCNICOS"
+            echo "========================================="
+
+            echo ""
+            echo "🧹 Limpiando contenedores huérfanos..."
+            docker container prune -f || true
+            docker volume prune -f || true
+
+            echo ""
             echo "🔄 Actualizando repositorio..."
             cd /opt/tecnicos/Servicio-Tecnico
             git fetch origin
             git reset --hard origin/main
 
-            echo "🛑 Deteniendo contenedores..."
-            docker compose -f docker-compose.prod.yml down
+            echo ""
+            echo "🛑 Deteniendo contenedores existentes..."
+            docker compose -f docker-compose.prod.yml down --remove-orphans || true
 
-            echo "🔨 Reconstruyendo contenedores..."
+            echo ""
+            echo "🔨 Reconstruyendo y levantando contenedores..."
             docker compose -f docker-compose.prod.yml up -d --build
 
-            echo "📊 Verificando estado..."
+            echo ""
+            echo "📊 Verificando estado de los contenedores..."
             docker compose -f docker-compose.prod.yml ps
 
+            echo ""
             echo "🧹 Limpiando imágenes viejas..."
-            docker image prune -f
+            docker image prune -f || true
 
-            echo "✅ Deploy completado!"
-          EOF
+            echo ""
+            echo "🌐 Probando el backend..."
+            curl -s http://localhost:3001/api/health || echo "⚠️ Backend no responde"
+
+            echo ""
+            echo "========================================="
+            echo "✅ DEPLOY COMPLETADO CON ÉXITO"
+            echo "🌐 https://tecnicos.tecnonacho.com"
+            echo "========================================="
