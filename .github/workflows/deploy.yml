@@ -25,7 +25,8 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
-          set -e
+          set -euo pipefail
+
           mkdir -p ~/.ssh
 
           printf '%s' "$VPS_SSH_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
@@ -45,52 +46,112 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
-          set -e
+          set -euo pipefail
 
           HOST_CLEAN="$(printf '%s' "$VPS_HOST" | tr -d '\r\n' | xargs)"
           USER_CLEAN="$(printf '%s' "$VPS_USER" | tr -d '\r\n' | xargs)"
           PORT_CLEAN="$(printf '%s' "$VPS_PORT" | tr -d '\r\n' | xargs)"
 
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p "$PORT_CLEAN" "$USER_CLEAN@$HOST_CLEAN" << 'DEPLOY_SCRIPT'
-            set -e
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            -p "$PORT_CLEAN" \
+            "$USER_CLEAN@$HOST_CLEAN" \
+            'bash -se' << 'DEPLOY_SCRIPT'
 
-            echo "========================================="
-            echo "🚀 INICIANDO DEPLOY - SISTEMA TÉCNICOS"
-            echo "========================================="
+          set -euo pipefail
 
-            echo ""
-            echo "🧹 Limpiando contenedores huérfanos..."
-            docker container prune -f || true
-            docker volume prune -f || true
+          PROJECT_DIR="/opt/tecnicos/Servicio-Tecnico"
+          COMPOSE_FILE="docker-compose.prod.yml"
 
-            echo ""
-            echo "🔄 Actualizando repositorio..."
-            cd /opt/tecnicos/Servicio-Tecnico
-            git fetch origin
-            git reset --hard origin/main
+          echo "========================================="
+          echo "INICIANDO DEPLOY - SISTEMA TÉCNICOS"
+          echo "========================================="
 
-            echo ""
-            echo "🛑 Deteniendo contenedores existentes..."
-            docker compose -f docker-compose.prod.yml down --remove-orphans || true
+          cd "$PROJECT_DIR"
 
-            echo ""
-            echo "🔨 Reconstruyendo y levantando contenedores..."
-            docker compose -f docker-compose.prod.yml up -d --build
+          echo ""
+          echo "Actualizando repositorio..."
+          git fetch origin main
+          git reset --hard origin/main
 
-            echo ""
-            echo "📊 Verificando estado de los contenedores..."
-            docker compose -f docker-compose.prod.yml ps
+          echo ""
+          echo "Commit desplegado:"
+          git log -1 --oneline
 
-            echo ""
-            echo "🧹 Limpiando imágenes viejas..."
-            docker image prune -f || true
+          echo ""
+          echo "Validando Docker Compose..."
+          docker compose -f "$COMPOSE_FILE" config --quiet
 
-            echo ""
-            echo "🌐 Probando el backend..."
-            curl -s http://localhost:3001/api/health || echo "⚠️ Backend no responde"
+          echo ""
+          echo "Verificando configuración del frontend..."
+          docker compose -f "$COMPOSE_FILE" config |
+            sed -n '/frontend:/,/^[^ ]/p' || true
 
-            echo ""
-            echo "========================================="
-            echo "✅ DEPLOY COMPLETADO CON ÉXITO"
-            echo "🌐 https://tecnicos.tecnonacho.com"
-            echo "========================================="
+          echo ""
+          echo "Construyendo imágenes..."
+          docker compose -f "$COMPOSE_FILE" build
+
+          echo ""
+          echo "Actualizando contenedores..."
+          docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+
+          echo ""
+          echo "Esperando al frontend..."
+          FRONTEND_OK=false
+
+          for intento in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8082/ > /dev/null; then
+              FRONTEND_OK=true
+              echo "Frontend disponible."
+              break
+            fi
+
+            echo "Intento $intento/20: frontend aún no disponible."
+            sleep 3
+          done
+
+          if [ "$FRONTEND_OK" != "true" ]; then
+            echo "ERROR: el frontend no respondió correctamente."
+            docker compose -f "$COMPOSE_FILE" ps
+            docker compose -f "$COMPOSE_FILE" logs frontend --tail=100
+            exit 1
+          fi
+
+          echo ""
+          echo "Esperando al backend..."
+          BACKEND_OK=false
+
+          for intento in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then
+              BACKEND_OK=true
+              echo "Backend disponible."
+              break
+            fi
+
+            echo "Intento $intento/20: backend aún no disponible."
+            sleep 3
+          done
+
+          if [ "$BACKEND_OK" != "true" ]; then
+            echo "ERROR: el backend no respondió correctamente."
+            docker compose -f "$COMPOSE_FILE" ps
+            docker compose -f "$COMPOSE_FILE" logs backend --tail=100
+            exit 1
+          fi
+
+          echo ""
+          echo "Estado final:"
+          docker compose -f "$COMPOSE_FILE" ps
+
+          echo ""
+          echo "Limpiando imágenes sin uso..."
+          docker image prune -f
+
+          echo ""
+          echo "========================================="
+          echo "DEPLOY COMPLETADO CORRECTAMENTE"
+          echo "https://tecnicos.tecnonacho.com"
+          echo "========================================="
+
+          DEPLOY_SCRIPT
