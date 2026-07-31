@@ -57,7 +57,7 @@ services:
     environment:
       VITE_API_URL: https://tecnicos.tecnonacho.com/api
     ports:
-      - "8080:5173"  # Frontend en puerto 8080
+      - "8082:5173"  # Frontend en puerto 8080
     depends_on:
       - backend
     volumes:
