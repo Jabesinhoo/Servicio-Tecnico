@@ -1,33 +1,269 @@
 // backend/src/services/ia.service.js
-const { Ollama } = require('ollama');
 const { Pool } = require('pg');
 
-const ollama = new Ollama({
-  host: process.env.OLLAMA_URL || 'http://localhost:11434'
-});
+const OLLAMA_URL = (
+  process.env.OLLAMA_URL || 'http://ollama:11434'
+).replace(/\/+$/, '');
 
-const MODEL = process.env.OLLAMA_MODEL || 'llama3.2:3b';
+const MODEL =
+  process.env.OLLAMA_MODEL || 'llama3.2:1b';
+
+const toPositiveInt = (value, fallback) => {
+  const parsed = Number.parseInt(value, 10);
+
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : fallback;
+};
+
+const OLLAMA_TIMEOUT_MS = toPositiveInt(
+  process.env.OLLAMA_TIMEOUT_MS,
+  180000
+);
+
+const OLLAMA_NUM_CTX = toPositiveInt(
+  process.env.OLLAMA_NUM_CTX,
+  2048
+);
+
+const OLLAMA_NUM_PREDICT = toPositiveInt(
+  process.env.OLLAMA_NUM_PREDICT,
+  400
+);
+
+const OLLAMA_KEEP_ALIVE =
+  process.env.OLLAMA_KEEP_ALIVE || '30m';
 
 const pgPool = new Pool({
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || '1235',
-    database: process.env.DB_NAME || 'tecnicos'
+  host: process.env.DB_HOST || 'postgres',
+  port: toPositiveInt(process.env.DB_PORT, 5432),
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || '1235',
+  database: process.env.DB_NAME || 'tecnicos',
+  max: toPositiveInt(process.env.DB_POOL_MAX, 10),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 // ============================================================
-// FECHA ACTUAL
+// OLLAMA
+// ============================================================
+
+const solicitarOllama = async (
+  ruta,
+  opciones = {},
+  timeoutMs = OLLAMA_TIMEOUT_MS
+) => {
+  const controller = new AbortController();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const response = await fetch(
+      `${OLLAMA_URL}${ruta}`,
+      {
+        ...opciones,
+        signal: controller.signal,
+      }
+    );
+
+    const raw = await response.text();
+
+    let data = null;
+
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = {
+          raw,
+        };
+      }
+    }
+
+    if (!response.ok) {
+      const detalle =
+        data?.error ||
+        data?.message ||
+        data?.raw ||
+        `HTTP ${response.status}`;
+
+      throw new Error(
+        `Ollama respondió con error: ${detalle}`
+      );
+    }
+
+    return data;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(
+        `Ollama no respondió antes de ${Math.round(
+          timeoutMs / 1000
+        )} segundos`
+      );
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const ollamaChat = async (
+  messages,
+  options = {}
+) => {
+  const data = await solicitarOllama(
+    '/api/chat',
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+      },
+
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        stream: false,
+        keep_alive: OLLAMA_KEEP_ALIVE,
+
+        options: {
+          num_ctx: OLLAMA_NUM_CTX,
+          num_predict: OLLAMA_NUM_PREDICT,
+          temperature: 0.2,
+          ...options,
+        },
+      }),
+    }
+  );
+
+  const contenido =
+    data?.message?.content?.trim();
+
+  if (!contenido) {
+    throw new Error(
+      'Ollama respondió sin contenido'
+    );
+  }
+
+  return contenido;
+};
+
+const verificarConexion = async () => {
+  try {
+    const data = await solicitarOllama(
+      '/api/tags',
+      {
+        method: 'GET',
+      },
+      15000
+    );
+
+    const modelos = Array.isArray(data?.models)
+      ? data.models
+      : [];
+
+    const modeloDisponible = modelos.some(
+      (item) =>
+        item?.name === MODEL ||
+        item?.model === MODEL
+    );
+
+    if (!modeloDisponible) {
+      return {
+        success: false,
+        disponible: false,
+        modelo: MODEL,
+
+        error:
+          `El servidor Ollama está activo, ` +
+          `pero el modelo ${MODEL} no está descargado`,
+      };
+    }
+
+    return {
+      success: true,
+      disponible: true,
+      modelo: MODEL,
+      message:
+        `Ollama está disponible con el modelo ${MODEL}`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      disponible: false,
+      modelo: MODEL,
+      error: error.message,
+    };
+  }
+};
+
+// ============================================================
+// FECHA ACTUAL EN COLOMBIA
 // ============================================================
 
 const getFechaActual = () => {
-    const hoy = new Date();
-    return {
-        fecha: hoy.toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' }),
-        iso: hoy.toISOString().split('T')[0],
-        hora: hoy.toLocaleTimeString('es-CO'),
-        diaSemana: hoy.toLocaleDateString('es-CO', { weekday: 'long' })
-    };
+  const ahora = new Date();
+  const timeZone = 'America/Bogota';
+
+  const partes = new Intl.DateTimeFormat(
+    'en-CA',
+    {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }
+  ).formatToParts(ahora);
+
+  const valores = Object.fromEntries(
+    partes.map((parte) => [
+      parte.type,
+      parte.value,
+    ])
+  );
+
+  const iso =
+    `${valores.year}-` +
+    `${valores.month}-` +
+    `${valores.day}`;
+
+  return {
+    fecha: new Intl.DateTimeFormat(
+      'es-CO',
+      {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'long',
+      }
+    ).format(ahora),
+
+    iso,
+
+    hora: new Intl.DateTimeFormat(
+      'es-CO',
+      {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }
+    ).format(ahora),
+
+    diaSemana: new Intl.DateTimeFormat(
+      'es-CO',
+      {
+        timeZone,
+        weekday: 'long',
+      }
+    ).format(ahora),
+  };
 };
 
 // ============================================================
@@ -35,449 +271,945 @@ const getFechaActual = () => {
 // ============================================================
 
 const getBotConfig = (rol) => {
-    const bots = {
-        admin: {
-            nombre: 'Administrador',
-            descripcion: 'Visión general del sistema, estadísticas, gestión de usuarios',
-            prompt: `
-                Eres el asistente del Administrador del sistema.
-                Tienes acceso a toda la información del sistema.
-                Puedes responder sobre: estadísticas generales, gestión de usuarios, rendimiento global,
-                servicios, productos, clientes, facturación, alquileres, inventario.
-                Responde de forma profesional y ejecutiva.
-            `
-        },
-        tecnico: {
-            nombre: 'Técnico',
-            descripcion: 'Servicios asignados, diagnósticos, equipos, repuestos',
-            prompt: `
-                Eres el asistente de un Técnico de servicio.
-                Tu función es ayudar al técnico con sus tareas diarias.
-                Puedes responder sobre: servicios asignados, equipos, diagnósticos, repuestos,
-                órdenes pendientes, visitas técnicas, estado de equipos.
-                Responde de forma práctica y operativa.
-                Prioriza la información de los servicios asignados al técnico.
-            `
-        },
-        ventas: {
-            nombre: 'Ventas',
-            descripcion: 'Cotizaciones, clientes, pedidos, seguimiento',
-            prompt: `
-                Eres el asistente del área de Ventas.
-                Tu función es ayudar con la gestión de cotizaciones, clientes y pedidos.
-                Puedes responder sobre: cotizaciones pendientes, clientes, pedidos,
-                seguimiento de ventas, productos, precios, disponibilidad.
-                Responde de forma comercial y proactiva.
-                Prioriza el seguimiento a clientes y cierre de ventas.
-            `
-        },
-        cartera: {
-            nombre: 'Cartera',
-            descripcion: 'Facturas, pagos, clientes morosos, cobros',
-            prompt: `
-                Eres el asistente del área de Cartera.
-                Tu función es ayudar con la gestión de cobros y pagos.
-                Puedes responder sobre: facturas vencidas, clientes morosos,
-                pagos pendientes, acuerdos de pago, cartera por antigüedad.
-                Responde de forma financiera y estratégica.
-                Prioriza los cobros urgentes y la reducción de morosidad.
-            `
-        },
-        jefe_tecnicos: {
-            nombre: 'Jefe de Técnicos',
-            descripcion: 'Carga de trabajo, rendimiento, asignaciones, productividad',
-            prompt: `
-                Eres el asistente del Jefe de Técnicos.
-                Tu función es ayudar con la gestión del equipo técnico.
-                Puedes responder sobre: carga de trabajo por técnico, rendimiento,
-                asignaciones, productividad, tiempos de atención, órdenes retrasadas.
-                Responde de forma gerencial y analítica.
-                Prioriza la optimización de recursos y la eficiencia del equipo.
-            `
-        },
-        garantias: {
-            nombre: 'Garantías',
-            descripcion: 'Casos de garantía, seguimiento, proveedores, devoluciones',
-            prompt: `
-                Eres el asistente del área de Garantías.
-                Tu función es ayudar con la gestión de casos de garantía.
-                Puedes responder sobre: garantías ingresadas, casos pendientes,
-                seguimiento a proveedores, devoluciones, productos defectuosos.
-                Responde de forma detallada y de seguimiento.
-                Prioriza el cumplimiento de tiempos y la satisfacción del cliente.
-            `
-        }
-    };
-    return bots[rol] || bots.admin;
+  const bots = {
+    admin: {
+      nombre: 'Administrador',
+
+      descripcion:
+        'Visión general del sistema, estadísticas y gestión de usuarios',
+
+      prompt: `
+        Eres el asistente del Administrador del sistema.
+
+        Puedes ayudar con estadísticas generales, usuarios,
+        rendimiento global, servicios, productos, clientes,
+        facturación, alquileres e inventario.
+
+        Responde de forma profesional y ejecutiva.
+      `,
+    },
+
+    tecnico: {
+      nombre: 'Técnico',
+
+      descripcion:
+        'Servicios asignados, diagnósticos, equipos y repuestos',
+
+      prompt: `
+        Eres el asistente de un Técnico de servicio.
+
+        Ayuda con servicios asignados, equipos, diagnósticos,
+        repuestos, órdenes pendientes, visitas técnicas
+        y estado de equipos.
+
+        Responde de forma práctica y operativa.
+        Prioriza la información de los servicios
+        asignados al técnico.
+      `,
+    },
+
+    ventas: {
+      nombre: 'Ventas',
+
+      descripcion:
+        'Cotizaciones, clientes, pedidos y seguimiento',
+
+      prompt: `
+        Eres el asistente del área de Ventas.
+
+        Ayuda con cotizaciones, clientes, pedidos,
+        seguimiento comercial, productos, precios
+        y disponibilidad.
+
+        Responde de forma comercial y proactiva.
+      `,
+    },
+
+    cartera: {
+      nombre: 'Cartera',
+
+      descripcion:
+        'Facturas, pagos, clientes morosos y cobros',
+
+      prompt: `
+        Eres el asistente del área de Cartera.
+
+        Ayuda con facturas vencidas, clientes morosos,
+        pagos pendientes, acuerdos de pago
+        y cartera por antigüedad.
+
+        Responde de forma financiera y estratégica.
+      `,
+    },
+
+    jefe_tecnicos: {
+      nombre: 'Jefe de Técnicos',
+
+      descripcion:
+        'Carga de trabajo, rendimiento, asignaciones y productividad',
+
+      prompt: `
+        Eres el asistente del Jefe de Técnicos.
+
+        Ayuda con carga de trabajo, rendimiento,
+        asignaciones, productividad, tiempos de atención
+        y órdenes retrasadas.
+
+        Responde de forma gerencial y analítica.
+      `,
+    },
+
+    garantias: {
+      nombre: 'Garantías',
+
+      descripcion:
+        'Casos de garantía, seguimiento, proveedores y devoluciones',
+
+      prompt: `
+        Eres el asistente del área de Garantías.
+
+        Ayuda con garantías ingresadas, casos pendientes,
+        proveedores, devoluciones y productos defectuosos.
+
+        Responde de forma detallada
+        y orientada al seguimiento.
+      `,
+    },
+  };
+
+  return bots[rol] || bots.admin;
 };
 
 // ============================================================
 // FUNCIONES DE CONSULTA POR ROL
 // ============================================================
 
-// 1. Servicios de un técnico
-const getServiciosTecnico = async (tecnico_id) => {
-    try {
-        const result = await pgPool.query(`
-            SELECT 
-                s.codigo_os,
-                s.estado,
-                s.descripcion_inicial,
-                s.fecha_agendada,
-                s.hora_inicio_agendada,
-                s.duracion_estimada,
-                c.razon_social as cliente_nombre,
-                c.documento as cliente_documento,
-                s.created_at
-            FROM service_orders s
-            LEFT JOIN clients c ON s.client_id = c.id
-            WHERE s.tecnico_id = $1
-            ORDER BY s.fecha_agendada ASC NULLS LAST
-        `, [tecnico_id]);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getServiciosTecnico:', error);
-        return [];
-    }
+const getServiciosTecnico = async (
+  tecnicoId
+) => {
+  if (!tecnicoId) {
+    return [];
+  }
+
+  try {
+    const result = await pgPool.query(
+      `
+        SELECT
+          s.codigo_os,
+          s.estado,
+          s.descripcion_inicial,
+          s.fecha_agendada,
+          s.hora_inicio_agendada,
+          s.duracion_estimada,
+          c.razon_social AS cliente_nombre,
+          c.documento AS cliente_documento,
+          s.created_at
+        FROM service_orders s
+        LEFT JOIN clients c
+          ON s.client_id = c.id
+        WHERE s.tecnico_id = $1
+        ORDER BY
+          s.fecha_agendada ASC NULLS LAST
+      `,
+      [tecnicoId]
+    );
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getServiciosTecnico:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 2. Servicios del día de un técnico
-const getServiciosHoyTecnico = async (tecnico_id) => {
-    try {
-        const hoy = getFechaActual().iso;
-        const result = await pgPool.query(`
-            SELECT 
-                s.codigo_os,
-                s.estado,
-                s.descripcion_inicial,
-                s.fecha_agendada,
-                s.hora_inicio_agendada,
-                s.duracion_estimada,
-                c.razon_social as cliente_nombre,
-                c.documento as cliente_documento
-            FROM service_orders s
-            LEFT JOIN clients c ON s.client_id = c.id
-            WHERE s.tecnico_id = $1 AND DATE(s.fecha_agendada) = $2
-            ORDER BY s.hora_inicio_agendada ASC
-        `, [tecnico_id, hoy]);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getServiciosHoyTecnico:', error);
-        return [];
-    }
+const getServiciosHoyTecnico = async (
+  tecnicoId
+) => {
+  if (!tecnicoId) {
+    return [];
+  }
+
+  try {
+    const result = await pgPool.query(
+      `
+        SELECT
+          s.codigo_os,
+          s.estado,
+          s.descripcion_inicial,
+          s.fecha_agendada,
+          s.hora_inicio_agendada,
+          s.duracion_estimada,
+          c.razon_social AS cliente_nombre,
+          c.documento AS cliente_documento
+        FROM service_orders s
+        LEFT JOIN clients c
+          ON s.client_id = c.id
+        WHERE s.tecnico_id = $1
+          AND DATE(s.fecha_agendada) = $2
+        ORDER BY
+          s.hora_inicio_agendada ASC
+      `,
+      [
+        tecnicoId,
+        getFechaActual().iso,
+      ]
+    );
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getServiciosHoyTecnico:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 3. Resumen de un técnico
-const getResumenTecnico = async (tecnico_id) => {
-    try {
-        const result = await pgPool.query(`
-            SELECT 
-                COUNT(*) as total,
-                COUNT(CASE WHEN estado = 'pendiente' THEN 1 END) as pendientes,
-                COUNT(CASE WHEN estado = 'asignada' THEN 1 END) as asignados,
-                COUNT(CASE WHEN estado = 'en_ejecucion' THEN 1 END) as en_ejecucion,
-                COUNT(CASE WHEN estado = 'cerrada' THEN 1 END) as completados,
-                COUNT(CASE WHEN DATE(fecha_agendada) = CURRENT_DATE THEN 1 END) as hoy
-            FROM service_orders s
-            WHERE s.tecnico_id = $1
-        `, [tecnico_id]);
-        return result.rows[0];
-    } catch (error) {
-        console.error('Error en getResumenTecnico:', error);
-        return null;
-    }
+const getResumenTecnico = async (
+  tecnicoId
+) => {
+  if (!tecnicoId) {
+    return null;
+  }
+
+  try {
+    const result = await pgPool.query(
+      `
+        SELECT
+          COUNT(*) AS total,
+
+          COUNT(
+            CASE
+              WHEN estado = 'pendiente'
+              THEN 1
+            END
+          ) AS pendientes,
+
+          COUNT(
+            CASE
+              WHEN estado = 'asignada'
+              THEN 1
+            END
+          ) AS asignados,
+
+          COUNT(
+            CASE
+              WHEN estado = 'en_ejecucion'
+              THEN 1
+            END
+          ) AS en_ejecucion,
+
+          COUNT(
+            CASE
+              WHEN estado = 'cerrada'
+              THEN 1
+            END
+          ) AS completados,
+
+          COUNT(
+            CASE
+              WHEN DATE(fecha_agendada) = CURRENT_DATE
+              THEN 1
+            END
+          ) AS hoy
+
+        FROM service_orders
+        WHERE tecnico_id = $1
+      `,
+      [tecnicoId]
+    );
+
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error(
+      'Error en getResumenTecnico:',
+      error.message
+    );
+
+    return null;
+  }
 };
 
-// 4. Todos los técnicos
 const getTecnicosDisponibles = async () => {
-    try {
-        const result = await pgPool.query(`
-            SELECT 
-                id,
-                nombre1,
-                apellidos,
-                usuario,
-                celular,
-                email,
-                activo
-            FROM usuarios 
-            WHERE rol = 'tecnico'
-            ORDER BY nombre1 ASC
-        `);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getTecnicosDisponibles:', error);
-        return [];
-    }
+  try {
+    const result = await pgPool.query(`
+      SELECT
+        id,
+        nombre1,
+        apellidos,
+        usuario,
+        celular,
+        email,
+        activo
+      FROM usuarios
+      WHERE rol = 'tecnico'
+      ORDER BY nombre1 ASC
+    `);
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getTecnicosDisponibles:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 5. Carga de trabajo por técnico
 const getCargaTecnicos = async () => {
-    try {
-        const result = await pgPool.query(`
-            SELECT 
-                u.id,
-                u.nombre1,
-                u.apellidos,
-                COUNT(s.id) as total_servicios,
-                COUNT(CASE WHEN s.estado = 'pendiente' THEN 1 END) as pendientes,
-                COUNT(CASE WHEN s.estado = 'asignada' THEN 1 END) as asignados,
-                COUNT(CASE WHEN s.estado = 'en_ejecucion' THEN 1 END) as en_ejecucion,
-                COUNT(CASE WHEN s.estado = 'cerrada' THEN 1 END) as completados
-            FROM usuarios u
-            LEFT JOIN service_orders s ON u.id = s.tecnico_id
-            WHERE u.rol = 'tecnico'
-            GROUP BY u.id, u.nombre1, u.apellidos
-            ORDER BY total_servicios DESC
-        `);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getCargaTecnicos:', error);
-        return [];
-    }
+  try {
+    const result = await pgPool.query(`
+      SELECT
+        u.id,
+        u.nombre1,
+        u.apellidos,
+
+        COUNT(s.id)
+          AS total_servicios,
+
+        COUNT(
+          CASE
+            WHEN s.estado = 'pendiente'
+            THEN 1
+          END
+        ) AS pendientes,
+
+        COUNT(
+          CASE
+            WHEN s.estado = 'asignada'
+            THEN 1
+          END
+        ) AS asignados,
+
+        COUNT(
+          CASE
+            WHEN s.estado = 'en_ejecucion'
+            THEN 1
+          END
+        ) AS en_ejecucion,
+
+        COUNT(
+          CASE
+            WHEN s.estado = 'cerrada'
+            THEN 1
+          END
+        ) AS completados
+
+      FROM usuarios u
+
+      LEFT JOIN service_orders s
+        ON u.id = s.tecnico_id
+
+      WHERE u.rol = 'tecnico'
+
+      GROUP BY
+        u.id,
+        u.nombre1,
+        u.apellidos
+
+      ORDER BY
+        total_servicios DESC
+    `);
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getCargaTecnicos:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 6. Servicios por estado (general)
-const getServiciosByEstado = async (estado) => {
-    try {
-        const result = await pgPool.query(`
-            SELECT 
-                s.codigo_os,
-                s.estado,
-                s.descripcion_inicial,
-                s.fecha_agendada,
-                c.razon_social as cliente_nombre,
-                u.usuario as tecnico_nombre,
-                s.created_at
-            FROM service_orders s
-            LEFT JOIN clients c ON s.client_id = c.id
-            LEFT JOIN usuarios u ON s.tecnico_id = u.id
-            WHERE s.estado = $1
-            ORDER BY s.fecha_agendada ASC NULLS LAST
-            LIMIT 30
-        `, [estado]);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getServiciosByEstado:', error);
-        return [];
-    }
+const getServiciosByEstado = async (
+  estado
+) => {
+  if (!estado) {
+    return [];
+  }
+
+  try {
+    const result = await pgPool.query(
+      `
+        SELECT
+          s.codigo_os,
+          s.estado,
+          s.descripcion_inicial,
+          s.fecha_agendada,
+          c.razon_social AS cliente_nombre,
+          u.usuario AS tecnico_nombre,
+          s.created_at
+
+        FROM service_orders s
+
+        LEFT JOIN clients c
+          ON s.client_id = c.id
+
+        LEFT JOIN usuarios u
+          ON s.tecnico_id = u.id
+
+        WHERE s.estado = $1
+
+        ORDER BY
+          s.fecha_agendada ASC NULLS LAST
+
+        LIMIT 30
+      `,
+      [estado]
+    );
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getServiciosByEstado:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 7. Cotizaciones pendientes (para Ventas)
 const getCotizacionesPendientes = async () => {
-    try {
-        // Si tienes tabla de cotizaciones, ajusta la consulta
-        const result = await pgPool.query(`
-            SELECT 
-                id,
-                numero_solicitud,
-                cliente_nombre,
-                fecha_creacion,
-                estado
-            FROM solicitudes_alquiler 
-            WHERE estado = 'pendiente'
-            ORDER BY fecha_creacion ASC
-            LIMIT 20
-        `);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getCotizacionesPendientes:', error);
-        return [];
-    }
+  try {
+    const result = await pgPool.query(`
+      SELECT
+        id,
+        numero_solicitud,
+        cliente_nombre,
+        fecha_creacion,
+        estado
+
+      FROM solicitudes_alquiler
+
+      WHERE estado = 'pendiente'
+
+      ORDER BY
+        fecha_creacion ASC
+
+      LIMIT 20
+    `);
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getCotizacionesPendientes:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 8. Facturas vencidas (para Cartera)
 const getFacturasVencidas = async () => {
-    try {
-        const result = await pgPool.query(`
-            SELECT 
-                numero_factura,
-                cliente_nombre,
-                total_general,
-                fecha_emision,
-                estado
-            FROM invoices
-            WHERE estado = 'emitida' AND fecha_emision < NOW() - INTERVAL '30 days'
-            ORDER BY fecha_emision ASC
-            LIMIT 20
-        `);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getFacturasVencidas:', error);
-        return [];
-    }
+  try {
+    const result = await pgPool.query(`
+      SELECT
+        numero_factura,
+        cliente_nombre,
+        total_general,
+        fecha_emision,
+        estado
+
+      FROM invoices
+
+      WHERE estado = 'emitida'
+        AND fecha_emision
+          < NOW() - INTERVAL '30 days'
+
+      ORDER BY
+        fecha_emision ASC
+
+      LIMIT 20
+    `);
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getFacturasVencidas:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 9. Garantías pendientes
 const getGarantiasPendientes = async () => {
-    try {
-        // Si tienes tabla de garantías, ajusta la consulta
-        const result = await pgPool.query(`
-            SELECT 
-                id,
-                numero_solicitud,
-                cliente_nombre,
-                fecha_creacion,
-                estado
-            FROM solicitudes_alquiler 
-            WHERE estado = 'pendiente' AND tipo = 'garantia'
-            ORDER BY fecha_creacion ASC
-            LIMIT 20
-        `);
-        return result.rows;
-    } catch (error) {
-        console.error('Error en getGarantiasPendientes:', error);
-        return [];
-    }
+  try {
+    const result = await pgPool.query(`
+      SELECT
+        id,
+        numero_solicitud,
+        cliente_nombre,
+        fecha_creacion,
+        estado
+
+      FROM solicitudes_alquiler
+
+      WHERE estado = 'pendiente'
+        AND tipo = 'garantia'
+
+      ORDER BY
+        fecha_creacion ASC
+
+      LIMIT 20
+    `);
+
+    return result.rows;
+  } catch (error) {
+    console.error(
+      'Error en getGarantiasPendientes:',
+      error.message
+    );
+
+    return [];
+  }
 };
 
-// 10. Estadísticas generales
 const getEstadisticasGenerales = async () => {
-    try {
-        const result = await pgPool.query(`
-            SELECT 
-                (SELECT COUNT(*) FROM service_orders) as total_servicios,
-                (SELECT COUNT(*) FROM service_orders WHERE estado = 'pendiente') as pendientes,
-                (SELECT COUNT(*) FROM service_orders WHERE estado = 'asignada') as asignados,
-                (SELECT COUNT(*) FROM service_orders WHERE estado = 'en_ejecucion') as en_ejecucion,
-                (SELECT COUNT(*) FROM service_orders WHERE estado = 'cerrada') as completados,
-                (SELECT COUNT(*) FROM usuarios WHERE rol = 'tecnico' AND activo = true) as tecnicos_activos,
-                (SELECT COUNT(*) FROM sync_clientes WHERE activo = true) as clientes_activos,
-                (SELECT COUNT(*) FROM products WHERE estado = true) as productos_activos,
-                (SELECT COUNT(*) FROM invoices WHERE estado = 'emitida') as facturas_pendientes,
-                (SELECT COUNT(*) FROM solicitudes_alquiler WHERE estado = 'pendiente') as solicitudes_pendientes
-        `);
-        return result.rows[0];
-    } catch (error) {
-        console.error('Error en getEstadisticasGenerales:', error);
-        return null;
-    }
+  try {
+    const result = await pgPool.query(`
+      SELECT
+        (
+          SELECT COUNT(*)
+          FROM service_orders
+        ) AS total_servicios,
+
+        (
+          SELECT COUNT(*)
+          FROM service_orders
+          WHERE estado = 'pendiente'
+        ) AS pendientes,
+
+        (
+          SELECT COUNT(*)
+          FROM service_orders
+          WHERE estado = 'asignada'
+        ) AS asignados,
+
+        (
+          SELECT COUNT(*)
+          FROM service_orders
+          WHERE estado = 'en_ejecucion'
+        ) AS en_ejecucion,
+
+        (
+          SELECT COUNT(*)
+          FROM service_orders
+          WHERE estado = 'cerrada'
+        ) AS completados,
+
+        (
+          SELECT COUNT(*)
+          FROM usuarios
+          WHERE rol = 'tecnico'
+            AND activo = true
+        ) AS tecnicos_activos,
+
+        (
+          SELECT COUNT(*)
+          FROM sync_clientes
+          WHERE activo = true
+        ) AS clientes_activos,
+
+        (
+          SELECT COUNT(*)
+          FROM products
+          WHERE estado = true
+        ) AS productos_activos,
+
+        (
+          SELECT COUNT(*)
+          FROM invoices
+          WHERE estado = 'emitida'
+        ) AS facturas_pendientes,
+
+        (
+          SELECT COUNT(*)
+          FROM solicitudes_alquiler
+          WHERE estado = 'pendiente'
+        ) AS solicitudes_pendientes
+    `);
+
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error(
+      'Error en getEstadisticasGenerales:',
+      error.message
+    );
+
+    return null;
+  }
 };
 
 // ============================================================
-// MAPA DE TOOLS
+// MAPA Y EJECUCIÓN DE TOOLS
 // ============================================================
 
 const tools = {
-    getServiciosTecnico,
-    getServiciosHoyTecnico,
-    getResumenTecnico,
-    getTecnicosDisponibles,
-    getCargaTecnicos,
-    getServiciosByEstado,
-    getCotizacionesPendientes,
-    getFacturasVencidas,
-    getGarantiasPendientes,
-    getEstadisticasGenerales
+  getServiciosTecnico,
+  getServiciosHoyTecnico,
+  getResumenTecnico,
+  getTecnicosDisponibles,
+  getCargaTecnicos,
+  getServiciosByEstado,
+  getCotizacionesPendientes,
+  getFacturasVencidas,
+  getGarantiasPendientes,
+  getEstadisticasGenerales,
+};
+
+const ejecutarTool = async (
+  nombre,
+  params = {}
+) => {
+  switch (nombre) {
+    case 'getServiciosTecnico':
+      return getServiciosTecnico(
+        params.tecnico_id
+      );
+
+    case 'getServiciosHoyTecnico':
+      return getServiciosHoyTecnico(
+        params.tecnico_id
+      );
+
+    case 'getResumenTecnico':
+      return getResumenTecnico(
+        params.tecnico_id
+      );
+
+    case 'getServiciosByEstado':
+      return getServiciosByEstado(
+        params.estado
+      );
+
+    case 'getTecnicosDisponibles':
+    case 'getCargaTecnicos':
+    case 'getCotizacionesPendientes':
+    case 'getFacturasVencidas':
+    case 'getGarantiasPendientes':
+    case 'getEstadisticasGenerales':
+      return tools[nombre]();
+
+    default:
+      return null;
+  }
 };
 
 // ============================================================
 // DETECCIÓN DE INTENCIÓN POR ROL
 // ============================================================
 
-const detectarIntencion = (mensaje, rol) => {
-    const msg = mensaje.toLowerCase();
-    
-    // ============================================================
-    // ADMIN
-    // ============================================================
-    if (rol === 'admin') {
-        if (msg.includes('estadistica') || msg.includes('general') || msg.includes('resumen ejecutivo')) {
-            return { tool: 'getEstadisticasGenerales', params: {} };
-        }
-        if (msg.includes('tecnico') && (msg.includes('carga') || msg.includes('trabajo') || msg.includes('ocupado'))) {
-            return { tool: 'getCargaTecnicos', params: {} };
-        }
-        if (msg.includes('tecnico') && (msg.includes('disponible') || msg.includes('libre') || msg.includes('activo'))) {
-            return { tool: 'getTecnicosDisponibles', params: {} };
-        }
-        if (msg.includes('pendiente') || msg.includes('por atender')) {
-            return { tool: 'getServiciosByEstado', params: { estado: 'pendiente' } };
-        }
+const normalizarTexto = (texto = '') => {
+  return String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+};
+
+const contieneAlguno = (
+  texto,
+  palabras
+) => {
+  return palabras.some((palabra) =>
+    texto.includes(palabra)
+  );
+};
+
+const detectarIntencion = (
+  mensaje,
+  rol
+) => {
+  const msg = normalizarTexto(mensaje);
+
+  // ADMINISTRADOR
+  if (rol === 'admin') {
+    if (
+      contieneAlguno(msg, [
+        'estadistica',
+        'general',
+        'resumen ejecutivo',
+      ])
+    ) {
+      return {
+        tool: 'getEstadisticasGenerales',
+        params: {},
+      };
     }
-    
-    // ============================================================
-    // TÉCNICO
-    // ============================================================
-    if (rol === 'tecnico') {
-        if (msg.includes('hoy') && (msg.includes('servicio') || msg.includes('os') || msg.includes('orden'))) {
-            return { tool: 'getServiciosHoyTecnico', params: {} };
-        }
-        if (msg.includes('resumen') || msg.includes('estadistica') || msg.includes('cuantos')) {
-            return { tool: 'getResumenTecnico', params: {} };
-        }
-        if (msg.includes('todos') && (msg.includes('servicio') || msg.includes('os') || msg.includes('orden'))) {
-            return { tool: 'getServiciosTecnico', params: {} };
-        }
-        if (msg.includes('pendiente') || msg.includes('por hacer')) {
-            return { tool: 'getServiciosTecnico', params: {} };
-        }
+
+    if (
+      msg.includes('tecnico') &&
+      contieneAlguno(msg, [
+        'carga',
+        'trabajo',
+        'ocupado',
+      ])
+    ) {
+      return {
+        tool: 'getCargaTecnicos',
+        params: {},
+      };
     }
-    
-    // ============================================================
-    // VENTAS
-    // ============================================================
-    if (rol === 'ventas') {
-        if (msg.includes('cotizacion') || msg.includes('cotización')) {
-            return { tool: 'getCotizacionesPendientes', params: {} };
-        }
-        if (msg.includes('cliente') && (msg.includes('contactar') || msg.includes('llamar') || msg.includes('seguimiento'))) {
-            return { tool: 'getCotizacionesPendientes', params: {} };
-        }
-        if (msg.includes('pedido') && (msg.includes('pendiente') || msg.includes('retraso'))) {
-            return { tool: 'getServiciosByEstado', params: { estado: 'pendiente' } };
-        }
+
+    if (
+      msg.includes('tecnico') &&
+      contieneAlguno(msg, [
+        'disponible',
+        'libre',
+        'activo',
+      ])
+    ) {
+      return {
+        tool: 'getTecnicosDisponibles',
+        params: {},
+      };
     }
-    
-    // ============================================================
-    // CARTERA
-    // ============================================================
-    if (rol === 'cartera') {
-        if (msg.includes('factura') && (msg.includes('vencida') || msg.includes('vencer') || msg.includes('pendiente'))) {
-            return { tool: 'getFacturasVencidas', params: {} };
-        }
-        if (msg.includes('pago') && (msg.includes('pendiente') || msg.includes('moroso') || msg.includes('deuda'))) {
-            return { tool: 'getFacturasVencidas', params: {} };
-        }
-        if (msg.includes('cartera') || msg.includes('cobro')) {
-            return { tool: 'getFacturasVencidas', params: {} };
-        }
+
+    if (
+      contieneAlguno(msg, [
+        'pendiente',
+        'por atender',
+      ])
+    ) {
+      return {
+        tool: 'getServiciosByEstado',
+
+        params: {
+          estado: 'pendiente',
+        },
+      };
     }
-    
-    // ============================================================
-    // JEFE DE TÉCNICOS
-    // ============================================================
-    if (rol === 'jefe_tecnicos') {
-        if (msg.includes('carga') && msg.includes('tecnico')) {
-            return { tool: 'getCargaTecnicos', params: {} };
-        }
-        if (msg.includes('rendimiento') || msg.includes('productividad')) {
-            return { tool: 'getCargaTecnicos', params: {} };
-        }
-        if (msg.includes('disponible') && msg.includes('tecnico')) {
-            return { tool: 'getTecnicosDisponibles', params: {} };
-        }
-        if (msg.includes('retraso') || msg.includes('demora')) {
-            return { tool: 'getServiciosByEstado', params: { estado: 'pendiente' } };
-        }
+  }
+
+  // TÉCNICO
+  if (rol === 'tecnico') {
+    if (
+      msg.includes('hoy') &&
+      contieneAlguno(msg, [
+        'servicio',
+        'os',
+        'orden',
+      ])
+    ) {
+      return {
+        tool: 'getServiciosHoyTecnico',
+        params: {},
+      };
     }
-    
-    // ============================================================
-    // GARANTÍAS
-    // ============================================================
-    if (rol === 'garantias') {
-        if (msg.includes('garantia') && (msg.includes('pendiente') || msg.includes('ingresada'))) {
-            return { tool: 'getGarantiasPendientes', params: {} };
-        }
-        if (msg.includes('proveedor') || msg.includes('fabricante')) {
-            return { tool: 'getGarantiasPendientes', params: {} };
-        }
-        if (msg.includes('devolucion') || msg.includes('rechazado')) {
-            return { tool: 'getGarantiasPendientes', params: {} };
-        }
+
+    if (
+      contieneAlguno(msg, [
+        'resumen',
+        'estadistica',
+        'cuantos',
+      ])
+    ) {
+      return {
+        tool: 'getResumenTecnico',
+        params: {},
+      };
     }
-    
-    return { tool: null, params: {} };
+
+    if (
+      msg.includes('todos') &&
+      contieneAlguno(msg, [
+        'servicio',
+        'os',
+        'orden',
+      ])
+    ) {
+      return {
+        tool: 'getServiciosTecnico',
+        params: {},
+      };
+    }
+
+    if (
+      contieneAlguno(msg, [
+        'pendiente',
+        'por hacer',
+      ])
+    ) {
+      return {
+        tool: 'getServiciosTecnico',
+        params: {},
+      };
+    }
+  }
+
+  // VENTAS
+  if (rol === 'ventas') {
+    if (msg.includes('cotizacion')) {
+      return {
+        tool: 'getCotizacionesPendientes',
+        params: {},
+      };
+    }
+
+    if (
+      msg.includes('cliente') &&
+      contieneAlguno(msg, [
+        'contactar',
+        'llamar',
+        'seguimiento',
+      ])
+    ) {
+      return {
+        tool: 'getCotizacionesPendientes',
+        params: {},
+      };
+    }
+
+    if (
+      msg.includes('pedido') &&
+      contieneAlguno(msg, [
+        'pendiente',
+        'retraso',
+      ])
+    ) {
+      return {
+        tool: 'getServiciosByEstado',
+
+        params: {
+          estado: 'pendiente',
+        },
+      };
+    }
+  }
+
+  // CARTERA
+  if (rol === 'cartera') {
+    if (
+      msg.includes('factura') &&
+      contieneAlguno(msg, [
+        'vencida',
+        'vencer',
+        'pendiente',
+      ])
+    ) {
+      return {
+        tool: 'getFacturasVencidas',
+        params: {},
+      };
+    }
+
+    if (
+      msg.includes('pago') &&
+      contieneAlguno(msg, [
+        'pendiente',
+        'moroso',
+        'deuda',
+      ])
+    ) {
+      return {
+        tool: 'getFacturasVencidas',
+        params: {},
+      };
+    }
+
+    if (
+      contieneAlguno(msg, [
+        'cartera',
+        'cobro',
+      ])
+    ) {
+      return {
+        tool: 'getFacturasVencidas',
+        params: {},
+      };
+    }
+  }
+
+  // JEFE DE TÉCNICOS
+  if (rol === 'jefe_tecnicos') {
+    if (
+      msg.includes('carga') &&
+      msg.includes('tecnico')
+    ) {
+      return {
+        tool: 'getCargaTecnicos',
+        params: {},
+      };
+    }
+
+    if (
+      contieneAlguno(msg, [
+        'rendimiento',
+        'productividad',
+      ])
+    ) {
+      return {
+        tool: 'getCargaTecnicos',
+        params: {},
+      };
+    }
+
+    if (
+      msg.includes('disponible') &&
+      msg.includes('tecnico')
+    ) {
+      return {
+        tool: 'getTecnicosDisponibles',
+        params: {},
+      };
+    }
+
+    if (
+      contieneAlguno(msg, [
+        'retraso',
+        'demora',
+      ])
+    ) {
+      return {
+        tool: 'getServiciosByEstado',
+
+        params: {
+          estado: 'pendiente',
+        },
+      };
+    }
+  }
+
+  // GARANTÍAS
+  if (rol === 'garantias') {
+    if (
+      msg.includes('garantia') &&
+      contieneAlguno(msg, [
+        'pendiente',
+        'ingresada',
+      ])
+    ) {
+      return {
+        tool: 'getGarantiasPendientes',
+        params: {},
+      };
+    }
+
+    if (
+      contieneAlguno(msg, [
+        'proveedor',
+        'fabricante',
+        'devolucion',
+        'rechazado',
+      ])
+    ) {
+      return {
+        tool: 'getGarantiasPendientes',
+        params: {},
+      };
+    }
+  }
+
+  return {
+    tool: null,
+    params: {},
+  };
 };
 
 // ============================================================
@@ -487,150 +1219,296 @@ const detectarIntencion = (mensaje, rol) => {
 const sesiones = new Map();
 
 const getSesion = (userId) => {
-    if (!sesiones.has(userId)) {
-        sesiones.set(userId, {
-            historial: [],
-            contexto: { rol: '', nombre: '' },
-            ultimaActividad: Date.now()
-        });
-    }
-    return sesiones.get(userId);
+  const clave = String(
+    userId || 'anonimo'
+  );
+
+  if (!sesiones.has(clave)) {
+    sesiones.set(clave, {
+      historial: [],
+
+      contexto: {
+        rol: '',
+        nombre: '',
+      },
+
+      ultimaActividad: Date.now(),
+    });
+  }
+
+  return sesiones.get(clave);
+};
+
+const limpiarSesion = (userId) => {
+  const clave = String(
+    userId || 'anonimo'
+  );
+
+  sesiones.delete(clave);
+
+  return {
+    success: true,
+  };
 };
 
 // ============================================================
 // CHAT PRINCIPAL CON BOT POR ROL
 // ============================================================
 
-const chatConModo = async (userId, mensaje, modo = 'asistente', rol = 'usuario', tecnico_id = null) => {
-    try {
-        let promptSistema = '';
-        let datos = null;
-        let toolUsada = null;
-        const fecha = getFechaActual();
-        const botConfig = getBotConfig(rol);
-
-        if (modo === 'asistente') {
-            // Detectar intención según rol
-            const intencion = detectarIntencion(mensaje, rol);
-            
-            if (intencion.tool && tools[intencion.tool]) {
-                try {
-                    let params = { ...intencion.params };
-                    // Si es técnico, pasar su ID automáticamente
-                    if (rol === 'tecnico' && tecnico_id) {
-                        if (intencion.tool === 'getServiciosHoyTecnico' || 
-                            intencion.tool === 'getResumenTecnico' || 
-                            intencion.tool === 'getServiciosTecnico') {
-                            params.tecnico_id = tecnico_id;
-                        }
-                    }
-                    datos = await tools[intencion.tool](params);
-                    toolUsada = intencion.tool;
-                } catch (error) {
-                    console.error('Error ejecutando tool:', error);
-                    datos = null;
-                }
-            }
-
-            // Construir prompt con el bot específico del rol
-            promptSistema = `
-                ${botConfig.prompt}
-
-                FECHA ACTUAL: ${fecha.fecha}
-                HORA ACTUAL: ${fecha.hora}
-                ROL DEL USUARIO: ${rol}
-                NOMBRE DEL USUARIO: ${userId}
-
-                REGLAS IMPORTANTES:
-                1. SIEMPRE usa la fecha actual ${fecha.fecha} como referencia.
-                2. Si tienes datos de la base de datos, USA ESOS DATOS para responder.
-                3. Si NO tienes datos, responde: "No tengo información registrada sobre eso."
-                4. NUNCA inventes información que no esté en los datos.
-                5. Sé conciso, profesional y útil.
-                6. Si el usuario es técnico, responde sobre SUS servicios personales.
-                7. Si eres de ventas, enfócate en cotizaciones y clientes.
-                8. Si eres de cartera, enfócate en cobros y facturas.
-                9. Si eres jefe de técnicos, enfócate en rendimiento y carga de trabajo.
-                10. Si eres de garantías, enfócate en casos y seguimiento.
-            `;
-
-            if (datos) {
-                if (Array.isArray(datos) && datos.length === 0) {
-                    promptSistema += `\n\nNo se encontraron datos. Responde: "No hay información disponible para tu consulta."`;
-                } else {
-                    promptSistema += `\n\nDATOS DE LA BASE DE DATOS (USA ESTOS DATOS PARA RESPONDER):\n${JSON.stringify(datos, null, 2)}`;
-                    promptSistema += `\n\nResponde basándote EXCLUSIVAMENTE en estos datos.`;
-                }
-            } else {
-                promptSistema += `\n\nNo se ejecutó ninguna consulta a la base de datos. Responde: "No tengo información sobre eso."`;
-            }
-
-            // Historial de la sesión
-            const sesion = getSesion(userId);
-            if (sesion.historial.length > 0) {
-                const ultimos = sesion.historial.slice(-4);
-                promptSistema += `\n\nHistorial reciente:`;
-                ultimos.forEach(h => {
-                    promptSistema += `\n[${h.role}]: ${h.content.substring(0, 80)}`;
-                });
-            }
-
-        } else {
-            // Modo consulta
-            promptSistema = `
-                Eres un asistente de consulta rápida. Responde preguntas específicas de forma directa y concisa.
-                FECHA ACTUAL: ${fecha.fecha}
-                Responde siempre en español.
-                No uses contexto del usuario, solo responde la pregunta puntual.
-            `;
-        }
-
-        const response = await ollama.chat({
-            model: MODEL,
-            messages: [
-                { role: 'system', content: promptSistema },
-                { role: 'user', content: mensaje }
-            ]
-        });
-
-        if (modo === 'asistente') {
-            const sesion = getSesion(userId);
-            sesion.historial.push(
-                { role: 'user', content: mensaje },
-                { role: 'assistant', content: response.message.content }
-            );
-            sesion.ultimaActividad = Date.now();
-        }
-
-        return { 
-            success: true, 
-            respuesta: response.message.content,
-            tool: toolUsada,
-            datos: datos
-        };
-    } catch (error) {
-        console.error('Error en chat:', error);
-        return { success: false, error: error.message };
+const chatConModo = async (
+  userId,
+  mensaje,
+  modo = 'asistente',
+  rol = 'usuario',
+  tecnicoId = null
+) => {
+  try {
+    if (
+      !mensaje ||
+      !String(mensaje).trim()
+    ) {
+      return {
+        success: false,
+        message: 'El mensaje es obligatorio',
+        error: 'El mensaje es obligatorio',
+      };
     }
+
+    const rolNormalizado =
+      normalizarTexto(rol)
+        .replace(/\s+/g, '_') ||
+      'usuario';
+
+    const modoNormalizado =
+      modo === 'consulta'
+        ? 'consulta'
+        : 'asistente';
+
+    const fecha = getFechaActual();
+
+    const botConfig =
+      getBotConfig(rolNormalizado);
+
+    let promptSistema = '';
+    let datos = null;
+    let toolUsada = null;
+
+    if (modoNormalizado === 'asistente') {
+      const intencion = detectarIntencion(
+        mensaje,
+        rolNormalizado
+      );
+
+      if (
+        intencion.tool &&
+        tools[intencion.tool]
+      ) {
+        const params = {
+          ...intencion.params,
+        };
+
+        if (
+          rolNormalizado === 'tecnico' &&
+          tecnicoId &&
+          [
+            'getServiciosHoyTecnico',
+            'getResumenTecnico',
+            'getServiciosTecnico',
+          ].includes(intencion.tool)
+        ) {
+          params.tecnico_id = tecnicoId;
+        }
+
+        try {
+          datos = await ejecutarTool(
+            intencion.tool,
+            params
+          );
+
+          toolUsada = intencion.tool;
+        } catch (error) {
+          console.error(
+            `Error ejecutando la tool ${intencion.tool}:`,
+            error
+          );
+
+          datos = null;
+        }
+      }
+
+      promptSistema = `
+        ${botConfig.prompt}
+
+        FECHA ACTUAL: ${fecha.fecha}
+        HORA ACTUAL: ${fecha.hora}
+        ROL DEL USUARIO: ${rolNormalizado}
+        IDENTIFICADOR DEL USUARIO: ${userId}
+
+        REGLAS:
+
+        1. Responde siempre en español.
+
+        2. Usa la fecha actual como referencia.
+
+        3. Cuando recibas datos del sistema,
+        basa la respuesta exclusivamente en esos datos.
+
+        4. No inventes servicios, clientes, facturas,
+        productos, estados ni cifras internas.
+
+        5. Si la consulta requiere información interna
+        y no hay datos, indícalo claramente.
+
+        6. Para orientación general, responde de forma
+        práctica, breve y profesional.
+      `;
+
+      if (toolUsada) {
+        if (
+          Array.isArray(datos) &&
+          datos.length === 0
+        ) {
+          promptSistema +=
+            '\nNo se encontraron registros para la consulta realizada.';
+        } else if (
+          datos === null ||
+          datos === undefined
+        ) {
+          promptSistema +=
+            '\nLa consulta al sistema no devolvió información disponible.';
+        } else {
+          promptSistema +=
+            `\n\nDATOS DEL SISTEMA:\n` +
+            `${JSON.stringify(datos, null, 2)}`;
+        }
+      } else {
+        promptSistema += `
+          \nNo se ejecutó una consulta a la base de datos.
+
+          Puedes brindar orientación general,
+          pero no debes afirmar datos internos del sistema.
+        `;
+      }
+
+      const sesion = getSesion(userId);
+
+      const ultimos =
+        sesion.historial.slice(-6);
+
+      if (ultimos.length > 0) {
+        promptSistema +=
+          '\n\nHISTORIAL RECIENTE:';
+
+        for (const item of ultimos) {
+          promptSistema +=
+            `\n[${item.role}]: ` +
+            `${String(item.content).slice(0, 300)}`;
+        }
+      }
+    } else {
+      promptSistema = `
+        Eres un asistente de consulta rápida.
+
+        Responde preguntas específicas
+        de forma directa, clara y concisa.
+
+        FECHA ACTUAL: ${fecha.fecha}
+
+        Responde siempre en español.
+
+        No uses memoria ni afirmes
+        información interna del sistema.
+      `;
+    }
+
+    const respuesta = await ollamaChat([
+      {
+        role: 'system',
+        content: promptSistema,
+      },
+      {
+        role: 'user',
+        content: String(mensaje).trim(),
+      },
+    ]);
+
+    if (
+      modoNormalizado === 'asistente'
+    ) {
+      const sesion = getSesion(userId);
+
+      sesion.historial.push(
+        {
+          role: 'user',
+          content: String(mensaje).trim(),
+        },
+        {
+          role: 'assistant',
+          content: respuesta,
+        }
+      );
+
+      sesion.historial =
+        sesion.historial.slice(-20);
+
+      sesion.ultimaActividad =
+        Date.now();
+    }
+
+    return {
+      success: true,
+      respuesta,
+      tool: toolUsada,
+      datos,
+      modo: modoNormalizado,
+      modelo: MODEL,
+    };
+  } catch (error) {
+    console.error(
+      'Error en chatConModo:',
+      error
+    );
+
+    return {
+      success: false,
+      message: error.message,
+      error: error.message,
+    };
+  }
 };
 
 // ============================================================
 // GENERAR ALERTAS
 // ============================================================
 
-const generarAlertas = async (rol = 'usuario', tecnico_id = null) => {
-    try {
-        const alertas = [];
-        const fecha = getFechaActual();
+const generarAlertas = async (
+  rol = 'usuario',
+  tecnicoId = null
+) => {
+  try {
+    const alertas = [];
+    const fecha = getFechaActual();
 
-        if (rol === 'admin' || rol === 'jefe_tecnicos') {
-            // Estadísticas generales
-            const stats = await getEstadisticasGenerales();
-            if (stats) {
-                alertas.push({
-                    tipo: 'estadisticas',
-                    titulo: `Resumen del sistema (${fecha.fecha})`,
-                    mensaje: `
+    const rolNormalizado =
+      normalizarTexto(rol)
+        .replace(/\s+/g, '_');
+
+    if (
+      rolNormalizado === 'admin' ||
+      rolNormalizado === 'jefe_tecnicos'
+    ) {
+      const stats =
+        await getEstadisticasGenerales();
+
+      if (stats) {
+        alertas.push({
+          tipo: 'estadisticas',
+
+          titulo:
+            `Resumen del sistema ` +
+            `(${fecha.fecha})`,
+
+          mensaje: `
 Total servicios: ${stats.total_servicios || 0}
 Pendientes: ${stats.pendientes || 0}
 Asignados: ${stats.asignados || 0}
@@ -638,68 +1516,106 @@ En ejecución: ${stats.en_ejecucion || 0}
 Completados: ${stats.completados || 0}
 Técnicos activos: ${stats.tecnicos_activos || 0}
 Clientes activos: ${stats.clientes_activos || 0}
-                    `,
-                    prioridad: 'media',
-                    data: stats
-                });
-            }
-        }
+          `.trim(),
 
-        if (rol === 'tecnico' && tecnico_id) {
-            const resumen = await getResumenTecnico(tecnico_id);
-            if (resumen) {
-                alertas.push({
-                    tipo: 'resumen_tecnico',
-                    titulo: `Tus servicios (${fecha.fecha})`,
-                    mensaje: `
+          prioridad: 'media',
+          data: stats,
+        });
+      }
+    }
+
+    if (
+      rolNormalizado === 'tecnico' &&
+      tecnicoId
+    ) {
+      const resumen =
+        await getResumenTecnico(tecnicoId);
+
+      if (resumen) {
+        alertas.push({
+          tipo: 'resumen_tecnico',
+
+          titulo:
+            `Tus servicios ` +
+            `(${fecha.fecha})`,
+
+          mensaje: `
 Total servicios: ${resumen.total || 0}
 Pendientes: ${resumen.pendientes || 0}
 Asignados: ${resumen.asignados || 0}
 En ejecución: ${resumen.en_ejecucion || 0}
 Completados: ${resumen.completados || 0}
 Para hoy: ${resumen.hoy || 0}
-                    `,
-                    prioridad: 'media',
-                    data: resumen
-                });
-            }
-        }
+          `.trim(),
 
-        if (rol === 'ventas') {
-            const cotizaciones = await getCotizacionesPendientes();
-            if (cotizaciones.length > 0) {
-                alertas.push({
-                    tipo: 'cotizaciones',
-                    titulo: `${cotizaciones.length} cotizaciones pendientes`,
-                    mensaje: cotizaciones.map(c => 
-                        `- ${c.numero_solicitud}: ${c.cliente_nombre}`
-                    ).join('\n'),
-                    prioridad: 'alta',
-                    data: cotizaciones
-                });
-            }
-        }
-
-        if (rol === 'cartera') {
-            const facturas = await getFacturasVencidas();
-            if (facturas.length > 0) {
-                alertas.push({
-                    tipo: 'facturas',
-                    titulo: `${facturas.length} facturas vencidas`,
-                    mensaje: facturas.map(f => 
-                        `- ${f.numero_factura}: ${f.cliente_nombre} ($${f.total_general})`
-                    ).join('\n'),
-                    prioridad: 'alta',
-                    data: facturas
-                });
-            }
-        }
-
-        return alertas;
-    } catch (error) {
-        console.error('Error generando alertas:', error);
-        return [];
+          prioridad: 'media',
+          data: resumen,
+        });
+      }
     }
+
+    if (rolNormalizado === 'ventas') {
+      const cotizaciones =
+        await getCotizacionesPendientes();
+
+      if (cotizaciones.length > 0) {
+        alertas.push({
+          tipo: 'cotizaciones',
+
+          titulo:
+            `${cotizaciones.length} ` +
+            `cotizaciones pendientes`,
+
+          mensaje: cotizaciones
+            .map(
+              (item) =>
+                `- ${item.numero_solicitud}: ` +
+                `${item.cliente_nombre}`
+            )
+            .join('\n'),
+
+          prioridad: 'alta',
+          data: cotizaciones,
+        });
+      }
+    }
+
+    if (rolNormalizado === 'cartera') {
+      const facturas =
+        await getFacturasVencidas();
+
+      if (facturas.length > 0) {
+        alertas.push({
+          tipo: 'facturas',
+
+          titulo:
+            `${facturas.length} ` +
+            `facturas vencidas`,
+
+          mensaje: facturas
+            .map(
+              (item) =>
+                `- ${item.numero_factura}: ` +
+                `${item.cliente_nombre} ` +
+                `($${item.total_general})`
+            )
+            .join('\n'),
+
+          prioridad: 'alta',
+          data: facturas,
+        });
+      }
+    }
+
+    return alertas;
+  } catch (error) {
+    console.error(
+      'Error generando alertas:',
+      error
+    );
+
+    return [];
+  }
 };
 
 // ============================================================
@@ -707,40 +1623,59 @@ Para hoy: ${resumen.hoy || 0}
 // ============================================================
 
 module.exports = {
-    chatConModo,
-    getSesion,
-    getFechaActual,
-    generarAlertas,
-    getBotConfig,
-    getServiciosTecnico,
-    getServiciosHoyTecnico,
-    getResumenTecnico,
-    getTecnicosDisponibles,
-    getCargaTecnicos,
-    getServiciosByEstado,
-    getCotizacionesPendientes,
-    getFacturasVencidas,
-    getGarantiasPendientes,
-    getEstadisticasGenerales,
-    chat: async (prompt, sistema) => {
-        const response = await ollama.chat({
-            model: MODEL,
-            messages: [
-                { role: 'system', content: sistema || '' },
-                { role: 'user', content: prompt }
-            ]
-        });
-        return { success: true, respuesta: response.message.content };
-    },
-    verificarConexion: async () => {
-        try {
-            const response = await ollama.chat({
-                model: MODEL,
-                messages: [{ role: 'user', content: 'Responde solo "OK"' }]
-            });
-            return { success: true, message: response.message.content };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
+  chatConModo,
+  getSesion,
+  limpiarSesion,
+  getFechaActual,
+  generarAlertas,
+  getBotConfig,
+  getServiciosTecnico,
+  getServiciosHoyTecnico,
+  getResumenTecnico,
+  getTecnicosDisponibles,
+  getCargaTecnicos,
+  getServiciosByEstado,
+  getCotizacionesPendientes,
+  getFacturasVencidas,
+  getGarantiasPendientes,
+  getEstadisticasGenerales,
+
+  chat: async (
+    prompt,
+    sistema = ''
+  ) => {
+    try {
+      const respuesta = await ollamaChat([
+        {
+          role: 'system',
+          content: sistema,
+        },
+        {
+          role: 'user',
+          content: String(
+            prompt || ''
+          ).trim(),
+        },
+      ]);
+
+      return {
+        success: true,
+        respuesta,
+        modelo: MODEL,
+      };
+    } catch (error) {
+      console.error(
+        'Error en chat genérico:',
+        error
+      );
+
+      return {
+        success: false,
+        message: error.message,
+        error: error.message,
+      };
     }
+  },
+
+  verificarConexion,
 };
