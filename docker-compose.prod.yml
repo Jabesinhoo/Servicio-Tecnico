@@ -1,13 +1,16 @@
 services:
+  # ==========================================================
+  # POSTGRESQL
+  # ==========================================================
   postgres:
     image: postgres:16-alpine
     container_name: tecnicos_db
     restart: unless-stopped
 
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "1235"
       POSTGRES_DB: tecnicos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-1235}"
 
     ports:
       - "5433:5432"
@@ -15,16 +18,68 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+    networks:
+      - tecnicos_network
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d tecnicos"]
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d tecnicos
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+
+  # ==========================================================
+  # OLLAMA
+  # ==========================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: tecnicos_ollama
+    restart: unless-stopped
+
+    ports:
+      - "11435:11434"
+
+    volumes:
+      - ollama_data:/root/.ollama
 
     networks:
       - tecnicos_network
 
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
 
+      # Evita mantener el modelo cargado durante todo el día.
+      OLLAMA_KEEP_ALIVE: "5m"
+
+      # Da tiempo suficiente para cargar el modelo.
+      OLLAMA_LOAD_TIMEOUT: "15m"
+
+      # Reduce consumo de memoria y CPU.
+      OLLAMA_CONTEXT_LENGTH: "1024"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+
+    # Este VPS tiene recursos limitados.
+    # Ollama no podrá consumir toda la CPU del servidor.
+    cpus: "0.75"
+    mem_limit: 1800m
+    pids_limit: 256
+
+    healthcheck:
+      test:
+        - CMD
+        - ollama
+        - list
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================
+  # BACKEND NODE.JS
+  # ==========================================================
   backend:
     build:
       context: ./backend
@@ -33,26 +88,31 @@ services:
     container_name: tecnicos_backend
     restart: unless-stopped
 
+    # Conserva las demás variables actuales del backend,
+    # como JWT_SECRET y configuraciones adicionales.
+    env_file:
+      - ./backend/.env
+
     environment:
       NODE_ENV: production
+      PORT: "3001"
 
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_USER: postgres
-      DB_PASSWORD: "1235"
+      DB_PASSWORD: "${DB_PASSWORD:-1235}"
       DB_NAME: tecnicos
 
-      PORT: "3001"
+      CORS_ORIGIN: "https://tecnicos.tecnonacho.com"
 
-      JWT_SECRET: una_clave_super_secreta
-      JWT_EXPIRES: 7d
+      OLLAMA_URL: "http://ollama:11434"
+      OLLAMA_MODEL: "llama3.2:1b"
 
-      OLLAMA_URL: http://ollama:11434
-      OLLAMA_MODEL: llama3.2:3b
-
-      N8N_URL: http://n8n:5678
-
-      CORS_ORIGIN: https://tecnicos.tecnonacho.com
+      # Variables usadas por el servicio de IA corregido.
+      OLLAMA_TIMEOUT_MS: "300000"
+      OLLAMA_NUM_CTX: "1024"
+      OLLAMA_NUM_PREDICT: "200"
+      OLLAMA_KEEP_ALIVE: "5m"
 
     ports:
       - "3001:3001"
@@ -61,16 +121,36 @@ services:
       postgres:
         condition: service_healthy
 
+      ollama:
+        condition: service_healthy
+
     networks:
       - tecnicos_network
 
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e "
+          fetch('http://127.0.0.1:3001/api/health')
+          .then(r => process.exit(r.ok ? 0 : 1))
+          .catch(() => process.exit(1))
+          "
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
+  # ==========================================================
+  # FRONTEND REACT + NGINX
+  # ==========================================================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+
       args:
-        VITE_API_URL: https://tecnicos.tecnonacho.com
+        VITE_API_URL: "https://tecnicos.tecnonacho.com"
 
     container_name: tecnicos_frontend
     restart: unless-stopped
@@ -79,100 +159,88 @@ services:
       - "8082:80"
 
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
     networks:
       - tecnicos_network
 
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: tecnicos_ollama
-    restart: unless-stopped
-
-    environment:
-      OLLAMA_HOST: 0.0.0.0:11434
-      OLLAMA_KEEP_ALIVE: 24h
-
-    ports:
-      - "11435:11434"
-
-    volumes:
-      - ollama_data:/root/.ollama
-
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1/ > /dev/null || exit 1
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 20s
 
-    networks:
-      - tecnicos_network
-
-
+  # ==========================================================
+  # N8N
+  # ==========================================================
   n8n:
     image: n8nio/n8n:latest
     container_name: tecnicos_n8n
     restart: unless-stopped
 
+    ports:
+      - "5679:5678"
+
     environment:
-      # Puerto HTTP interno de n8n
-      N8N_LISTEN_ADDRESS: 0.0.0.0
-      N8N_PORT: "5678"
-      N8N_PROTOCOL: http
-
-      # Se usa 5680 para evitar el conflicto observado con el puerto 5679
-      N8N_RUNNERS_BROKER_PORT: "5680"
-
-      # Zona horaria
-      TZ: America/Bogota
-      GENERIC_TIMEZONE: America/Bogota
-
-      # Configuración de PostgreSQL
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: "5432"
       DB_POSTGRESDB_DATABASE: tecnicos
       DB_POSTGRESDB_USER: postgres
-      DB_POSTGRESDB_PASSWORD: "1235"
+      DB_POSTGRESDB_PASSWORD: "${DB_PASSWORD:-1235}"
 
-      # Configuración general
-      N8N_DIAGNOSTICS_ENABLED: "false"
-      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_LISTEN_ADDRESS: "0.0.0.0"
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+
+      N8N_RUNNERS_BROKER_PORT: "5680"
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
 
-    ports:
-      - "5679:5678"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+
+      GENERIC_TIMEZONE: America/Bogota
+      TZ: America/Bogota
+
+    volumes:
+      - n8n_data:/home/node/.n8n
 
     depends_on:
       postgres:
         condition: service_healthy
 
-    volumes:
-      - n8n_data:/home/node/.n8n
+    networks:
+      - tecnicos_network
 
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:5678/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""
-        ]
+        - CMD-SHELL
+        - >
+          node -e "
+          fetch('http://127.0.0.1:5678/healthz')
+          .then(r => process.exit(r.ok ? 0 : 1))
+          .catch(() => process.exit(1))
+          "
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
 
-    networks:
-      - tecnicos_network
-
-
+# ============================================================
+# VOLÚMENES PERSISTENTES
+# ============================================================
 volumes:
   postgres_data:
-  ollama_data:
   n8n_data:
+  ollama_data:
 
-
+# ============================================================
+# RED INTERNA
+# ============================================================
 networks:
   tecnicos_network:
     driver: bridge
