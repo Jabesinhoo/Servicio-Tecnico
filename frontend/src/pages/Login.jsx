@@ -7,7 +7,7 @@ export default function Login() {
   useDocumentTitle("Sistema Técnicos | Iniciar sesión");
   const navigate = useNavigate();
 
-  const [identifier, setIdentifier] = useState("admin");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -173,7 +173,7 @@ export default function Login() {
                         focus-visible:border-sky-500
                         transition
                       "
-                      placeholder="admin@ejemplo.com"
+                      placeholder="Usuario o correo electrónico"
                       autoComplete="username"
                     />
                   </div>

@@ -35,8 +35,21 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            localStorage.clear();
-            window.location.href = '/login';
+            console.error('PETICIÓN 401 DETECTADA:', {
+                url: error.config?.url,
+                baseURL: error.config?.baseURL,
+                method: error.config?.method,
+                respuesta: error.response?.data,
+                tokenExiste: Boolean(localStorage.getItem('token')),
+                authorization:
+                    error.config?.headers?.Authorization ||
+                    error.config?.headers?.authorization ||
+                    'NO ENVIADO',
+            });
+
+            // Temporalmente NO borrar token ni redirigir.
+            // localStorage.clear();
+            // window.location.href = '/login';
         }
 
         return Promise.reject(error);

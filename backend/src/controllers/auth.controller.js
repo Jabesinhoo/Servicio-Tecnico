@@ -105,32 +105,42 @@ const login = async (req, res) => {
     }
 
     // Asegúrate de que JWT_SECRET esté definido
-    const jwtSecret = process.env.JWT_SECRET || 'secret_key_development';
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      console.error('JWT_SECRET no está configurado');
+
+      return res.status(500).json({
+        message:
+          'La autenticación del servidor no está configurada.',
+      });
+    }
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        usuario: user.usuario, 
+    {
+        id: user.id,
         email: user.email,
-        rol: user.rol 
-      },
-      jwtSecret,
-      { expiresIn: process.env.JWT_EXPIRES || "7d" }
-    );
+        rol: user.rol,
+    },
+    jwtSecret,
+    {
+        expiresIn: '8h',
+    }
+);
 
     return res.json({
       message: "Login exitoso.",
       token,
-      user: { 
-        id: user.id, 
-        usuario: user.usuario, 
-        email: user.email, 
-        rol: user.rol 
+      user: {
+        id: user.id,
+        usuario: user.usuario,
+        email: user.email,
+        rol: user.rol
       },
     });
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     console.error("Stack trace:", err.stack);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: "Error interno del servidor.",
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });

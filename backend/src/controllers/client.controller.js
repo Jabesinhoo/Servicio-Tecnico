@@ -1,30 +1,81 @@
 
 const pool = require('../db/pool');
+const {
+    listClients,
+    searchClients,
+} = require('../services/client-query.service');
 
-
+// backend/src/controllers/client.controller.js
 exports.getAll = async (req, res) => {
-  try {
-    console.log('=== GET ALL CLIENTS ===');
-    const result = await pool.query(`
-      SELECT id, tipo_persona, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido,
-             razon_social, tipo_documento, documento, digito_verificacion, telefono, telefono_2,
-             email, email_2, direccion, direccion_2, ciudad, codigo_postal,
-             responsable_iva, autoretenedor, gran_contribuyente, clasificacion_dian,
-             actividad_economica, codigo_ciiu, plazo_credito, cupo_credito,
-             fecha_aniversario, lista_precios, forma_pago, codigo_worldoffice,
-             observacion, notas, activo, "createdAt", "updatedAt"
-      FROM clients 
-      ORDER BY 
-        CASE WHEN tipo_persona = 'juridica' THEN razon_social ELSE primer_nombre END ASC
-    `);
-    console.log('Resultado:', result.rows.length);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error getting clients:', error);
-    console.error('Error detail:', error.message);
-    res.status(500).json({ error: error.message, message: 'Error al obtener los clientes' });
-  }
+    try {
+        const result = await listClients({
+            page: req.query.page,
+            limit: req.query.limit,
+            search:
+                req.query.search ||
+                req.query.q ||
+                '',
+            origin:
+                req.query.origin ||
+                req.query.origen ||
+                'all',
+        });
+
+        /*
+         * Compatibilidad temporal:
+         *
+         * El frontend actual espera un arreglo.
+         * El frontend nuevo solicitará:
+         * ?paginated=true
+         */
+        if (
+            req.query.paginated !== 'true'
+        ) {
+            res.setHeader(
+                'X-Total-Count',
+                String(
+                    result.pagination.total
+                )
+            );
+
+            res.setHeader(
+                'X-Total-Pages',
+                String(
+                    result.pagination.totalPages
+                )
+            );
+
+            res.setHeader(
+                'X-Current-Page',
+                String(
+                    result.pagination.page
+                )
+            );
+
+            return res.status(200).json(
+                result.data
+            );
+        }
+
+        return res.status(200).json(
+            result
+        );
+    } catch (error) {
+        console.error(
+            'Error obteniendo clientes:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                'Error al obtener los clientes',
+            error: error.message,
+        });
+    }
 };
+
+
 exports.getById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -52,37 +103,49 @@ exports.getById = async (req, res) => {
 };
 
 exports.search = async (req, res) => {
-  try {
-    const { q } = req.query;
-    
-    if (!q || q.trim().length < 2) {
-      return res.json([]);
-    }
-    
-    const searchTerm = `%${q.toLowerCase()}%`;
-    const result = await pool.query(`
-      SELECT id, tipo_persona, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido,
-             razon_social, tipo_documento, documento, digito_verificacion, telefono, email,
-             direccion, ciudad, activo
-      FROM clients 
-      WHERE 
-        LOWER(primer_nombre) LIKE $1 OR
-        LOWER(primer_apellido) LIKE $1 OR
-        LOWER(razon_social) LIKE $1 OR
-        documento LIKE $1 OR
-        telefono LIKE $1
-      ORDER BY 
-        CASE WHEN tipo_persona = 'juridica' THEN razon_social ELSE primer_nombre END ASC
-      LIMIT 10
-    `, [searchTerm]);
-    
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error searching clients:', error);
-    res.status(500).json({ message: 'Error al buscar clientes' });
-  }
-};
+    try {
+        const search =
+            String(req.query.q || '')
+                .trim();
 
+        if (search.length < 2) {
+            return res.status(200).json([]);
+        }
+
+        const result =
+            await searchClients({
+                search,
+
+                limit:
+                    req.query.limit || 20,
+
+                origin:
+                    req.query.origin ||
+                    req.query.origen ||
+                    'all',
+            });
+
+        /*
+         * Conservamos el formato de arreglo porque
+         * ServicioForm.jsx ya espera res.data.
+         */
+        return res.status(200).json(
+            result.data
+        );
+    } catch (error) {
+        console.error(
+            'Error buscando clientes:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                'Error al buscar clientes',
+            error: error.message,
+        });
+    }
+};
 
 
 exports.create = async (req, res) => {
@@ -238,45 +301,75 @@ exports.update = async (req, res) => {
 };
 
 
-
 exports.delete = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    console.log('Intentando eliminar cliente (cascada):', id);
-    
-    const checkClient = await pool.query(`
-      SELECT id, tipo_persona, primer_nombre, primer_apellido, razon_social 
-      FROM clients WHERE id = $1
-    `, [id]);
-    
-    if (checkClient.rows.length === 0) {
-      return res.status(404).json({ message: 'Cliente no encontrado' });
+    try {
+        const { id } = req.params;
+
+        const result = await pool.query(
+            `
+                UPDATE clients
+
+                SET
+                    activo = FALSE,
+                    "updatedAt" = NOW()
+
+                WHERE id = $1
+
+                RETURNING
+                    id,
+                    tipo_persona,
+                    razon_social,
+                    primer_nombre,
+                    primer_apellido
+            `,
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message:
+                    'Cliente local no encontrado',
+            });
+        }
+
+        const cliente =
+            result.rows[0];
+
+        const nombre =
+            cliente.tipo_persona ===
+            'juridica'
+                ? cliente.razon_social
+                : [
+                    cliente.primer_nombre,
+                    cliente.primer_apellido,
+                ]
+                    .filter(Boolean)
+                    .join(' ');
+
+        return res.status(200).json({
+            success: true,
+            message:
+                `Cliente "${nombre}" desactivado correctamente`,
+            deactivated: true,
+        });
+    } catch (error) {
+        console.error(
+            'Error desactivando cliente:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                'Error al desactivar el cliente',
+            error: error.message,
+        });
     }
-    
-    const nombreCliente = checkClient.rows[0].tipo_persona === 'juridica' 
-      ? checkClient.rows[0].razon_social 
-      : `${checkClient.rows[0].primer_nombre || ''} ${checkClient.rows[0].primer_apellido || ''}`.trim();
-    
-    await pool.query(`DELETE FROM service_orders WHERE client_id = $1`, [id]);
-    console.log(`Órdenes de servicio eliminadas para cliente ${nombreCliente}`);
-    
-    const result = await pool.query(`DELETE FROM clients WHERE id = $1 RETURNING id`, [id]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Cliente no encontrado' });
-    }
-    
-    res.json({ 
-      message: `Cliente "${nombreCliente}" eliminado correctamente junto con sus órdenes asociadas`,
-      deleted: true
-    });
-    
-  } catch (error) {
-    console.error('Error deleting client:', error);
-    res.status(500).json({ message: 'Error al eliminar el cliente: ' + error.message });
-  }
 };
+
+
+
 exports.getClientStats = async (req, res) => {
   try {
     const { id } = req.params;
