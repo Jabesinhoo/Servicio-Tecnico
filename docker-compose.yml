@@ -3,115 +3,164 @@ services:
     image: postgres:16-alpine
     container_name: tecnicos_db
     restart: unless-stopped
+
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1235
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: tecnicos
-    ports:
-      - "5432:5432"
+      TZ: America/Bogota
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d tecnicos"
+        ]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+
     networks:
       - tecnicos_network
+
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+
     container_name: tecnicos_backend
     restart: unless-stopped
+
     environment:
+      NODE_ENV: production
+      PORT: 3001
+
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: 1235
       DB_NAME: tecnicos
-      PORT: 3001
+
       JWT_SECRET: una_clave_super_secreta
       JWT_EXPIRES: 7d
-      OLLAMA_URL: http://ollama:11434
-      OLLAMA_MODEL: llama3.2:3b
+
+      CORS_ORIGIN: "https://tecnicos.tecnonacho.com"
+      FRONTEND_URL: "https://tecnicos.tecnonacho.com"
+
+      OLLAMA_URL: "http://ollama:11434"
+      OLLAMA_MODEL: "llama3.2:1b"
+
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
+
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
+
     networks:
       - tecnicos_network
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
+
+      args:
+        VITE_API_URL: "https://tecnicos.tecnonacho.com"
+
     container_name: tecnicos_frontend
     restart: unless-stopped
-    environment:
-      VITE_API_URL: http://localhost:3001
+
     ports:
-      - "5173:5173"
+      - "127.0.0.1:8082:80"
+
     depends_on:
       - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+
     networks:
       - tecnicos_network
+
 
   ollama:
     image: ollama/ollama:latest
     container_name: tecnicos_ollama
     restart: unless-stopped
+
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_KEEP_ALIVE: "24h"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+
     ports:
-      - "11435:11434"
+      - "127.0.0.1:11435:11434"
+
     volumes:
       - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_KEEP_ALIVE=24h
+
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
     networks:
       - tecnicos_network
+
 
   n8n:
     image: n8nio/n8n:latest
     container_name: tecnicos_n8n
     restart: unless-stopped
+
     environment:
-      #- N8N_BASIC_AUTH_ACTIVE=true
-      #- N8N_BASIC_AUTH_USER=admin
-      #- N8N_BASIC_AUTH_PASSWORD=admin123
-      - N8N_HOST=localhost
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:5678/
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=tecnicos
-      - DB_POSTGRESDB_USER=postgres
-      - DB_POSTGRESDB_PASSWORD=1235
+      TZ: America/Bogota
+      GENERIC_TIMEZONE: America/Bogota
+
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: "http://localhost:5679/"
+
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: tecnicos
+      DB_POSTGRESDB_USER: postgres
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
     ports:
-      - "5678:5678"
+      - "5679:5678"
+
     depends_on:
       postgres:
         condition: service_healthy
+
     volumes:
       - n8n_data:/home/node/.n8n
+
     networks:
       - tecnicos_network
 
+
 volumes:
   postgres_data:
+    name: servicio-tecnico_postgres_data
+
   ollama_data:
+    name: servicio-tecnico_ollama_data
+
   n8n_data:
+    name: servicio-tecnico_n8n_data
+
 
 networks:
   tecnicos_network:
+    name: tecnicos_network
     driver: bridge

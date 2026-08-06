@@ -1,10 +1,19 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
-import { Lock, User, LogIn, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import api from "../services/api";
+import {
+  Lock,
+  User,
+  LogIn,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+} from "lucide-react";
 
 export default function Login() {
   useDocumentTitle("Sistema Técnicos | Iniciar sesión");
+
   const navigate = useNavigate();
 
   const [identifier, setIdentifier] = useState("");
@@ -16,56 +25,83 @@ export default function Login() {
 
   // Auto-ocultar mensajes
   useEffect(() => {
-    if (!error && !success) return;
-    const timer = setTimeout(() => {
+    if (!error && !success) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
       setError("");
       setSuccess("");
     }, 4000);
-    return () => clearTimeout(timer);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [error, success]);
 
-  const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError("");
-  setSuccess("");
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-  if (!identifier.trim() || !password) {
-    setError("Por favor, completa todos los campos.");
-    return;
-  }
+    setError("");
+    setSuccess("");
 
-  setLoading(true);
-  try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier, password }),
-    });
+    const normalizedIdentifier = identifier.trim();
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      setError(data.message || "Credenciales incorrectas.");
+    if (!normalizedIdentifier || !password) {
+      setError("Por favor, completa todos los campos.");
       return;
     }
 
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    setLoading(true);
 
-    setSuccess("¡Inicio de sesión exitoso! Redirigiendo...");
-    navigate("/dashboard");
-  } catch {
-    setError("No se pudo conectar con el servidor.");
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const response = await api.post("/api/auth/login", {
+        identifier: normalizedIdentifier,
+        password,
+      });
 
+      const data = response.data;
+
+      if (!data?.token || !data?.user) {
+        throw new Error(
+          "El servidor no devolvió una sesión válida."
+        );
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem(
+        "user",
+        JSON.stringify(data.user)
+      );
+
+      setSuccess(
+        "¡Inicio de sesión exitoso! Redirigiendo..."
+      );
+
+      navigate("/dashboard", {
+        replace: true,
+      });
+    } catch (requestError) {
+      console.error(
+        "Error iniciando sesión:",
+        requestError
+      );
+
+      const message =
+        requestError.response?.data?.message ||
+        requestError.message ||
+        "No se pudo conectar con el servidor.";
+
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-[92vh] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        {/* Header del Sistema */}
+        {/* Header del sistema */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-sky-600 to-indigo-600 rounded-2xl shadow-lg mb-4">
             <ShieldCheck className="w-9 h-9 text-white" />
@@ -76,10 +112,10 @@ export default function Login() {
           </h1>
         </div>
 
-        {/* Tarjeta de Login */}
+        {/* Tarjeta de login */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-          {/* Barra de estado superior */}
-          <div className="h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500"></div>
+          {/* Barra superior */}
+          <div className="h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500" />
 
           <div className="p-5 sm:p-8">
             {/* Encabezado del formulario */}
@@ -89,11 +125,11 @@ export default function Login() {
               </div>
 
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                Iniciar Sesión
+                Iniciar sesión
               </h2>
             </div>
 
-            {/* Mensajes de estado */}
+            {/* Mensajes */}
             {(error || success) && (
               <div
                 className={`mb-6 p-4 rounded-xl border animate-fadeIn ${
@@ -106,9 +142,10 @@ export default function Login() {
                   {error ? (
                     <>
                       <svg
-                        className="w-5 h-5 text-red-500"
+                        className="w-5 h-5 text-red-500 shrink-0"
                         fill="currentColor"
                         viewBox="0 0 20 20"
+                        aria-hidden="true"
                       >
                         <path
                           fillRule="evenodd"
@@ -116,6 +153,7 @@ export default function Login() {
                           clipRule="evenodd"
                         />
                       </svg>
+
                       <span className="text-red-700 dark:text-red-300 font-medium">
                         {error}
                       </span>
@@ -123,9 +161,10 @@ export default function Login() {
                   ) : (
                     <>
                       <svg
-                        className="w-5 h-5 text-emerald-600"
+                        className="w-5 h-5 text-emerald-600 shrink-0"
                         fill="currentColor"
                         viewBox="0 0 20 20"
+                        aria-hidden="true"
                       >
                         <path
                           fillRule="evenodd"
@@ -133,6 +172,7 @@ export default function Login() {
                           clipRule="evenodd"
                         />
                       </svg>
+
                       <span className="text-emerald-700 dark:text-emerald-300 font-medium">
                         {success}
                       </span>
@@ -143,11 +183,17 @@ export default function Login() {
             )}
 
             {/* Formulario */}
-            <form onSubmit={handleSubmit} className="responsive-page min-w-0 space-y-4 sm:space-y-6">
+            <form
+              onSubmit={handleSubmit}
+              className="responsive-page min-w-0 space-y-4 sm:space-y-6"
+            >
               <div className="space-y-5 min-w-0">
-                {/* Campo usuario/email */}
+                {/* Usuario o correo */}
                 <div className="min-w-0 flex flex-col gap-2">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  <label
+                    htmlFor="identifier"
+                    className="text-sm font-semibold text-slate-700 dark:text-slate-200"
+                  >
                     Usuario o correo electrónico
                   </label>
 
@@ -157,9 +203,13 @@ export default function Login() {
                     </div>
 
                     <input
+                      id="identifier"
+                      name="identifier"
                       type="text"
                       value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
+                      onChange={(event) =>
+                        setIdentifier(event.target.value)
+                      }
                       className="
                         w-full max-w-full box-border h-12
                         pl-10 pr-4
@@ -175,13 +225,17 @@ export default function Login() {
                       "
                       placeholder="Usuario o correo electrónico"
                       autoComplete="username"
+                      disabled={loading}
                     />
                   </div>
                 </div>
 
-                {/* Campo contraseña */}
+                {/* Contraseña */}
                 <div className="min-w-0 flex flex-col gap-2">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  <label
+                    htmlFor="password"
+                    className="text-sm font-semibold text-slate-700 dark:text-slate-200"
+                  >
                     Contraseña
                   </label>
 
@@ -191,9 +245,17 @@ export default function Login() {
                     </div>
 
                     <input
-                      type={showPassword ? "text" : "password"}
+                      id="password"
+                      name="password"
+                      type={
+                        showPassword
+                          ? "text"
+                          : "password"
+                      }
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(event) =>
+                        setPassword(event.target.value)
+                      }
                       className="
                         w-full max-w-full box-border h-12
                         pl-10 pr-12
@@ -209,12 +271,17 @@ export default function Login() {
                       "
                       placeholder="••••••••"
                       autoComplete="current-password"
+                      disabled={loading}
                     />
 
-                    {/* ✅ Ojo sin cuadro blanco */}
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
+                      onClick={() =>
+                        setShowPassword(
+                          (currentValue) =>
+                            !currentValue
+                        )
+                      }
                       className="
                         absolute inset-y-0 right-0
                         w-12 flex items-center justify-center
@@ -223,7 +290,12 @@ export default function Login() {
                         dark:hover:text-slate-200
                         outline-none border-0
                       "
-                      aria-label="Mostrar/Ocultar contraseña"
+                      aria-label={
+                        showPassword
+                          ? "Ocultar contraseña"
+                          : "Mostrar contraseña"
+                      }
+                      disabled={loading}
                     >
                       {showPassword ? (
                         <EyeOff className="h-5 w-5" />
@@ -255,6 +327,7 @@ export default function Login() {
                       className="animate-spin h-5 w-5"
                       fill="none"
                       viewBox="0 0 24 24"
+                      aria-hidden="true"
                     >
                       <circle
                         className="opacity-25"
@@ -264,12 +337,14 @@ export default function Login() {
                         stroke="currentColor"
                         strokeWidth="4"
                       />
+
                       <path
                         className="opacity-75"
                         fill="currentColor"
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                       />
                     </svg>
+
                     Iniciando sesión...
                   </>
                 ) : (
@@ -280,7 +355,7 @@ export default function Login() {
                 )}
               </button>
 
-              {/* Enlace registro */}
+              {/* Registro */}
               <div className="pt-6 border-t border-slate-200 dark:border-slate-800">
                 <p className="text-center text-slate-600 dark:text-slate-400">
                   ¿No tienes una cuenta?{" "}
@@ -288,7 +363,7 @@ export default function Login() {
                     to="/register"
                     className="font-bold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition"
                   >
-                    Crear cuenta 
+                    Crear cuenta
                   </Link>
                 </p>
               </div>
@@ -299,8 +374,9 @@ export default function Login() {
         {/* Footer */}
         <div className="mt-8 text-center text-slate-500 dark:text-slate-400 text-sm">
           <p>
-            © {new Date().getFullYear()} Sistema Técnicos. @Jabesinho
-             Todos los derechos reservados.
+            © {new Date().getFullYear()} Sistema
+            Técnicos. @Jabesinho Todos los derechos
+            reservados.
           </p>
         </div>
       </div>
