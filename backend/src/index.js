@@ -9,7 +9,9 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const sequelize = require('./config/database');
-
+const {
+  syncPermissionsToDatabase,
+} = require('./services/permissionsRegistry');
 // ============================================================
 // RUTAS
 // ============================================================
@@ -237,8 +239,17 @@ app.use((error, req, res, next) => {
 
 sequelize
   .authenticate()
-  .then(() => {
+  .then(async () => {
     console.log('PostgreSQL conectado');
+
+    try {
+      await syncPermissionsToDatabase();
+    } catch (error) {
+      console.error(
+        '❌ Error sincronizando permisos:',
+        error
+      );
+    }
   })
   .catch((error) => {
     console.error(
