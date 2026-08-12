@@ -10,25 +10,51 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
       },
 
-      numero_ov: { type: DataTypes.STRING(30), allowNull: false, unique: true },
+      numero_ov: {
+        type: DataTypes.STRING(30),
+        allowNull: false,
+        unique: true,
+      },
 
-      client_id: { type: DataTypes.UUID, allowNull: false },
-      vendedor_id: { type: DataTypes.UUID, allowNull: false },
+      client_id: {
+        type: DataTypes.UUID,
+        allowNull: false,
+      },
+
+      vendedor_id: {
+        type: DataTypes.UUID,
+        allowNull: false,
+      },
 
       estado: {
         type: DataTypes.ENUM("borrador", "confirmada", "cancelada"),
         allowNull: false,
         defaultValue: "borrador",
       },
+
       facturada: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false,
       },
 
-      total_productos: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
-      total_servicios: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
-      total_general: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
+      total_productos: {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: false,
+        defaultValue: 0,
+      },
+
+      total_servicios: {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: false,
+        defaultValue: 0,
+      },
+
+      total_general: {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: false,
+        defaultValue: 0,
+      },
     },
     {
       tableName: "sales_orders",
@@ -37,12 +63,25 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   SalesOrder.associate = (models) => {
-    SalesOrder.belongsTo(models.Client, { foreignKey: "client_id" });
-    SalesOrder.belongsTo(models.Usuario, { foreignKey: "vendedor_id" });
+    SalesOrder.belongsTo(models.Client, {
+      foreignKey: "client_id",
+    });
 
-    SalesOrder.hasMany(models.SalesOrderItem, { foreignKey: "sales_order_id" });
-    SalesOrder.hasMany(models.ServiceOrder, { foreignKey: "origen_id" }); // cuando origen_tipo = venta
-    SalesOrder.hasMany(models.Invoice, { foreignKey: "sales_order_id" });
+    SalesOrder.belongsTo(models.Usuario, {
+      foreignKey: "vendedor_id",
+    });
+
+    SalesOrder.hasMany(models.SalesOrderItem, {
+      foreignKey: "sales_order_id",
+    });
+
+    SalesOrder.hasMany(models.ServiceOrder, {
+      foreignKey: "origen_id",
+    });
+
+    SalesOrder.hasMany(models.Invoice, {
+      foreignKey: "sales_order_id",
+    });
   };
 
   return SalesOrder;

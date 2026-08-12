@@ -1,12 +1,11 @@
 // frontend/src/components/DashboardLayout.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
 import ColorPicker from './ui/ColorPicker';
 import NotificacionesCampana from './ui/NotificacionesCampana';
 import IAChat from './ui/IAChat';
-import { Calendar, Sparkles } from 'lucide-react';
 
 import {
   LayoutDashboard,
@@ -21,14 +20,17 @@ import {
   LogOut,
   User,
   X,
-  Truck
+  Truck,
+  Calendar,
+  Sparkles,
+  Shield
 } from 'lucide-react';
 
 const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [showIAChat, setShowIAChat] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, canViewModule } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -48,29 +50,89 @@ const DashboardLayout = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Navegación con permisos
   const navigation = useMemo(() => {
-    const commonNav = [
-      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { name: 'Servicios', href: '/dashboard/servicios', icon: Wrench },
-      { name: 'Clientes', href: '/dashboard/clientes', icon: Users },
-      { name: 'Inventarios', href: '/dashboard/inventarios', icon: Package },
-      { name: 'Tipos de Servicio', href: '/dashboard/tipos-servicio', icon: FileText },
-      { name: 'Reportes', href: '/dashboard/reportes', icon: BarChart3 },
-      { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar },
-      { name: 'Facturas', href: '/dashboard/facturas', icon: FileText },
-      { name: 'Alquileres', href: '/dashboard/alquileres', icon: Truck },
+    const allNav = [
+      { 
+        name: 'Dashboard', 
+        href: '/dashboard', 
+        icon: LayoutDashboard,
+        permission: null // visible para todos
+      },
+      { 
+        name: 'Servicios', 
+        href: '/dashboard/servicios', 
+        icon: Wrench,
+        permission: 'servicios'
+      },
+      { 
+        name: 'Clientes', 
+        href: '/dashboard/clientes', 
+        icon: Users,
+        permission: 'clientes'
+      },
+      { 
+        name: 'Inventarios', 
+        href: '/dashboard/inventarios', 
+        icon: Package,
+        permission: 'inventario'
+      },
+      { 
+        name: 'Tipos de Servicio', 
+        href: '/dashboard/tipos-servicio', 
+        icon: FileText,
+        permission: 'servicios'
+      },
+      { 
+        name: 'Reportes', 
+        href: '/dashboard/reportes', 
+        icon: BarChart3,
+        permission: 'reportes'
+      },
+      { 
+        name: 'Agenda', 
+        href: '/dashboard/agenda', 
+        icon: Calendar,
+        permission: 'agenda'
+      },
+      { 
+        name: 'Facturas', 
+        href: '/dashboard/facturas', 
+        icon: FileText,
+        permission: 'facturas'
+      },
+      { 
+        name: 'Alquileres', 
+        href: '/dashboard/alquileres', 
+        icon: Truck,
+        permission: 'alquileres'
+      },
+      { 
+        name: 'Técnicos', 
+        href: '/dashboard/tecnicos', 
+        icon: UserCheck,
+        permission: 'tecnicos'
+      },
+      { 
+        name: 'Usuarios', 
+        href: '/dashboard/usuarios', 
+        icon: UserCog,
+        permission: 'usuarios'
+      },
+      { 
+        name: 'Roles', 
+        href: '/dashboard/roles', 
+        icon: Shield,
+        permission: 'roles'
+      },
     ];
 
-    if (user?.rol === 'admin') {
-      return [
-        ...commonNav,
-        { name: 'Técnicos', href: '/dashboard/tecnicos', icon: UserCheck },
-        { name: 'Usuarios', href: '/dashboard/usuarios', icon: UserCog },
-      ];
-    }
-
-    return commonNav;
-  }, [user?.rol]);
+    // Filtrar por permisos
+    return allNav.filter(item => {
+      if (!item.permission) return true;
+      return canViewModule(item.permission);
+    });
+  }, [canViewModule]);
 
   const isActive = (href) => location.pathname === href;
 
@@ -79,8 +141,46 @@ const DashboardLayout = () => {
     navigate('/login');
   };
 
-  const displayName = user?.nombre1 || user?.usuario || user?.email || 'Usuario';
-  const roleName = user?.rol === 'admin' ? 'Administrador' : user?.rol === 'tecnico' ? 'Técnico' : 'Usuario';
+  // Obtener nombre completo del usuario
+  const getDisplayName = () => {
+    if (!user) return 'Usuario';
+    if (user?.nombre1 && user?.apellidos) {
+      return `${user.nombre1} ${user.apellidos}`;
+    }
+    return user?.nombre || user?.usuario || user?.email || 'Usuario';
+  };
+
+  // Obtener rol del usuario
+  const getRoleName = () => {
+    if (!user) return 'Usuario';
+    const role = user?.role?.name || user?.rol;
+    const roleMap = {
+      admin: 'Administrador',
+      director_tecnico: 'Director Técnico',
+      tecnico: 'Técnico',
+      caja: 'Caja',
+      usuario: 'Usuario'
+    };
+    return roleMap[role] || role || 'Usuario';
+  };
+
+  // Obtener iniciales para el avatar
+  const getInitials = () => {
+    const name = getDisplayName();
+    if (name && name !== 'Usuario') {
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    return (user?.email || 'U')[0].toUpperCase();
+  };
+
+  // Si el usuario no está cargado, mostrar loader
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
@@ -144,16 +244,22 @@ const DashboardLayout = () => {
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--bg-input)' }}>
-              <User className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {getInitials()}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{displayName}</p>
-              <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{roleName}</p>
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                {getDisplayName()}
+              </p>
+              <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                {getRoleName()}
+              </p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:bg-red-700"
             style={{ backgroundColor: '#dc2626' }}
           >
             <LogOut className="w-4 h-4" />

@@ -1,36 +1,43 @@
 // backend/src/index.js
-require("dotenv").config();
+'use strict';
 
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+require('dotenv').config();
 
-const sequelize = require("./config/database");
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
-const authRoutes = require("./routes/auth.routes");
-const dashboardRoutes = require("./routes/dashboard.routes");
-const catalogRoutes = require("./routes/catalog.routes");
-const serviceOrdersRoutes = require("./routes/service-orders.routes");
-const clientRoutes = require("./routes/client.routes");
-const userRoutes = require("./routes/user.routes");
-const tipoServicioRoutes = require("./routes/tipo-servicio.routes");
-const productRoutes = require("./routes/product.routes");
-const categoriaProductoRoutes = require("./routes/categoria-producto.routes");
-const reportRoutes = require("./routes/report.routes");
-const agendaRoutes = require("./routes/agenda.routes");
-const materialRoutes = require("./routes/material.routes");
-const invoiceRoutes = require("./routes/invoice.routes");
-const productoSerialRoutes = require("./routes/producto-serial.routes");
-const alquilerRoutes = require("./routes/alquiler.routes");
-const syncRoutes = require("./routes/sync.routes");
-const notificacionesRoutes = require("./routes/notificaciones.routes");
-const iaRoutes = require("./routes/ia.routes");
+const sequelize = require('./config/database');
+
+// ============================================================
+// RUTAS
+// ============================================================
+
+const authRoutes = require('./routes/auth.routes');
+const dashboardRoutes = require('./routes/dashboard.routes');
+const catalogRoutes = require('./routes/catalog.routes');
+const serviceOrdersRoutes = require('./routes/service-orders.routes');
+const clientRoutes = require('./routes/client.routes');
+const userRoutes = require('./routes/user.routes');
+const tipoServicioRoutes = require('./routes/tipo-servicio.routes');
+const productRoutes = require('./routes/product.routes');
+const categoriaProductoRoutes = require('./routes/categoria-producto.routes');
+const reportRoutes = require('./routes/report.routes');
+const agendaRoutes = require('./routes/agenda.routes');
+const materialRoutes = require('./routes/material.routes');
+const invoiceRoutes = require('./routes/invoice.routes');
+const productoSerialRoutes = require('./routes/producto-serial.routes');
+const alquilerRoutes = require('./routes/alquiler.routes');
+const syncRoutes = require('./routes/sync.routes');
+const notificacionesRoutes = require('./routes/notificaciones.routes');
+const iaRoutes = require('./routes/ia.routes');
+const rolesRoutes = require('./routes/roles');
 
 const app = express();
 
 // El backend está detrás de Nginx.
-app.set("trust proxy", 1);
+app.set('trust proxy', 1);
 
 // ============================================================
 // SEGURIDAD
@@ -42,14 +49,11 @@ app.use(helmet());
 // CORS
 // ============================================================
 
-// Permite configurar uno o varios orígenes separados por comas.
-// Ejemplo:
-// CORS_ORIGIN=https://tecnicos.tecnonacho.com,http://localhost:5173
 const allowedOrigins = (
   process.env.CORS_ORIGIN ||
-  "http://localhost:5173"
+  'http://localhost:5173'
 )
-  .split(",")
+  .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
@@ -79,21 +83,21 @@ const corsOptions = {
   credentials: true,
 
   methods: [
-    "GET",
-    "POST",
-    "PUT",
-    "PATCH",
-    "DELETE",
-    "OPTIONS",
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS',
   ],
 
   allowedHeaders: [
-    "Content-Type",
-    "Authorization",
+    'Content-Type',
+    'Authorization',
   ],
 
   exposedHeaders: [
-    "Content-Length",
+    'Content-Length',
   ],
 
   optionsSuccessStatus: 204,
@@ -107,14 +111,14 @@ app.use(cors(corsOptions));
 
 app.use(
   express.json({
-    limit: "10mb",
+    limit: '10mb',
   })
 );
 
 app.use(
   express.urlencoded({
     extended: true,
-    limit: "10mb",
+    limit: '10mb',
   })
 );
 
@@ -131,22 +135,22 @@ const authLimiter = rateLimit({
   message: {
     success: false,
     message:
-      "Demasiados intentos. Intenta nuevamente más tarde.",
+      'Demasiados intentos. Intenta nuevamente más tarde.',
   },
 });
 
-app.use("/api/auth", authLimiter);
+app.use('/api/auth', authLimiter);
 
 // ============================================================
 // HEALTHCHECK
 // ============================================================
 
-app.get("/api/health", (req, res) => {
+app.get('/api/health', (req, res) => {
   res.status(200).json({
     ok: true,
-    message: "API firme",
+    message: 'API firme',
     environment:
-      process.env.NODE_ENV || "development",
+      process.env.NODE_ENV || 'development',
   });
 });
 
@@ -154,33 +158,35 @@ app.get("/api/health", (req, res) => {
 // RUTAS
 // ============================================================
 
-app.use("/api/auth", authRoutes);
-app.use("/api/dashboard", dashboardRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
-app.use("/api", catalogRoutes);
-app.use("/api", serviceOrdersRoutes);
-app.use("/api", clientRoutes);
-app.use("/api", userRoutes);
-app.use("/api", tipoServicioRoutes);
-app.use("/api", productRoutes);
-app.use("/api", categoriaProductoRoutes);
-app.use("/api", reportRoutes);
-app.use("/api", agendaRoutes);
-app.use("/api", materialRoutes);
-app.use("/api", invoiceRoutes);
-app.use("/api", productoSerialRoutes);
-app.use("/api", alquilerRoutes);
-app.use("/api", notificacionesRoutes);
-app.use("/api", iaRoutes);
+app.use('/api', catalogRoutes);
+app.use('/api', serviceOrdersRoutes);
+app.use('/api', clientRoutes);
+app.use('/api', userRoutes);
+app.use('/api', tipoServicioRoutes);
+app.use('/api', productRoutes);
+app.use('/api', categoriaProductoRoutes);
+app.use('/api', reportRoutes);
+app.use('/api', agendaRoutes);
+app.use('/api', materialRoutes);
+app.use('/api', invoiceRoutes);
+app.use('/api', productoSerialRoutes);
+app.use('/api', alquilerRoutes);
+app.use('/api', notificacionesRoutes);
+app.use('/api', iaRoutes);
 
-app.use("/api/sync", syncRoutes);
+// Rutas con prefijo propio
+app.use('/api/roles', rolesRoutes);
+app.use('/api/sync', syncRoutes);
 
 // ============================================================
 // RUTA PRINCIPAL
 // ============================================================
 
-app.get("/", (req, res) => {
-  res.status(200).send("Backend firme");
+app.get('/', (req, res) => {
+  res.status(200).send('Backend firme');
 });
 
 // ============================================================
@@ -201,12 +207,12 @@ app.use((req, res) => {
 
 // eslint-disable-next-line no-unused-vars
 app.use((error, req, res, next) => {
-  console.error("Error global del backend:", {
+  console.error('Error global del backend:', {
     message: error.message,
     method: req.method,
     url: req.originalUrl,
     stack:
-      process.env.NODE_ENV === "development"
+      process.env.NODE_ENV === 'development'
         ? error.stack
         : undefined,
   });
@@ -218,10 +224,9 @@ app.use((error, req, res, next) => {
 
   res.status(status).json({
     success: false,
-
     message:
       status === 500
-        ? "Error interno del servidor"
+        ? 'Error interno del servidor'
         : error.message,
   });
 });
@@ -233,11 +238,11 @@ app.use((error, req, res, next) => {
 sequelize
   .authenticate()
   .then(() => {
-    console.log("PostgreSQL conectado");
+    console.log('PostgreSQL conectado');
   })
   .catch((error) => {
     console.error(
-      "Error de conexión a PostgreSQL:",
+      'Error de conexión a PostgreSQL:',
       error
     );
   });
@@ -246,16 +251,16 @@ sequelize
 // SCHEDULER
 // ============================================================
 
-if (process.env.NODE_ENV !== "test") {
+if (process.env.NODE_ENV !== 'test') {
   try {
-    require("./scheduler");
+    require('./scheduler');
 
     console.log(
-      "Scheduler de tareas programadas iniciado"
+      'Scheduler de tareas programadas iniciado'
     );
   } catch (error) {
     console.error(
-      "Error al iniciar scheduler:",
+      'Error al iniciar scheduler:',
       error.message
     );
   }
@@ -269,12 +274,12 @@ const PORT = Number(
   process.env.PORT || 3001
 );
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(
     `Backend iniciado en el puerto ${PORT}`
   );
 
   console.log(
-    `Orígenes CORS permitidos: ${allowedOrigins.join(", ")}`
+    `Orígenes CORS permitidos: ${allowedOrigins.join(', ')}`
   );
 });

@@ -1,34 +1,12 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// frontend/src/hooks/useAuth.js
+// Este archivo es un wrapper para usar el contexto desde hooks
+import { useContext } from 'react';
+import AuthContext from '../context/AuthContext';
 
 export const useAuth = () => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const navigate = useNavigate();
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const userData = localStorage.getItem('user');
-
-        if (token && userData) {
-            try {
-                setUser(JSON.parse(userData));
-            } catch (error) {
-                console.error('Error parsing user data:', error);
-                localStorage.clear();
-                navigate('/login');
-            }
-        } else {
-            navigate('/login');
-        }
-        setLoading(false);
-    }, [navigate]);
-
-    const logout = () => {
-        localStorage.clear();
-        setUser(null);
-        navigate('/login');
-    };
-
-    return { user, loading, logout };
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

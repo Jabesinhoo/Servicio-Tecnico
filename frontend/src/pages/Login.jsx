@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
-import api from "../services/api";
+import { publicApi } from "../services/api";
 import {
   Lock,
   User,
@@ -55,9 +55,13 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await api.post("/api/auth/login", {
+      console.log("LOGIN DEBUG:", {
         identifier: normalizedIdentifier,
-        password,
+        passwordLength: password.length,
+      });
+      const response = await publicApi.post("/api/auth/login", {
+        identifier: normalizedIdentifier,
+        password: password.trim(),
       });
 
       const data = response.data;
@@ -132,11 +136,10 @@ export default function Login() {
             {/* Mensajes */}
             {(error || success) && (
               <div
-                className={`mb-6 p-4 rounded-xl border animate-fadeIn ${
-                  error
-                    ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                    : "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
-                }`}
+                className={`mb-6 p-4 rounded-xl border animate-fadeIn ${error
+                  ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                  : "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   {error ? (

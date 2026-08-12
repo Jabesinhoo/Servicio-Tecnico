@@ -1,184 +1,565 @@
 // backend/src/controllers/user.controller.js
-const pool = require('../db/pool');
+const { Usuario, Role, sequelize } = require('../models');
 const bcrypt = require('bcryptjs');
 
-// Obtener todos los usuarios
-exports.getAll = async (req, res) => {
+// ============================================================
+// OBTENER TODOS LOS USUARIOS
+// ============================================================
+const getUsers = async (req, res) => {
   try {
-    const { rol } = req.query;
+    const users = await Usuario.findAll({
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+      order: [['created_at', 'DESC']],
+    });
     
-    // Roles válidos en la base de datos
-    const validRoles = ['admin', 'tecnico', 'usuario', 'ventas', 'inventario', 'facturacion'];
+    // Formatear respuesta para incluir nombre completo
+    const formattedUsers = users.map(user => ({
+      ...user.toJSON(),
+      nombre_completo: user.getNombreCompleto(),
+    }));
     
-    let query = `
-      SELECT id, nombre1, nombre2, apellidos, usuario, email, cedula, celular, rol, activo, "createdAt"
-      FROM usuarios 
-      WHERE 1=1
-    `;
-    const params = [];
-    let paramIndex = 1;
-    
-    if (rol && validRoles.includes(rol)) {
-      query += ` AND rol = $${paramIndex++}`;
-      params.push(rol);
-    } else if (rol && !validRoles.includes(rol)) {
-      // Si el rol no es válido, devolver array vacío
-      return res.json([]);
-    }
-    
-    query += ` ORDER BY nombre1 ASC`;
-    
-    const result = await pool.query(query, params);
-    res.json(result.rows);
+    res.json({
+      success: true,
+      data: formattedUsers,
+    });
   } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Error al obtener usuarios' });
+    console.error('Error al obtener usuarios:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener usuarios',
+      error: error.message,
+    });
   }
 };
 
-// Obtener usuarios por rol (endpoint específico)
-exports.getByRole = async (req, res) => {
-  try {
-    const { rol } = req.query;
-    
-    if (!rol) {
-      return res.status(400).json({ message: 'El rol es requerido' });
-    }
-    
-    const result = await pool.query(`
-      SELECT id, nombre1, nombre2, apellidos, usuario, email, cedula, celular, rol, activo, "createdAt"
-      FROM usuarios 
-      WHERE rol = $1 AND activo = true
-      ORDER BY nombre1 ASC
-    `, [rol]);
-    
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching users by role:', error);
-    res.status(500).json({ message: 'Error al obtener usuarios por rol' });
-  }
-};
-
-// Obtener usuario por ID
-exports.getById = async (req, res) => {
+// ============================================================
+// OBTENER USUARIO POR ID
+// ============================================================
+const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(`
-      SELECT id, nombre1, nombre2, apellidos, usuario, email, cedula, celular, rol, activo, "createdAt"
-      FROM usuarios 
-      WHERE id = $1
-    `, [id]);
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+    const user = await Usuario.findByPk(id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+    });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
     }
     
-    res.json(result.rows[0]);
+    res.json({
+      success: true,
+      data: {
+        ...user.toJSON(),
+        nombre_completo: user.getNombreCompleto(),
+      },
+    });
   } catch (error) {
-    console.error('Error fetching user:', error);
-    res.status(500).json({ message: 'Error al obtener usuario' });
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener usuario',
+      error: error.message,
+    });
   }
 };
 
-// Crear usuario
-exports.create = async (req, res) => {
+// ============================================================
+// CREAR USUARIO
+// ============================================================
+const createUser = async (req, res) => {
+  const t = await sequelize.transaction();
+  
   try {
-    const { nombre1, nombre2, apellidos, usuario, cedula, email, celular, password, rol } = req.body;
+    const { 
+      nombre1, nombre2, apellidos, email, password, 
+      usuario, cedula, celular, role_id, rol 
+    } = req.body;
     
     // Validaciones
-    if (!nombre1 || !apellidos || !usuario || !cedula || !email || !password) {
-      return res.status(400).json({ message: 'Faltan campos requeridos' });
+    if (!email || !password) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Email y contraseña son requeridos',
+      });
     }
     
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'La contraseña debe tener mínimo 6 caracteres' });
+    // Verificar si el email ya existe
+    const existingUser = await Usuario.findOne({
+      where: { email },
+      transaction: t,
+    });
+    
+    if (existingUser) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe un usuario con ese email',
+      });
     }
     
-    // Verificar existencia
-    const existing = await pool.query(`
-      SELECT id FROM usuarios WHERE usuario = $1 OR email = $2 OR cedula = $3
-    `, [usuario, email, cedula]);
-    
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ message: 'Usuario, email o cédula ya existen' });
+    // Verificar si el usuario ya existe
+    if (usuario) {
+      const existingUsuario = await Usuario.findOne({
+        where: { usuario },
+        transaction: t,
+      });
+      
+      if (existingUsuario) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con ese nombre de usuario',
+        });
+      }
     }
     
+    // Verificar si la cédula ya existe
+    if (cedula) {
+      const existingCedula = await Usuario.findOne({
+        where: { cedula },
+        transaction: t,
+      });
+      
+      if (existingCedula) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con esa cédula',
+        });
+      }
+    }
+    
+    // Verificar que el rol existe si se proporciona
+    let roleId = role_id;
+    let roleName = rol;
+    
+    if (roleId) {
+      const role = await Role.findByPk(roleId, { transaction: t });
+      if (!role) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Rol no encontrado',
+        });
+      }
+      roleName = role.name;
+    }
+    
+    // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    const result = await pool.query(`
-      INSERT INTO usuarios (
-        id, nombre1, nombre2, apellidos, usuario, cedula, email, celular, password, rol, activo, "createdAt", "updatedAt"
-      ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, true, NOW(), NOW()
-      )
-      RETURNING id, nombre1, nombre2, apellidos, usuario, email, rol
-    `, [nombre1, nombre2 || null, apellidos, usuario, cedula, email, celular || null, hashedPassword, rol || 'usuario']);
+    // Crear usuario
+    const user = await Usuario.create({
+      nombre1: nombre1 || null,
+      nombre2: nombre2 || null,
+      apellidos: apellidos || null,
+      email,
+      password: hashedPassword,
+      usuario: usuario || null,
+      cedula: cedula || null,
+      celular: celular || null,
+      role_id: roleId || null,
+      rol: roleName || 'usuario',
+      activo: true,
+    }, { transaction: t });
     
-    res.status(201).json(result.rows[0]);
+    await t.commit();
+    
+    // Obtener usuario creado con su rol
+    const createdUser = await Usuario.findByPk(user.id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+    });
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        ...createdUser.toJSON(),
+        nombre_completo: createdUser.getNombreCompleto(),
+      },
+      message: 'Usuario creado exitosamente',
+    });
   } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({ message: 'Error al crear usuario' });
+    await t.rollback();
+    console.error('Error al crear usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al crear usuario',
+      error: error.message,
+    });
   }
 };
 
-// Actualizar usuario
-exports.update = async (req, res) => {
+// ============================================================
+// ACTUALIZAR USUARIO
+// ============================================================
+const updateUser = async (req, res) => {
+  const t = await sequelize.transaction();
+  
   try {
     const { id } = req.params;
-    const { nombre1, nombre2, apellidos, celular, rol, activo, password } = req.body;
+    const { 
+      nombre1, nombre2, apellidos, email, password, 
+      usuario, cedula, celular, role_id, rol, activo 
+    } = req.body;
     
-    let query = `
-      UPDATE usuarios 
-      SET nombre1 = COALESCE($1, nombre1),
-          nombre2 = COALESCE($2, nombre2),
-          apellidos = COALESCE($3, apellidos),
-          celular = COALESCE($4, celular),
-          rol = COALESCE($5, rol),
-          activo = COALESCE($6, activo),
-          "updatedAt" = NOW()
-    `;
-    const params = [nombre1, nombre2, apellidos, celular, rol, activo];
-    let paramIndex = 7;
+    const user = await Usuario.findByPk(id, { transaction: t });
     
+    if (!user) {
+      await t.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+    }
+    
+    // Verificar si el email ya existe (excepto el mismo usuario)
+    if (email && email !== user.email) {
+      const existingUser = await Usuario.findOne({
+        where: { email },
+        transaction: t,
+      });
+      
+      if (existingUser) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con ese email',
+        });
+      }
+    }
+    
+    // Verificar si el usuario ya existe
+    if (usuario && usuario !== user.usuario) {
+      const existingUsuario = await Usuario.findOne({
+        where: { usuario },
+        transaction: t,
+      });
+      
+      if (existingUsuario) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con ese nombre de usuario',
+        });
+      }
+    }
+    
+    // Verificar si la cédula ya existe
+    if (cedula && cedula !== user.cedula) {
+      const existingCedula = await Usuario.findOne({
+        where: { cedula },
+        transaction: t,
+      });
+      
+      if (existingCedula) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con esa cédula',
+        });
+      }
+    }
+    
+    // Verificar que el rol existe si se proporciona
+    let roleId = role_id;
+    let roleName = rol;
+    
+    if (roleId) {
+      const role = await Role.findByPk(roleId, { transaction: t });
+      if (!role) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Rol no encontrado',
+        });
+      }
+      roleName = role.name;
+    }
+    
+    // Preparar datos para actualizar
+    const updateData = {
+      nombre1: nombre1 !== undefined ? nombre1 : user.nombre1,
+      nombre2: nombre2 !== undefined ? nombre2 : user.nombre2,
+      apellidos: apellidos !== undefined ? apellidos : user.apellidos,
+      email: email || user.email,
+      usuario: usuario !== undefined ? usuario : user.usuario,
+      cedula: cedula !== undefined ? cedula : user.cedula,
+      celular: celular !== undefined ? celular : user.celular,
+      role_id: roleId !== undefined ? roleId : user.role_id,
+      rol: roleName || user.rol,
+      activo: activo !== undefined ? activo : user.activo,
+    };
+    
+    // Si se proporciona contraseña, hashearla
     if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      query += `, password = $${paramIndex++}`;
-      params.push(hashedPassword);
+      updateData.password = await bcrypt.hash(password, 10);
+      updateData.password_changed_at = new Date();
     }
     
-    query += ` WHERE id = $${paramIndex} RETURNING id, nombre1, nombre2, apellidos, usuario, email, rol, activo`;
-    params.push(id);
+    await user.update(updateData, { transaction: t });
+    await t.commit();
     
-    const result = await pool.query(query, params);
+    // Obtener usuario actualizado con su rol
+    const updatedUser = await Usuario.findByPk(id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+    });
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
-    }
-    
-    res.json(result.rows[0]);
+    res.json({
+      success: true,
+      data: {
+        ...updatedUser.toJSON(),
+        nombre_completo: updatedUser.getNombreCompleto(),
+      },
+      message: 'Usuario actualizado exitosamente',
+    });
   } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({ message: 'Error al actualizar usuario' });
+    await t.rollback();
+    console.error('Error al actualizar usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar usuario',
+      error: error.message,
+    });
   }
 };
 
-// Eliminar usuario (soft delete)
-exports.delete = async (req, res) => {
+// ============================================================
+// ELIMINAR USUARIO (SOFT DELETE)
+// ============================================================
+const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const result = await pool.query(`
-      UPDATE usuarios SET activo = false, "updatedAt" = NOW()
-      WHERE id = $1 RETURNING id
-    `, [id]);
+    const user = await Usuario.findByPk(id);
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
     }
     
-    res.json({ message: 'Usuario desactivado correctamente' });
+    // No permitir eliminar al propio usuario
+    if (user.id === req.user.id) {
+      return res.status(400).json({
+        success: false,
+        message: 'No puedes eliminarte a ti mismo',
+      });
+    }
+    
+    await user.update({ activo: false });
+    
+    res.json({
+      success: true,
+      message: 'Usuario desactivado exitosamente',
+    });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ message: 'Error al desactivar usuario' });
+    console.error('Error al desactivar usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al desactivar usuario',
+      error: error.message,
+    });
   }
+};
+
+// ============================================================
+// ASIGNAR ROL A USUARIO
+// ============================================================
+const assignRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role_id } = req.body;
+    
+    if (!role_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'El ID del rol es requerido',
+      });
+    }
+    
+    const user = await Usuario.findByPk(id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+    }
+    
+    const role = await Role.findByPk(role_id);
+    
+    if (!role) {
+      return res.status(404).json({
+        success: false,
+        message: 'Rol no encontrado',
+      });
+    }
+    
+    await user.update({ 
+      role_id, 
+      rol: role.name 
+    });
+    
+    // Obtener usuario actualizado
+    const updatedUser = await Usuario.findByPk(id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        ...updatedUser.toJSON(),
+        nombre_completo: updatedUser.getNombreCompleto(),
+      },
+      message: 'Rol asignado exitosamente',
+    });
+  } catch (error) {
+    console.error('Error al asignar rol:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al asignar rol',
+      error: error.message,
+    });
+  }
+};
+
+// ============================================================
+// OBTENER USUARIOS POR ROL
+// ============================================================
+const getUsersByRole = async (req, res) => {
+  try {
+    const { roleName } = req.params;
+    
+    if (!roleName) {
+      return res.status(400).json({
+        success: false,
+        message: 'El nombre del rol es requerido',
+      });
+    }
+    
+    const users = await Usuario.findByRole(roleName);
+    
+    res.json({
+      success: true,
+      data: users.map(user => ({
+        ...user.toJSON(),
+        nombre_completo: user.getNombreCompleto(),
+      })),
+    });
+  } catch (error) {
+    console.error('Error al obtener usuarios por rol:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener usuarios por rol',
+      error: error.message,
+    });
+  }
+};
+
+// ============================================================
+// CAMBIAR CONTRASEÑA
+// ============================================================
+const changePassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contraseña actual y nueva son requeridas',
+      });
+    }
+    
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'La nueva contraseña debe tener al menos 8 caracteres',
+      });
+    }
+    
+    const user = await Usuario.findByPk(id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+    }
+    
+    // Verificar contraseña actual
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Contraseña actual incorrecta',
+      });
+    }
+    
+    // Hash de la nueva contraseña
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    await user.update({
+      password: hashedPassword,
+      password_changed_at: new Date(),
+    });
+    
+    res.json({
+      success: true,
+      message: 'Contraseña actualizada exitosamente',
+    });
+  } catch (error) {
+    console.error('Error al cambiar contraseña:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al cambiar contraseña',
+      error: error.message,
+    });
+  }
+};
+
+// ============================================================
+// EXPORTAR
+// ============================================================
+module.exports = {
+  getUsers,
+  getUserById,
+  createUser,
+  updateUser,
+  deleteUser,
+  assignRole,
+  getUsersByRole,
+  changePassword,
 };
