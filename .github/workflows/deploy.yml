@@ -84,11 +84,6 @@ jobs:
           docker compose -f "$COMPOSE_FILE" config --quiet
 
           echo ""
-          echo "Verificando configuración del frontend..."
-          docker compose -f "$COMPOSE_FILE" config |
-            sed -n '/frontend:/,/^[^ ]/p' || true
-
-          echo ""
           echo "Construyendo imágenes..."
           docker compose -f "$COMPOSE_FILE" build
 
@@ -97,56 +92,161 @@ jobs:
           docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
           echo ""
-          echo "Esperando al frontend..."
-          FRONTEND_OK=false
+          echo "Estado inicial:"
+          docker compose -f "$COMPOSE_FILE" ps
 
-          for intento in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:8082/ > /dev/null; then
-              FRONTEND_OK=true
-              echo "Frontend disponible."
-              break
-            fi
-
-            echo "Intento $intento/20: frontend aún no disponible."
-            sleep 3
-          done
-
-          if [ "$FRONTEND_OK" != "true" ]; then
-            echo "ERROR: el frontend no respondió correctamente."
-            docker compose -f "$COMPOSE_FILE" ps
-            docker compose -f "$COMPOSE_FILE" logs frontend --tail=100
-            exit 1
-          fi
+          # =====================================================
+          # BACKEND
+          # =====================================================
 
           echo ""
           echo "Esperando al backend..."
+
           BACKEND_OK=false
 
-          for intento in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then
+          for intento in $(seq 1 30); do
+
+            if curl -fsS \
+              http://127.0.0.1:3001/api/health \
+              > /dev/null; then
+
               BACKEND_OK=true
               echo "Backend disponible."
               break
             fi
 
-            echo "Intento $intento/20: backend aún no disponible."
+            echo "Intento $intento/30: backend aún no disponible."
             sleep 3
           done
 
           if [ "$BACKEND_OK" != "true" ]; then
-            echo "ERROR: el backend no respondió correctamente."
+
+            echo ""
+            echo "ERROR: backend no respondió."
+
             docker compose -f "$COMPOSE_FILE" ps
-            docker compose -f "$COMPOSE_FILE" logs backend --tail=100
+
+            docker compose \
+              -f "$COMPOSE_FILE" \
+              logs backend \
+              --tail=200
+
             exit 1
           fi
 
-          echo ""
-          echo "Estado final:"
-          docker compose -f "$COMPOSE_FILE" ps
+          # =====================================================
+          # VERIFICAR POSTGRESQL DESDE BACKEND
+          # =====================================================
 
           echo ""
-          echo "Limpiando imágenes sin uso..."
-          docker image prune -f
+          echo "Verificando conexión backend -> PostgreSQL..."
+
+          docker compose \
+            -f "$COMPOSE_FILE" \
+            exec -T backend \
+            node -e "
+              const db = require('./src/models');
+
+              db.sequelize.authenticate()
+                .then(() => {
+                  console.log('PostgreSQL OK');
+                  process.exit(0);
+                })
+                .catch((error) => {
+                  console.error(error);
+                  process.exit(1);
+                });
+            "
+
+          # =====================================================
+          # SINCRONIZACIÓN DE PERMISOS
+          # =====================================================
+
+          echo ""
+          echo "Sincronizando catálogo de permisos..."
+
+          docker compose \
+            -f "$COMPOSE_FILE" \
+            exec -T backend \
+            node -e "
+              const {
+                syncPermissionsToDatabase
+              } = require('./src/services/permissionsRegistry');
+
+              syncPermissionsToDatabase()
+                .then((permissions) => {
+                  console.log(
+                    'Permisos disponibles:',
+                    permissions.length
+                  );
+                  process.exit(0);
+                })
+                .catch((error) => {
+                  console.error(
+                    'Error sincronizando permisos:',
+                    error
+                  );
+                  process.exit(1);
+                });
+            "
+
+          # =====================================================
+          # FRONTEND
+          # =====================================================
+
+          echo ""
+          echo "Esperando al frontend..."
+
+          FRONTEND_OK=false
+
+          for intento in $(seq 1 30); do
+
+            if curl -fsS \
+              http://127.0.0.1:8082/ \
+              > /dev/null; then
+
+              FRONTEND_OK=true
+              echo "Frontend disponible."
+              break
+            fi
+
+            echo "Intento $intento/30: frontend aún no disponible."
+            sleep 3
+          done
+
+          if [ "$FRONTEND_OK" != "true" ]; then
+
+            echo ""
+            echo "ERROR: frontend no respondió."
+
+            docker compose -f "$COMPOSE_FILE" ps
+
+            docker compose \
+              -f "$COMPOSE_FILE" \
+              logs frontend \
+              --tail=200
+
+            exit 1
+          fi
+
+          # =====================================================
+          # VERIFICACIÓN FINAL
+          # =====================================================
+
+          echo ""
+          echo "Logs recientes del backend:"
+
+          docker compose \
+            -f "$COMPOSE_FILE" \
+            logs backend \
+            --tail=80
+
+          echo ""
+          echo "Estado final:"
+
+          docker compose \
+            -f "$COMPOSE_FILE" \
+            ps
 
           echo ""
           echo "========================================="
