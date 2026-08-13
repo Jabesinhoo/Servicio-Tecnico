@@ -1,6 +1,6 @@
 // backend/src/controllers/roles.js
-const { Role, Permission, sequelize } = require('../models');
-
+const { Op } = require('sequelize');
+const { Role, Permission, Usuario, sequelize } = require('../models');
 // Obtener todos los roles
 const getAllRoles = async (req, res) => {
   try {
@@ -170,7 +170,7 @@ const updateRole = async (req, res) => {
         { is_default: false },
         { 
           where: { 
-            id: { [sequelize.Op.ne]: id } 
+            id: { [Op.ne]: id }
           }, 
           transaction: t 
         }

@@ -19,7 +19,11 @@ export const AuthProvider = ({ children }) => {
       }
 
       const response = await api.get('/api/usuarios/me');
-      setUser(response.data.data);
+
+      const profile = response.data.data;
+
+      setUser(profile);
+      localStorage.setItem('user', JSON.stringify(profile));
     } catch (err) {
       console.error('Error al obtener perfil:', err);
       // Si el token es inválido, lo eliminamos
@@ -42,14 +46,14 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
       const response = await api.post('/api/auth/login', { identifier, password });
-      
+
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
         // Esperar a que se cargue el perfil
         await fetchUserProfile();
         return { success: true, user: response.data.user };
       }
-      
+
       return { success: false, message: 'Credenciales inválidas' };
     } catch (err) {
       const message = err.response?.data?.message || 'Error al iniciar sesión';
@@ -86,10 +90,10 @@ export const AuthProvider = ({ children }) => {
   // Verificar si el usuario tiene un permiso específico
   const hasPermission = useCallback((permissionName) => {
     if (!user) return false;
-    
+
     // Si es admin, tiene todos los permisos
     if (user.rol === 'admin' || user.role?.name === 'admin') return true;
-    
+
     // Verificar si el rol del usuario tiene el permiso
     return user.role?.permissions?.some(p => p.name === permissionName) || false;
   }, [user]);
@@ -106,7 +110,7 @@ export const AuthProvider = ({ children }) => {
   const canViewModule = useCallback((module) => {
     if (!user) return false;
     if (user.rol === 'admin' || user.role?.name === 'admin') return true;
-    
+
     const viewPermissions = [
       `${module}_view`,
       `${module}_create`,

@@ -1,0 +1,1448 @@
+﻿===== AUTH CONTEXT =====
+// frontend/src/context/AuthContext.jsx
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import api from '../services/api';
+
+const AuthContext = createContext(null);
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // FunciÃ³n para obtener el perfil del usuario
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await api.get('/api/usuarios/me');
+
+      const profile = response.data.data;
+
+      setUser(profile);
+      localStorage.setItem('user', JSON.stringify(profile));
+    } catch (err) {
+      console.error('Error al obtener perfil:', err);
+      // Si el token es invÃ¡lido, lo eliminamos
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, [fetchUserProfile]);
+
+  // Login
+  const login = async (identifier, password) => {
+    try {
+      setError(null);
+      setLoading(true);
+      const response = await api.post('/api/auth/login', { identifier, password });
+
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        // Esperar a que se cargue el perfil
+        await fetchUserProfile();
+        return { success: true, user: response.data.user };
+      }
+
+      return { success: false, message: 'Credenciales invÃ¡lidas' };
+    } catch (err) {
+      const message = err.response?.data?.message || 'Error al iniciar sesiÃ³n';
+      setError(message);
+      return { success: false, message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    setUser(null);
+    setError(null);
+  }, []);
+
+  // Registrar nuevo usuario (solo para admin)
+  const register = async (userData) => {
+    try {
+      setError(null);
+      setLoading(true);
+      const response = await api.post('/api/usuarios', userData);
+      return { success: true, data: response.data.data };
+    } catch (err) {
+      const message = err.response?.data?.message || 'Error al registrar usuario';
+      setError(message);
+      return { success: false, message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Verificar si el usuario tiene un permiso especÃ­fico
+  const hasPermission = useCallback((permissionName) => {
+    if (!user) return false;
+
+    // Si es admin, tiene todos los permisos
+    if (user.rol === 'admin' || user.role?.name === 'admin') return true;
+
+    // Verificar si el rol del usuario tiene el permiso
+    return user.role?.permissions?.some(p => p.name === permissionName) || false;
+  }, [user]);
+
+  // Verificar si el usuario tiene algÃºn permiso de una lista
+  const hasAnyPermission = useCallback((permissionNames) => {
+    if (!Array.isArray(permissionNames)) {
+      return hasPermission(permissionNames);
+    }
+    return permissionNames.some(name => hasPermission(name));
+  }, [hasPermission]);
+
+  // Verificar si el usuario puede ver un mÃ³dulo
+  const canViewModule = useCallback((module) => {
+    if (!user) return false;
+    if (user.rol === 'admin' || user.role?.name === 'admin') return true;
+
+    const viewPermissions = [
+      `${module}_view`,
+      `${module}_create`,
+      `${module}_edit`,
+      `${module}_delete`
+    ];
+    return hasAnyPermission(viewPermissions);
+  }, [user, hasAnyPermission]);
+
+  const value = {
+    user,
+    setUser,
+    loading,
+    error,
+    login,
+    logout,
+    register,
+    hasPermission,
+    hasAnyPermission,
+    canViewModule,
+    isAdmin: user?.rol === 'admin' || user?.role?.name === 'admin',
+    isTecnico: user?.rol === 'tecnico' || user?.role?.name === 'tecnico',
+    isCaja: user?.rol === 'caja' || user?.role?.name === 'caja',
+    isDirector: user?.rol === 'director_tecnico' || user?.role?.name === 'director_tecnico',
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Hook personalizado para usar el contexto
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export default AuthContext;
+
+===== USE PERMISSIONS =====
+// frontend/src/hooks/usePermissions.js
+import { useAuth } from '../context/AuthContext';
+
+export const usePermissions = () => {
+  const { user, hasPermission, hasAnyPermission, canViewModule } = useAuth();
+
+  const getUserPermissions = () => {
+    if (!user) return [];
+    if (user.rol === 'admin' || user.role?.name === 'admin') {
+      return ['*'];
+    }
+    return user.role?.permissions?.map(p => p.name) || [];
+  };
+
+  const getModulePermissions = (module) => {
+    const allPermissions = getUserPermissions();
+    return allPermissions.filter(p => p.startsWith(`${module}_`));
+  };
+
+  return {
+    hasPermission,
+    hasAnyPermission,
+    canViewModule,
+    getUserPermissions,
+    getModulePermissions,
+    isAdmin: user?.rol === 'admin' || user?.role?.name === 'admin',
+    isTecnico: user?.rol === 'tecnico' || user?.role?.name === 'tecnico',
+  };
+};
+
+===== PERMISSION BUTTON =====
+// frontend/src/components/PermissionButton.jsx
+import React from 'react';
+import { useAuth } from '../context/AuthContext';
+import { Lock } from 'lucide-react';
+
+const PermissionButton = ({ 
+  permission, 
+  children, 
+  onClick, 
+  className = '',
+  showLocked = false,
+  ...props 
+}) => {
+  const { hasPermission } = useAuth();
+  
+  if (!hasPermission(permission)) {
+    if (showLocked) {
+      return (
+        <button
+          className={`opacity-50 cursor-not-allowed ${className}`}
+          disabled
+          {...props}
+        >
+          <Lock className="w-4 h-4 inline mr-1" />
+          {children}
+        </button>
+      );
+    }
+    return null;
+  }
+  
+  return (
+    <button onClick={onClick} className={className} {...props}>
+      {children}
+    </button>
+  );
+};
+
+export default PermissionButton;
+
+===== PERMISSION GUARD =====
+// frontend/src/components/PermissionGuard.jsx
+import React from 'react';
+import { useAuth } from '../context/AuthContext';
+import { Lock } from 'lucide-react';
+
+const PermissionGuard = ({ 
+  permission, 
+  children, 
+  fallback = null,
+  showLocked = false 
+}) => {
+  const { hasPermission } = useAuth();
+  
+  if (!hasPermission(permission)) {
+    if (showLocked) {
+      return (
+        <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <Lock className="w-6 h-6 text-gray-400 mr-3" />
+          <div>
+            <p className="font-medium text-gray-700 dark:text-gray-300">Acceso Restringido</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">No tienes permisos para ver este contenido</p>
+          </div>
+        </div>
+      );
+    }
+    return fallback;
+  }
+  
+  return children;
+};
+
+export default PermissionGuard;
+
+===== DASHBOARD LAYOUT =====
+// frontend/src/components/DashboardLayout.jsx
+import React, { useState, useEffect, useMemo } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import ThemeToggle from './ThemeToggle';
+import ColorPicker from './ui/ColorPicker';
+import NotificacionesCampana from './ui/NotificacionesCampana';
+import IAChat from './ui/IAChat';
+
+import {
+  LayoutDashboard,
+  Wrench,
+  Package,
+  BarChart3,
+  Users,
+  UserCog,
+  UserCheck,
+  FileText,
+  Menu,
+  LogOut,
+  User,
+  X,
+  Truck,
+  Calendar,
+  Sparkles,
+  Shield
+} from 'lucide-react';
+
+const DashboardLayout = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showIAChat, setShowIAChat] = useState(false);
+  const { user, logout, canViewModule } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // NavegaciÃ³n con permisos
+  const navigation = useMemo(() => {
+    const allNav = [
+      { 
+        name: 'Dashboard', 
+        href: '/dashboard', 
+        icon: LayoutDashboard,
+        permission: null // visible para todos
+      },
+      { 
+        name: 'Servicios', 
+        href: '/dashboard/servicios', 
+        icon: Wrench,
+        permission: 'servicios'
+      },
+      { 
+        name: 'Clientes', 
+        href: '/dashboard/clientes', 
+        icon: Users,
+        permission: 'clientes'
+      },
+      { 
+        name: 'Inventarios', 
+        href: '/dashboard/inventarios', 
+        icon: Package,
+        permission: 'inventario'
+      },
+      { 
+        name: 'Tipos de Servicio', 
+        href: '/dashboard/tipos-servicio', 
+        icon: FileText,
+        permission: 'servicios'
+      },
+      { 
+        name: 'Reportes', 
+        href: '/dashboard/reportes', 
+        icon: BarChart3,
+        permission: 'reportes'
+      },
+      { 
+        name: 'Agenda', 
+        href: '/dashboard/agenda', 
+        icon: Calendar,
+        permission: 'agenda'
+      },
+      { 
+        name: 'Facturas', 
+        href: '/dashboard/facturas', 
+        icon: FileText,
+        permission: 'facturas'
+      },
+      { 
+        name: 'Alquileres', 
+        href: '/dashboard/alquileres', 
+        icon: Truck,
+        permission: 'alquileres'
+      },
+      { 
+        name: 'TÃ©cnicos', 
+        href: '/dashboard/tecnicos', 
+        icon: UserCheck,
+        permission: 'tecnicos'
+      },
+      { 
+        name: 'Usuarios', 
+        href: '/dashboard/usuarios', 
+        icon: UserCog,
+        permission: 'usuarios'
+      },
+      { 
+        name: 'Roles', 
+        href: '/dashboard/roles', 
+        icon: Shield,
+        permission: 'roles'
+      },
+    ];
+
+    // Filtrar por permisos
+    return allNav.filter(item => {
+      if (!item.permission) return true;
+      return canViewModule(item.permission);
+    });
+  }, [canViewModule]);
+
+  const isActive = (href) => location.pathname === href;
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  // Obtener nombre completo del usuario
+  const getDisplayName = () => {
+    if (!user) return 'Usuario';
+    if (user?.nombre1 && user?.apellidos) {
+      return `${user.nombre1} ${user.apellidos}`;
+    }
+    return user?.nombre || user?.usuario || user?.email || 'Usuario';
+  };
+
+  // Obtener rol del usuario
+  const getRoleName = () => {
+    if (!user) return 'Usuario';
+    const role = user?.role?.name || user?.rol;
+    const roleMap = {
+      admin: 'Administrador',
+      director_tecnico: 'Director TÃ©cnico',
+      tecnico: 'TÃ©cnico',
+      caja: 'Caja',
+      usuario: 'Usuario'
+    };
+    return roleMap[role] || role || 'Usuario';
+  };
+
+  // Obtener iniciales para el avatar
+  const getInitials = () => {
+    const name = getDisplayName();
+    if (name && name !== 'Usuario') {
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    return (user?.email || 'U')[0].toUpperCase();
+  };
+
+  // Si el usuario no estÃ¡ cargado, mostrar loader
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          borderColor: 'var(--border-color)',
+          boxShadow: 'var(--shadow-lg)'
+        }}
+      >
+        <div className="h-16 flex items-center justify-between px-5 border-b" style={{ borderColor: 'var(--border-color)' }}>
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-primary)' }}>
+              <span className="text-white font-bold text-sm">ST</span>
+            </div>
+            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Sistema TÃ©cnicos</span>
+          </Link>
+          {!isMobile && (
+            <button
+              onClick={() => setSidebarOpen(false)}
+              style={{ color: 'var(--text-muted)' }}
+              className="hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        <nav className="flex-1 px-3 py-6 overflow-y-auto h-[calc(100%-8rem)]">
+          <div className="space-y-1">
+            {navigation.map((item) => {
+              const active = isActive(item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  onClick={() => isMobile && setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    active
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                  style={{
+                    color: active ? 'var(--color-primary)' : 'var(--text-secondary)',
+                    backgroundColor: active ? 'var(--color-primary-light)' : 'transparent'
+                  }}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--bg-input)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {getInitials()}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                {getDisplayName()}
+              </p>
+              <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                {getRoleName()}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:bg-red-700"
+            style={{ backgroundColor: '#dc2626' }}
+          >
+            <LogOut className="w-4 h-4" />
+            Salir
+          </button>
+        </div>
+      </aside>
+
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main content */}
+      <div
+        className={`min-h-screen transition-all duration-300 ${
+          sidebarOpen && !isMobile ? 'ml-64' : 'ml-0'
+        }`}
+      >
+        {/* Header */}
+        <header
+          className="sticky top-0 z-30 border-b shadow-sm"
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            borderColor: 'var(--border-color)',
+            boxShadow: 'var(--shadow)'
+          }}
+        >
+          <div className="h-16 px-4 flex items-center justify-between">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              {/* BotÃ³n IA Chat - Asistente Personal */}
+              <button
+                onClick={() => setShowIAChat(true)}
+                className="relative p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                style={{ color: 'var(--text-muted)' }}
+                title="Asistente Personal IA"
+              >
+                <Sparkles className="w-5 h-5" />
+                <span className="absolute -bottom-0.5 -right-0.5 text-[8px] bg-gradient-to-r from-blue-500 to-purple-500 text-white px-1 rounded-full">
+                  IA
+                </span>
+              </button>
+              
+              <NotificacionesCampana />
+              <ColorPicker />
+              <ThemeToggle />
+            </div>
+          </div>
+        </header>
+
+        <main className="p-4 md:p-6 lg:p-8">
+          <Outlet />
+        </main>
+      </div>
+
+      {/* IA Chat Modal - Asistente Personal */}
+      <IAChat isOpen={showIAChat} onClose={() => setShowIAChat(false)} />
+    </div>
+  );
+};
+
+export default DashboardLayout;
+
+===== APP JSX =====
+// frontend/src/App.jsx
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { PrivateRoute } from './components/PrivateRoute';
+import DashboardLayout from './components/DashboardLayout';
+
+// Auth Pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+
+// Dashboard Pages
+import Dashboard from './pages/Dashboard/Dashboard';
+
+// Servicios - verificar si existe pages/Servicios.jsx o pages/Servicios/Servicios.jsx
+let Servicios, Inventarios, Ventas, Clientes, Tecnicos, Usuarios, TiposServicio, Agenda, Facturas, Alquileres, Reportes;
+
+try {
+  Servicios = require('./pages/Servicios/Servicios').default;
+} catch {
+  try {
+    Servicios = require('./pages/Servicios').default;
+  } catch {
+    Servicios = () => <div className="p-6"><h1 className="text-2xl font-bold">Servicios</h1></div>;
+  }
+}
+
+try {
+  Inventarios = require('./pages/Inventarios/Inventarios').default;
+} catch {
+  try {
+    Inventarios = require('./pages/Inventarios').default;
+  } catch {
+    Inventarios = () => <div className="p-6"><h1 className="text-2xl font-bold">Inventarios</h1></div>;
+  }
+}
+
+try {
+  Ventas = require('./pages/Ventas/Ventas').default;
+} catch {
+  try {
+    Ventas = require('./pages/Ventas').default;
+  } catch {
+    Ventas = () => <div className="p-6"><h1 className="text-2xl font-bold">Ventas</h1></div>;
+  }
+}
+
+// Dashboard pages - verificar si existen
+try {
+  Clientes = require('./pages/Dashboard/Clientes').default;
+} catch {
+  Clientes = () => <div className="p-6"><h1 className="text-2xl font-bold">Clientes</h1></div>;
+}
+
+try {
+  Tecnicos = require('./pages/Dashboard/Tecnicos').default;
+} catch {
+  Tecnicos = () => <div className="p-6"><h1 className="text-2xl font-bold">TÃ©cnicos</h1></div>;
+}
+
+try {
+  Usuarios = require('./pages/Dashboard/Usuarios').default;
+} catch {
+  Usuarios = () => <div className="p-6"><h1 className="text-2xl font-bold">Usuarios</h1></div>;
+}
+
+try {
+  TiposServicio = require('./pages/Dashboard/TiposServicio').default;
+} catch {
+  TiposServicio = () => <div className="p-6"><h1 className="text-2xl font-bold">Tipos de Servicio</h1></div>;
+}
+
+try {
+  Agenda = require('./pages/Dashboard/Agenda').default;
+} catch {
+  Agenda = () => <div className="p-6"><h1 className="text-2xl font-bold">Agenda</h1></div>;
+}
+
+try {
+  Facturas = require('./pages/Dashboard/Facturas').default;
+} catch {
+  Facturas = () => <div className="p-6"><h1 className="text-2xl font-bold">Facturas</h1></div>;
+}
+
+try {
+  Alquileres = require('./pages/Dashboard/Alquileres').default;
+} catch {
+  Alquileres = () => <div className="p-6"><h1 className="text-2xl font-bold">Alquileres</h1></div>;
+}
+
+try {
+  Reportes = require('./pages/Dashboard/Reportes').default;
+} catch {
+  Reportes = () => <div className="p-6"><h1 className="text-2xl font-bold">Reportes</h1></div>;
+}
+
+// Roles y Permisos
+import RolesManagement from './pages/RolesManagement';
+import UserRolesAssignment from './pages/UserRolesAssignment';
+
+// Error Boundary
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error en la aplicaciÃ³n:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#f8f9fa' }}>
+          <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8 text-center">
+            <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <span className="text-3xl">âš ï¸</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Algo saliÃ³ mal</h2>
+            <p className="text-gray-600 mb-4">
+              Ha ocurrido un error inesperado. Por favor, recarga la pÃ¡gina.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Recargar pÃ¡gina
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const App = () => {
+  return (
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            {/* Rutas pÃºblicas */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            
+            {/* Rutas protegidas */}
+            <Route element={<PrivateRoute />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard/servicios" element={<Servicios />} />
+                <Route path="/dashboard/inventarios" element={<Inventarios />} />
+                <Route path="/dashboard/ventas" element={<Ventas />} />
+                <Route path="/dashboard/clientes" element={<Clientes />} />
+                <Route path="/dashboard/tecnicos" element={<Tecnicos />} />
+                <Route path="/dashboard/usuarios" element={<Usuarios />} />
+                <Route path="/dashboard/tipos-servicio" element={<TiposServicio />} />
+                <Route path="/dashboard/agenda" element={<Agenda />} />
+                <Route path="/dashboard/facturas" element={<Facturas />} />
+                <Route path="/dashboard/alquileres" element={<Alquileres />} />
+                <Route path="/dashboard/reportes" element={<Reportes />} />
+                
+                {/* Roles y Permisos */}
+                <Route path="/dashboard/roles" element={<RolesManagement />} />
+                <Route path="/dashboard/usuarios/roles" element={<UserRolesAssignment />} />
+              </Route>
+            </Route>
+            
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
+  );
+};
+
+export default App;
+
+===== BACKEND AUTH =====
+// backend/src/middlewares/auth.js
+'use strict';
+
+const jwt = require('jsonwebtoken');
+const { Usuario, Role } = require('../models');
+
+// ============================================================
+// UTILIDAD: DETECTAR ADMIN
+// ============================================================
+
+const isAdmin = (user) => {
+  if (!user) return false;
+
+  // Compatibilidad con el campo antiguo "rol"
+  if (
+    typeof user.rol === 'string' &&
+    user.rol.toLowerCase() === 'admin'
+  ) {
+    return true;
+  }
+
+  // Compatibilidad con el nuevo sistema de roles
+  if (
+    user.role?.name &&
+    String(user.role.name).toLowerCase() === 'admin'
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+// ============================================================
+// AUTENTICACIÃ“N
+// ============================================================
+
+const authenticate = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        message: 'No se proporcionÃ³ token de autenticaciÃ³n',
+      });
+    }
+
+    const [scheme, token] = authHeader.split(' ');
+
+    if (
+      scheme !== 'Bearer' ||
+      !token
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: 'Formato de token invÃ¡lido',
+      });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    const user = await Usuario.findByPk(decoded.id, {
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          include: ['permissions'],
+          required: false,
+        },
+      ],
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+    }
+
+    if (!user.activo) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario inactivo',
+      });
+    }
+
+    req.user = user;
+
+    return next();
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token expirado',
+      });
+    }
+
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token invÃ¡lido',
+      });
+    }
+
+    console.error('Error en autenticaciÃ³n:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Error en autenticaciÃ³n',
+    });
+  }
+};
+
+// ============================================================
+// AUTORIZACIÃ“N POR PERMISOS
+// ============================================================
+
+const authorize = (...allowedPermissions) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Usuario no autenticado',
+        });
+      }
+
+      // ========================================================
+      // ADMIN TIENE ACCESO TOTAL
+      // ========================================================
+
+      if (isAdmin(req.user)) {
+        return next();
+      }
+
+      // Si la ruta no exige permisos especÃ­ficos
+      if (allowedPermissions.length === 0) {
+        return next();
+      }
+
+      const userPermissions =
+        req.user.role?.permissions || [];
+
+      const hasRequiredPermission =
+        allowedPermissions.some(
+          (permission) =>
+            userPermissions.some(
+              (userPermission) =>
+                userPermission.name === permission
+            )
+        );
+
+      if (!hasRequiredPermission) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'No tienes permisos suficientes para realizar esta acciÃ³n',
+        });
+      }
+
+      return next();
+    } catch (error) {
+      console.error(
+        'Error en autorizaciÃ³n:',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: 'Error en autorizaciÃ³n',
+      });
+    }
+  };
+};
+
+// ============================================================
+// VERIFICAR UN PERMISO ESPECÃFICO
+// ============================================================
+
+const hasPermission = (permissionName) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Usuario no autenticado',
+        });
+      }
+
+      // ========================================================
+      // ADMIN TIENE ACCESO TOTAL
+      // ========================================================
+
+      if (isAdmin(req.user)) {
+        return next();
+      }
+
+      // Primero intentar usando los permisos ya cargados
+      const userPermissions =
+        req.user.role?.permissions || [];
+
+      const permissionFound =
+        userPermissions.some(
+          (permission) =>
+            permission.name === permissionName
+        );
+
+      if (permissionFound) {
+        return next();
+      }
+
+      // Compatibilidad con mÃ©todo definido en Usuario
+      if (
+        typeof req.user.hasPermission === 'function'
+      ) {
+        const hasPerm =
+          await req.user.hasPermission(
+            permissionName
+          );
+
+        if (hasPerm) {
+          return next();
+        }
+      }
+
+      return res.status(403).json({
+        success: false,
+        message:
+          `No tienes permiso para: ${permissionName}`,
+      });
+    } catch (error) {
+      console.error(
+        'Error al verificar permiso:',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Error al verificar permisos',
+      });
+    }
+  };
+};
+
+module.exports = {
+  authenticate,
+  authorize,
+  hasPermission,
+};
+
+===== BACKEND ROLE MIDDLEWARE =====
+'use strict';
+
+const {
+  derivePermissionFromRequest,
+} = require('../services/permissionsRegistry');
+
+const isAdmin = (user) => {
+  if (!user) {
+    return false;
+  }
+
+  if (
+    typeof user.rol === 'string' &&
+    user.rol.toLowerCase() === 'admin'
+  ) {
+    return true;
+  }
+
+  if (
+    user.role?.name &&
+    String(user.role.name)
+      .toLowerCase() === 'admin'
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+function allowRoles(...legacyRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'No autorizado',
+      });
+    }
+
+    // ========================================================
+    // ADMIN SIEMPRE TIENE ACCESO TOTAL
+    // ========================================================
+
+    if (isAdmin(req.user)) {
+      return next();
+    }
+
+    // ========================================================
+    // NUEVO SISTEMA DE PERMISOS
+    // ========================================================
+
+    const permissionName =
+      derivePermissionFromRequest(req);
+
+    const rolePermissions =
+      req.user.role?.permissions || [];
+
+    // Si el usuario ya estÃ¡ asociado al nuevo sistema de roles,
+    // usamos exclusivamente sus permisos.
+    if (
+      req.user.role &&
+      permissionName
+    ) {
+      const hasPermission =
+        rolePermissions.some(
+          (permission) =>
+            permission.active !== false &&
+            permission.name ===
+              permissionName
+        );
+
+      if (hasPermission) {
+        return next();
+      }
+
+      return res.status(403).json({
+        success: false,
+        message:
+          'No tienes permisos suficientes para realizar esta acciÃ³n',
+        requiredPermission:
+          permissionName,
+      });
+    }
+
+    // ========================================================
+    // COMPATIBILIDAD CON ROLES ANTIGUOS
+    // ========================================================
+
+    const currentLegacyRole =
+      req.user.rol ||
+      req.user.role?.name;
+
+    if (
+      !currentLegacyRole ||
+      !legacyRoles.includes(
+        currentLegacyRole
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Prohibido',
+        requiredPermission:
+          permissionName,
+      });
+    }
+
+    return next();
+  };
+}
+
+module.exports = {
+  allowRoles,
+};
+
+===== ROUTES ROLES =====
+// backend/src/routes/roles.js
+'use strict';
+
+const express = require('express');
+const router = express.Router();
+
+const { authenticate, authorize } = require('../middlewares/auth');
+const rolesController = require('../controllers/roles');
+
+// Todas las rutas requieren autenticaciÃ³n
+router.use(authenticate);
+
+// ============================================================
+// PERMISOS
+// IMPORTANTE: esta ruta debe ir antes de "/:id"
+// ============================================================
+
+router.get(
+  '/permissions/all',
+  authorize('roles_view'),
+  rolesController.getAllPermissionsGrouped
+);
+
+// ============================================================
+// ROLES
+// ============================================================
+
+router.get(
+  '/',
+  authorize('roles_view', 'roles_create', 'roles_edit'),
+  rolesController.getAllRoles
+);
+
+router.get(
+  '/:id',
+  authorize('roles_view'),
+  rolesController.getRoleById
+);
+
+router.post(
+  '/',
+  authorize('roles_create'),
+  rolesController.createRole
+);
+
+router.put(
+  '/:id',
+  authorize('roles_edit'),
+  rolesController.updateRole
+);
+
+router.delete(
+  '/:id',
+  authorize('roles_delete'),
+  rolesController.deleteRole
+);
+
+module.exports = router;
+
+===== ROUTES USUARIOS =====
+const { Usuario, Role } = require('../models');
+const express = require('express');
+const router = express.Router();
+const { authenticate, authorize } = require('../middlewares/auth');
+const userController = require('../controllers/user.controller');
+
+router.use(authenticate);
+
+// ============================================================
+// RUTAS PÃšBLICAS (para tÃ©cnicos y usuarios logueados)
+// ============================================================
+
+// Obtener usuarios por rol (para selecciÃ³n en formularios)
+router.get('/usuarios/role/:roleName', userController.getUsersByRole);
+
+// Obtener usuario actual
+router.get('/usuarios/me', async (req, res) => {
+  try {
+    const user = await Usuario.findByPk(req.user.id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...user.toJSON(),
+        nombre_completo: user.getNombreCompleto(),
+      },
+    });
+  } catch (error) {
+    console.error('Error en GET /usuarios/me:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener usuario actual',
+      error: error.message,
+    });
+  }
+});
+
+// Cambiar propia contraseÃ±a
+router.put('/usuarios/me/password', userController.changePassword);
+
+// ============================================================
+// RUTAS CON PERMISOS (requieren permisos especÃ­ficos)
+// ============================================================
+
+// Ver usuarios
+router.get('/usuarios', authorize('usuarios_view'), userController.getUsers);
+
+// Ver usuario especÃ­fico
+router.get('/usuarios/:id', authorize('usuarios_view'), userController.getUserById);
+
+// Crear usuario
+router.post('/usuarios', authorize('usuarios_create'), userController.createUser);
+
+// Actualizar usuario
+router.put('/usuarios/:id', authorize('usuarios_edit'), userController.updateUser);
+
+// Eliminar usuario (soft delete)
+router.delete('/usuarios/:id', authorize('usuarios_delete'), userController.deleteUser);
+
+// Asignar rol a usuario
+router.put('/usuarios/:id/role', authorize('usuarios_edit'), userController.assignRole);
+
+// Cambiar contraseÃ±a de otro usuario (solo admin)
+router.put('/usuarios/:id/password', authorize('usuarios_edit'), userController.changePassword);
+
+module.exports = router;
+
+===== USOS DE PERMISOS EN FRONTEND =====
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\DashboardLayout.jsx:33: const { user, logout, canViewModule } = useAuth();
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\DashboardLayout.jsx:133: return canViewModule(item.permission);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\DashboardLayout.jsx:135: }, [canViewModule]);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\DashboardLayout.jsx:156: const role = user?.role?.name || user?.rol;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionButton.jsx:1: // frontend/src/components/PermissionButton.jsx
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionButton.jsx:6: const PermissionButton = ({
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionButton.jsx:14: const { hasPermission } = useAuth();
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionButton.jsx:16: if (!hasPermission(permission)) {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionButton.jsx:39: export default PermissionButton;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionGuard.jsx:1: // frontend/src/components/PermissionGuard.jsx
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionGuard.jsx:6: const PermissionGuard = ({
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionGuard.jsx:12: const { hasPermission } = useAuth();
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionGuard.jsx:14: if (!hasPermission(permission)) {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\components\PermissionGuard.jsx:32: export default PermissionGuard;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:91: const hasPermission = useCallback((permissionName) => {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:95: if (user.rol === 'admin' || user.role?.name === 'admin') return true;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:98: return user.role?.permissions?.some(p => p.name === permissionName) || false;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:102: const hasAnyPermission = useCallback((permissionNames) => {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:104: return hasPermission(permissionNames);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:106: return permissionNames.some(name => hasPermission(name));
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:107: }, [hasPermission]);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:110: const canViewModule = useCallback((module) => {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:112: if (user.rol === 'admin' || user.role?.name === 'admin') return true;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:120: return hasAnyPermission(viewPermissions);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:121: }, [user, hasAnyPermission]);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:131: hasPermission,
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:132: hasAnyPermission,
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:133: canViewModule,
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:134: isAdmin: user?.rol === 'admin' || user?.role?.name === 'admin',
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:135: isTecnico: user?.rol === 'tecnico' || user?.role?.name === 'tecnico',
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:136: isCaja: user?.rol === 'caja' || user?.role?.name === 'caja',
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\context\AuthContext.jsx:137: isDirector: user?.rol === 'director_tecnico' || user?.role?.name === 'director_tecnico',
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:5: const { user, hasPermission, hasAnyPermission, canViewModule } = useAuth();
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:9: if (user.rol === 'admin' || user.role?.name === 'admin') {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:12: return user.role?.permissions?.map(p => p.name) || [];
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:21: hasPermission,
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:22: hasAnyPermission,
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:23: canViewModule,
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:26: isAdmin: user?.rol === 'admin' || user?.role?.name === 'admin',
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\hooks\usePermissions.js:27: isTecnico: user?.rol === 'tecnico' || user?.role?.name === 'tecnico',
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\UserRolesAssignment.jsx:48: setSelectedRole(user.role_id || '');
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\UserRolesAssignment.jsx:104: const matchesRole = !roleFilter || user.role_id === parseInt(roleFilter);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\UserRolesAssignment.jsx:257: <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role_id)}`}>
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\UserRolesAssignment.jsx:258: {getRoleName(user.role_id)}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Agenda.jsx:28: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Agenda.jsx:29: const isAdmin = userRole === 'admin';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Agenda.jsx:70: if (!isAdmin) return;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Agenda.jsx:176: selectable={isAdmin}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Agenda.jsx:178: editable={isAdmin}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Agenda.jsx:179: droppable={isAdmin}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Agenda.jsx:218: {isAdmin && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Clientes.jsx:401: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Dashboard.jsx:42: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Facturas.jsx:75: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Inventarios.jsx:127: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Reportes.jsx:32: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Reportes.jsx:33: const isAdmin = userRole === 'admin';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Reportes.jsx:370: r.roles.includes(userRole) || isAdmin
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Servicios.jsx:126: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Servicios.jsx:128: const isAdmin = userRole === 'admin';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Servicios.jsx:210: isAdmin={isAdmin}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Servicios.jsx:238: canEdit={isAdmin}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Tecnicos.jsx:119: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\TiposServicio.jsx:108: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Usuarios.jsx:125: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\index.jsx:30: const userRole = user?.rol || 'usuario';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\SolicitudDetail.jsx:21: const isAdmin = user.rol === 'admin';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\SolicitudDetail.jsx:22: const isTecnico = user.rol === 'tecnico';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\SolicitudDetail.jsx:23: const isVentas = user.rol === 'ventas';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\SolicitudDetail.jsx:238: {(isAdmin || isVentas) && solicitud.estado === 'pendiente' && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\SolicitudDetail.jsx:313: canEdit={isAdmin || isVentas}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\SolicitudDetail.jsx:314: isAdmin={isAdmin}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\components\ItemCard.jsx:5: const ItemCard = ({ item, tecnicos, onAssignTecnico, onDelete, onOpenChecklist, canEdit, isAdmin, isTecnico }) => {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\Alquileres\components\ItemCard.jsx:62: {isAdmin && !item.tecnico_id && item.estado_revision === 'pendiente' && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\components\PermissionGuard.jsx:1: // frontend/src/components/PermissionGuard.jsx
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\components\PermissionGuard.jsx:6: const PermissionGuard = ({
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\components\PermissionGuard.jsx:12: const { hasPermission } = usePermissions();
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\components\PermissionGuard.jsx:14: if (!hasPermission(permission)) {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\components\PermissionGuard.jsx:29: export default PermissionGuard;
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioDetail.jsx:25: const isAdmin = user.rol === 'admin';
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioDetail.jsx:258: {isAdmin && !servicio.tecnico_nombre && servicio.estado === 'aprobado' && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioDetail.jsx:276: {isAdmin && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioDetail.jsx:348: {isAdmin && servicio.estado === 'pendiente' && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioDetail.jsx:436: isAdmin={isAdmin}
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioTable.jsx:27: isAdmin = false,
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioTable.jsx:152: {isAdmin && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioTable.jsx:163: {isAdmin && servicio.estado === 'pendiente' && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioTable.jsx:174: {isAdmin && servicio.estado === 'pendiente' && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioTable.jsx:185: {isAdmin &&
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\ServicioTable.jsx:221: {isAdmin && (
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\components\MaterialesPanel.jsx:6: const MaterialesPanel = ({ servicioId, tecnicoId, isAdmin = false, onRefresh }) => {
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\frontend\src\pages\Dashboard\servicios\components\MaterialesPanel.jsx:182: {estado === 'solicitado' && isAdmin && (
+
+===== RUTAS PROTEGIDAS BACKEND =====
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\agenda.routes.js:12: router.put('/agenda/horario/:tecnico_id', allowRoles('admin'), agendaController.setHorarioTecnico);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\agenda.routes.js:17: router.put('/agenda/servicio/:id', allowRoles('admin'), agendaController.agendarServicio);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:15: router.post('/alquiler/solicitudes', allowRoles('admin', 'ventas'), alquilerController.crearSolicitud);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:24: router.patch('/alquiler/solicitudes/:id/estado', allowRoles('admin'), alquilerController.actualizarEstado);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:27: router.patch('/alquiler/solicitudes/:id/aprobar', allowRoles('admin', 'facturacion'), alquilerController.aprobarDocumentacion);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:34: router.post('/alquiler/solicitudes/:solicitud_id/items', allowRoles('admin', 'ventas'), alquilerController.agregarItem);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:37: router.patch('/alquiler/items/:item_id/asignar', allowRoles('admin', 'tecnico'), alquilerController.asignarTecnico);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:44: router.post('/alquiler/items/:item_id/revision', allowRoles('admin', 'tecnico'), alquilerController.crearRevision);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:54: router.post('/alquiler/solicitudes/:solicitud_id/despacho', allowRoles('admin', 'inventario'), alquilerController.crearDespacho);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:57: router.patch('/alquiler/despachos/:id/completar', allowRoles('admin', 'inventario'), alquilerController.completarDespacho);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:64: router.post('/alquiler/solicitudes/:solicitud_id/devolucion', allowRoles('admin', 'ventas'), alquilerController.crearDevolucion);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:67: router.patch('/alquiler/devoluciones/:id/completar', allowRoles('admin', 'tecnico'), alquilerController.completarDevolucion);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\alquiler.routes.js:86: router.get('/alquiler/solicitudes/:solicitud_id/exportar', allowRoles('admin', 'inventario'), alquilerController.exportarInventario);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\invoice.routes.js:12: allowRoles('admin', 'facturacion'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\invoice.routes.js:19: allowRoles('admin', 'facturacion'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\invoice.routes.js:26: allowRoles('admin', 'facturacion'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\invoice.routes.js:33: allowRoles('admin', 'facturacion'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\invoice.routes.js:40: allowRoles('admin', 'facturacion'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\material.routes.js:12: router.post('/materiales/servicio/:service_order_id/solicitar', allowRoles('tecnico', 'admin'), materialController.solicitarMateriales);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\material.routes.js:13: router.put('/materiales/:id/entregar', allowRoles('admin', 'inventario'), materialController.entregarMateriales);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\material.routes.js:14: router.put('/materiales/:id/usar', allowRoles('tecnico', 'admin'), materialController.reportarUso);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\material.routes.js:17: router.get('/materiales/consumo-tecnico', allowRoles('admin'), materialController.getConsumoTecnico);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\product.routes.js:16: router.post('/products', allowRoles('admin', 'inventario'), productController.create);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\product.routes.js:17: router.put('/products/:id', allowRoles('admin', 'inventario'), productController.update);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\product.routes.js:18: router.delete('/products/:id', allowRoles('admin', 'inventario'), productController.delete);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\producto-serial.routes.js:23: router.post('/productos-sync/seriales', allowRoles('admin', 'inventario'), productoSerialController.crearSerial);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\producto-serial.routes.js:29: router.patch('/seriales/:serialId/estado', allowRoles('admin', 'inventario', 'tecnico'), productoSerialController.cambiarEstado);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:11: router.get('/reportes/ventas/diarias', allowRoles('admin', 'ventas'), reportController.getVentasDiarias);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:12: router.get('/reportes/ventas/mensuales', allowRoles('admin', 'ventas'), reportController.getVentasMensuales);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:13: router.get('/reportes/ventas/productos-mas-vendidos', allowRoles('admin', 'ventas', 'inventario'), reportController.getProductosMasVendidos);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:14: router.get('/reportes/ventas/por-vendedor', allowRoles('admin'), reportController.getVentasPorVendedor);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:17: router.get('/reportes/servicios/por-estado', allowRoles('admin', 'tecnico'), reportController.getServiciosPorEstado);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:18: router.get('/reportes/servicios/por-tecnico', allowRoles('admin'), reportController.getServiciosPorTecnico);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:19: router.get('/reportes/servicios/tiempos', allowRoles('admin'), reportController.getTiemposServicio);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:20: router.get('/reportes/servicios/repuestos-usados', allowRoles('admin', 'inventario'), reportController.getRepuestosMasUsados);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:23: router.get('/reportes/inventario/stock-actual', allowRoles('admin', 'inventario'), reportController.getStockActual);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:24: router.get('/reportes/inventario/stock-bajo', allowRoles('admin', 'inventario'), reportController.getStockBajo);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:25: router.get('/reportes/inventario/movimientos', allowRoles('admin', 'inventario'), reportController.getMovimientosStock);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:26: router.get('/reportes/inventario/valor', allowRoles('admin', 'inventario'), reportController.getValorInventario);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:29: router.get('/reportes/clientes/frecuentes', allowRoles('admin', 'ventas'), reportController.getClientesFrecuentes);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:32: router.get('/reportes/financieros/ingresos-gastos', allowRoles('admin'), reportController.getIngresosGastos);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\report.routes.js:35: router.get('/reportes/rendimiento/tecnicos', allowRoles('admin'), reportController.getRendimientoTecnicos);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\roles.js:20: authorize('roles_view'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\roles.js:30: authorize('roles_view', 'roles_create', 'roles_edit'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\roles.js:36: authorize('roles_view'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\roles.js:42: authorize('roles_create'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\roles.js:48: authorize('roles_edit'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\roles.js:54: authorize('roles_delete'),
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\service-orders.routes.js:20: router.patch('/service-orders/:id/assign', allowRoles('admin'), serviceOrderController.assignTech);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\service-orders.routes.js:24: router.delete('/service-orders/:id', allowRoles('admin'), serviceOrderController.delete);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\service-orders.routes.js:26: router.patch('/service-orders/:id/approve', allowRoles('admin'), serviceOrderController.approve);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\service-orders.routes.js:27: router.patch('/service-orders/:id/reject', allowRoles('admin'), serviceOrderController.reject);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\service-orders.routes.js:28: router.put('/service-orders/:id', allowRoles('admin', 'tecnico'), serviceOrderController.update);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\sync.routes.js:10: router.use(allowRoles('admin'));
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\tipo-servicio.routes.js:16: router.post('/tipos-servicio', allowRoles('admin'), tipoServicioController.create);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\tipo-servicio.routes.js:17: router.put('/tipos-servicio/:id', allowRoles('admin'), tipoServicioController.update);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\tipo-servicio.routes.js:18: router.delete('/tipos-servicio/:id', allowRoles('admin'), tipoServicioController.delete);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\user.routes.js:54: router.get('/usuarios', authorize('usuarios_view'), userController.getUsers);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\user.routes.js:57: router.get('/usuarios/:id', authorize('usuarios_view'), userController.getUserById);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\user.routes.js:60: router.post('/usuarios', authorize('usuarios_create'), userController.createUser);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\user.routes.js:63: router.put('/usuarios/:id', authorize('usuarios_edit'), userController.updateUser);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\user.routes.js:66: router.delete('/usuarios/:id', authorize('usuarios_delete'), userController.deleteUser);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\user.routes.js:69: router.put('/usuarios/:id/role', authorize('usuarios_edit'), userController.assignRole);
+C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico\backend\src\routes\user.routes.js:72: router.put('/usuarios/:id/password', authorize('usuarios_edit'), userController.changePassword);

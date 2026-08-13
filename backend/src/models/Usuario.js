@@ -1,4 +1,7 @@
 'use strict';
+const { Op } = require('sequelize');
+const Permission = require('./Permission');
+
 
 module.exports = (sequelize, DataTypes) => {
   const Usuario = sequelize.define('Usuario', {
@@ -267,61 +270,134 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   // Obtener usuarios por rol
-  Usuario.findByRole = async function(roleName) {
-    const Role = require('./Role');
-    const role = await Role.findOne({
-      where: { name: roleName, active: true },
+  // Obtener usuarios por rol
+// Compatible con:
+// 1. Nuevo sistema roles + role_id
+// 2. Sistema anterior usuarios.rol
+Usuario.findByRole = async function(roleName) {
+  const Role = sequelize.models.Role;
+
+  const normalizedRole = String(roleName || '')
+    .trim()
+    .toLowerCase();
+
+  if (!normalizedRole) {
+    return [];
+  }
+
+  let role = null;
+
+  if (Role && typeof Role.findOne === 'function') {
+    role = await Role.findOne({
+      where: {
+        name: normalizedRole,
+        active: true,
+      },
     });
-    
-    if (!role) return [];
-    
-    return this.findAll({
-      where: { role_id: role.id, activo: true },
-      include: [{
-        model: Role,
-        as: 'role',
-        include: ['permissions'],
-      }],
-      attributes: { exclude: ['password'] },
+  }
+
+  const conditions = [
+    {
+      rol: normalizedRole,
+    },
+  ];
+
+  if (role) {
+    conditions.push({
+      role_id: role.id,
     });
-  };
+  }
+
+  return this.findAll({
+    where: {
+      activo: true,
+      [Op.or]: conditions,
+    },
+
+    include: Role
+      ? [{
+          model: Role,
+          as: 'role',
+          required: false,
+          include: ['permissions'],
+        }]
+      : [],
+
+    attributes: {
+      exclude: ['password'],
+    },
+
+    order: [
+      ['nombre1', 'ASC'],
+      ['apellidos', 'ASC'],
+    ],
+  });
+};
 
   // Obtener usuarios con permisos específicos
-  Usuario.findWithPermission = async function(permissionName) {
-    const Permission = require('./Permission');
-    const permission = await Permission.findOne({
-      where: { name: permissionName, active: true },
-    });
-    
-    if (!permission) return [];
-    
-    const roles = await sequelize.models.Role.findAll({
-      include: [{
-        model: Permission,
-        as: 'permissions',
-        where: { id: permission.id },
-        through: { attributes: [] },
-      }],
-    });
-    
-    const roleIds = roles.map(r => r.id);
-    
-    if (roleIds.length === 0) return [];
-    
-    return this.findAll({
-      where: {
-        role_id: { [sequelize.Op.in]: roleIds },
-        activo: true,
-      },
-      include: [{
-        model: sequelize.models.Role,
-        as: 'role',
-        include: ['permissions'],
-      }],
-      attributes: { exclude: ['password'] },
-    });
-  };
+  // Obtener usuarios con permisos específicos
+Usuario.findWithPermission = async function(permissionName) {
+  const Permission = sequelize.models.Permission;
+  const Role = sequelize.models.Role;
 
+  if (
+    !Permission ||
+    typeof Permission.findOne !== 'function' ||
+    !Role
+  ) {
+    return [];
+  }
+
+  const permission = await Permission.findOne({
+    where: {
+      name: permissionName,
+      active: true,
+    },
+  });
+
+  if (!permission) {
+    return [];
+  }
+
+  const roles = await Role.findAll({
+    include: [{
+      model: Permission,
+      as: 'permissions',
+      where: {
+        id: permission.id,
+      },
+      through: {
+        attributes: [],
+      },
+    }],
+  });
+
+  if (!roles.length) {
+    return [];
+  }
+
+  const roleIds = roles.map(role => role.id);
+
+  return this.findAll({
+    where: {
+      role_id: {
+        [Op.in]: roleIds,
+      },
+      activo: true,
+    },
+
+    include: [{
+      model: Role,
+      as: 'role',
+      required: false,
+      include: ['permissions'],
+    }],
+
+    attributes: {
+      exclude: ['password'],
+    },
+  });
+};
   // ============================================================
   // HOOKS
   // ============================================================

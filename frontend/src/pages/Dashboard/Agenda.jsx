@@ -25,7 +25,7 @@ const Agenda = () => {
   const [currentView, setCurrentView] = useState('timeGridDay');
   const [tecnicosList, setTecnicosList] = useState([]);
 
-  const userRole = user?.rol || 'usuario';
+  const userRole = user?.role?.name || user?.rol || 'usuario';
   const isAdmin = userRole === 'admin';
 
   useEffect(() => {
@@ -37,7 +37,7 @@ const Agenda = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      
+
       if (currentView === 'dayGridMonth') {
         const start = new Date(selectedDate);
         const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
@@ -47,7 +47,7 @@ const Agenda = () => {
         params.append('fechaInicio', selectedDate);
         params.append('fechaFin', selectedDate);
       }
-      
+
       const res = await api.get(`/api/agenda/eventos?${params.toString()}`);
       setEventos(res.data || []);
     } catch (error) {
@@ -59,10 +59,16 @@ const Agenda = () => {
 
   const fetchTecnicos = async () => {
     try {
-      const res = await api.get('/api/users?rol=tecnico');
-      setTecnicosList(res.data || []);
+      const res = await api.get('/api/usuarios/role/tecnico');
+
+      const data = Array.isArray(res.data)
+        ? res.data
+        : res.data?.data || [];
+
+      setTecnicosList(data);
     } catch (error) {
       console.error('Error fetching tecnicos:', error);
+      setTecnicosList([]);
     }
   };
 
@@ -84,8 +90,8 @@ const Agenda = () => {
   const handleEventDrop = async (dropInfo) => {
     const evento = dropInfo.event;
     const nuevaFecha = dropInfo.event.startStr.split('T')[0];
-    const nuevaHora = dropInfo.event.startStr.split('T')[1]?.slice(0,5) || '09:00';
-    
+    const nuevaHora = dropInfo.event.startStr.split('T')[1]?.slice(0, 5) || '09:00';
+
     try {
       await api.put(`/api/agenda/servicio/${evento.id}`, {
         fecha_agendada: nuevaFecha,
@@ -123,31 +129,28 @@ const Agenda = () => {
         <div className="flex gap-2">
           <button
             onClick={() => setCurrentView('timeGridDay')}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              currentView === 'timeGridDay'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-            }`}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${currentView === 'timeGridDay'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+              }`}
           >
             Día
           </button>
           <button
             onClick={() => setCurrentView('timeGridWeek')}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              currentView === 'timeGridWeek'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-            }`}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${currentView === 'timeGridWeek'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+              }`}
           >
             Semana
           </button>
           <button
             onClick={() => setCurrentView('dayGridMonth')}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              currentView === 'dayGridMonth'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-            }`}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${currentView === 'dayGridMonth'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+              }`}
           >
             Mes
           </button>
@@ -249,7 +252,7 @@ const Agenda = () => {
           </div>
 
           {/* Disponibilidad */}
-          <DisponibilidadPanel 
+          <DisponibilidadPanel
             fecha={selectedDate}
             onSelectTecnico={(tecnico) => {
               console.log('Técnico seleccionado:', tecnico);

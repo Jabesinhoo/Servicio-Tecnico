@@ -14,7 +14,7 @@ export const usePermissions = () => {
 
   const getModulePermissions = (module) => {
     const allPermissions = getUserPermissions();
-    return allPermissions.filter(p => p.startsWith(`${module}:`));
+    return allPermissions.filter(p => p.startsWith(`${module}_`));
   };
 
   return {

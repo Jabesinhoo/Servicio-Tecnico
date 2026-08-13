@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { publicApi } from "../services/api";
@@ -14,8 +14,6 @@ import {
 export default function Login() {
   useDocumentTitle("Sistema Técnicos | Iniciar sesión");
 
-  const navigate = useNavigate();
-
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -23,7 +21,6 @@ export default function Login() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Auto-ocultar mensajes
   useEffect(() => {
     if (!error && !success) {
       return undefined;
@@ -82,9 +79,9 @@ export default function Login() {
         "¡Inicio de sesión exitoso! Redirigiendo..."
       );
 
-      navigate("/dashboard", {
-        replace: true,
-      });
+      // Recargar la aplicación para que AuthContext
+      // inicialice inmediatamente la sesión recién creada.
+      window.location.replace("/dashboard");
     } catch (requestError) {
       console.error(
         "Error iniciando sesión:",
