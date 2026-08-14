@@ -3,22 +3,62 @@ const sql = require('mssql');
 require('dotenv').config();
 
 // Configuración de conexión a World Office
+// ============================================================
+// CONFIGURACIÓN SQL SERVER / WORLD OFFICE
+// ============================================================
+
+const requiredSqlServerEnv = [
+    'SQLSERVER_HOST',
+    'SQLSERVER_INSTANCE',
+    'SQLSERVER_DATABASE',
+    'SQLSERVER_USER',
+    'SQLSERVER_PASSWORD',
+];
+
+for (const key of requiredSqlServerEnv) {
+    if (!process.env[key]) {
+        throw new Error(
+            `Falta la variable de entorno requerida: ${key}`
+        );
+    }
+}
+
 const config = {
-    server: process.env.SQLSERVER_HOST || 'SERTECNO',
-    instanceName: process.env.SQLSERVER_INSTANCE || 'WORLDOFFICE14',
-    database: process.env.SQLSERVER_DATABASE || 'Melissa_2023',
-    user: process.env.SQLSERVER_USER || 'Jabes',
-    password: process.env.SQLSERVER_PASSWORD || 'Jabes2026',
+    server: process.env.SQLSERVER_HOST,
+    database: process.env.SQLSERVER_DATABASE,
+    user: process.env.SQLSERVER_USER,
+    password: process.env.SQLSERVER_PASSWORD,
+
+    connectionTimeout: Number(
+        process.env.SQLSERVER_CONNECTION_TIMEOUT || 20000
+    ),
+
+    requestTimeout: Number(
+        process.env.SQLSERVER_REQUEST_TIMEOUT || 60000
+    ),
+
     options: {
-        encrypt: false,
-        trustServerCertificate: true,
-        instanceName: process.env.SQLSERVER_INSTANCE || 'WORLDOFFICE14'
+        instanceName: process.env.SQLSERVER_INSTANCE,
+
+        encrypt:
+            String(process.env.SQLSERVER_ENCRYPT)
+                .trim()
+                .toLowerCase() === 'true',
+
+        trustServerCertificate:
+            String(process.env.SQLSERVER_TRUST_CERTIFICATE)
+                .trim()
+                .toLowerCase() === 'true',
+
+        enableArithAbort: true,
+        useUTC: false,
     },
+
     pool: {
         max: 10,
         min: 0,
-        idleTimeoutMillis: 30000
-    }
+        idleTimeoutMillis: 30000,
+    },
 };
 
 let pool = null;
@@ -130,12 +170,17 @@ const getAlquileres = async () => {
 // ============================================================
 
 const syncAllData = async (pgPool) => {
+    if (!pgPool || typeof pgPool.query !== 'function') {
+        throw new Error(
+            'syncAllData requiere una conexión válida a PostgreSQL'
+        );
+    }
     try {
         console.log('📦 Iniciando sincronización con World Office...');
         console.log('⏱️  ' + new Date().toISOString());
-        
+
         await connect();
-        
+
         // Extraer datos
         const [clientes, productos, seriales, alquileres] = await Promise.all([
             getClientes().catch(e => { console.error('Error en clientes:', e.message); return []; }),
@@ -152,10 +197,10 @@ const syncAllData = async (pgPool) => {
         if (clientes.length > 0) {
             // Eliminar datos existentes (sin truncar)
             await pgPool.query('DELETE FROM sync_clientes');
-            
+
             for (const cliente of clientes) {
                 const esActivo = cliente.Activo === -1 || cliente.Activo === true;
-                
+
                 await pgPool.query(`
                     INSERT INTO sync_clientes (
                         id_externo, documento, razon_social, primer_nombre, 
@@ -184,10 +229,10 @@ const syncAllData = async (pgPool) => {
         // ============================================================
         if (productos.length > 0) {
             await pgPool.query('DELETE FROM sync_productos');
-            
+
             for (const producto of productos) {
                 const esActivo = producto.Activo === -1 || producto.Activo === true;
-                
+
                 await pgPool.query(`
                     INSERT INTO sync_productos (
                         id_externo, codigo, nombre, precio_venta, iva, activo, datos_completos
@@ -211,7 +256,7 @@ const syncAllData = async (pgPool) => {
         // ============================================================
         if (seriales.length > 0) {
             await pgPool.query('DELETE FROM sync_seriales');
-            
+
             for (const serial of seriales) {
                 await pgPool.query(`
                     INSERT INTO sync_seriales (
@@ -233,7 +278,7 @@ const syncAllData = async (pgPool) => {
         // ============================================================
         if (alquileres.length > 0) {
             await pgPool.query('DELETE FROM sync_alquileres');
-            
+
             for (const alquiler of alquileres) {
                 await pgPool.query(`
                     INSERT INTO sync_alquileres (

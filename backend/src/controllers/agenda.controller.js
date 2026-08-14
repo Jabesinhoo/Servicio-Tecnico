@@ -243,12 +243,11 @@ exports.getDisponibilidad = async (req, res) => {
       const servicios = await pool.query(`
         SELECT hora_inicio_agendada, duracion_estimada, codigo_os
         FROM service_orders
-WHERE tecnico_id = $1
-  AND DATE(fecha_agendada) = $2
-  AND estado::text NOT IN ('cerrada', 'cancelada')
+        WHERE tecnico_id = $1
+        AND DATE(fecha_agendada) = $2
+        AND estado::text NOT IN ('cerrada', 'cancelada')
       `, [tecnico.id, fecha]);
 
-      // Calcular horarios ocupados
       const horariosOcupados = servicios.rows.map(s => ({
         inicio: s.hora_inicio_agendada,
         fin: calcularHoraFin(fecha, s.hora_inicio_agendada, s.duracion_estimada || 60),

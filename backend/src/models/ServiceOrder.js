@@ -19,7 +19,16 @@ module.exports = (sequelize, DataTypes) => {
       tecnico_id: { type: DataTypes.UUID, allowNull: true },
       descripcion_inicial: { type: DataTypes.TEXT, allowNull: true },
       estado: {
-        type: DataTypes.ENUM("pendiente", "asignada", "en_ejecucion", "en_espera", "cerrada"),
+        type: DataTypes.ENUM(
+          "pendiente",
+          "aprobado",
+          "rechazado",
+          "asignada",
+          "en_ejecucion",
+          "en_espera",
+          "cancelado",
+          "cerrada"
+        ),
         allowNull: false,
         defaultValue: "pendiente",
       },
@@ -44,7 +53,7 @@ module.exports = (sequelize, DataTypes) => {
     // Solo relaciones con modelos que existen
     ServiceOrder.belongsTo(models.Client, { foreignKey: "client_id" });
     ServiceOrder.belongsTo(models.Usuario, { foreignKey: "tecnico_id" });
-    
+
     // Comentar las relaciones que causan error
     // ServiceOrder.hasMany(models.ServiceTime, { foreignKey: "service_order_id" });
     // ServiceOrder.hasMany(models.Invoice, { foreignKey: "service_order_id" });

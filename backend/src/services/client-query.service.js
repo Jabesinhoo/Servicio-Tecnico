@@ -1,4 +1,4 @@
-// backend/src/services/client-query.service.js
+﻿// backend/src/services/client-query.service.js
 const pool = require('../db/pool');
 
 const DEFAULT_LIMIT = 25;
@@ -122,8 +122,8 @@ const buildLocalClientsQuery = () => `
 
 const buildMelissaClientsQuery = () => `
     SELECT
-        sc.id::text AS id,
-        ('melissa:' || sc.id::text) AS cliente_key,
+        sc.id_externo::text AS id,
+        ('melissa:' || sc.id_externo::text) AS cliente_key,
         'melissa'::text AS origen,
         sc.id_externo::bigint AS id_externo,
 
