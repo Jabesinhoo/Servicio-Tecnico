@@ -1,211 +1,38 @@
-﻿// backend/src/controllers/user.controller.js
-const db = require('../models');
-const { Usuario, sequelize } = db;
-const Role = sequelize.models.Role || db.Role;
+// backend/src/controllers/user.controller.js
+const { Usuario, Role, sequelize } = require('../models');
 const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
+
 // ============================================================
 // OBTENER TODOS LOS USUARIOS
 // ============================================================
-// ============================================================
-// OBTENER TODOS LOS USUARIOS + FILTROS
-// ============================================================
-
 const getUsers = async (req, res) => {
   try {
-    const {
-      rol,
-      role_id,
-      activo,
-      search,
-      q,
-    } = req.query;
-
-    const where = {};
-
-    // ============================================================
-    // FILTRO POR ROL
-    // ============================================================
-
-    if (rol && String(rol).trim()) {
-      where.rol = String(rol)
-        .trim()
-        .toLowerCase();
-    }
-
-    // También permitir filtrar directamente por role_id.
-    if (
-      role_id !== undefined &&
-      role_id !== null &&
-      String(role_id).trim() !== ''
-    ) {
-      const parsedRoleId = Number(role_id);
-
-      if (
-        !Number.isInteger(parsedRoleId) ||
-        parsedRoleId <= 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: 'El role_id no es válido',
-        });
-      }
-
-      where.role_id = parsedRoleId;
-    }
-
-    // ============================================================
-    // FILTRO ACTIVO / INACTIVO
-    // ============================================================
-
-    if (
-      activo !== undefined &&
-      activo !== null &&
-      String(activo).trim() !== ''
-    ) {
-      const activoNormalizado = String(activo)
-        .trim()
-        .toLowerCase();
-
-      if (
-        ![
-          'true',
-          'false',
-          '1',
-          '0',
-        ].includes(activoNormalizado)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'El filtro activo debe ser true o false',
-        });
-      }
-
-      where.activo =
-        activoNormalizado === 'true' ||
-        activoNormalizado === '1';
-    }
-
-    // ============================================================
-    // BÚSQUEDA
-    // ============================================================
-
-    const termino = String(
-      search || q || ''
-    ).trim();
-
-    if (termino) {
-      where[Op.or] = [
-        {
-          nombre1: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          nombre2: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          apellidos: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          usuario: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          email: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          cedula: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          celular: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-      ];
-    }
-
-    // ============================================================
-    // CONSULTA
-    // ============================================================
-
     const users = await Usuario.findAll({
-      where,
-
-      include: [
-        {
-          model: Role,
-          as: 'role',
-          include: ['permissions'],
-        },
-      ],
-
-      attributes: {
-        exclude: [
-          'password',
-          'two_factor_secret',
-        ],
-      },
-
-      order: [
-        ['nombre1', 'ASC'],
-        ['apellidos', 'ASC'],
-      ],
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+      order: [['created_at', 'DESC']],
     });
-
-    // ============================================================
-    // RESPUESTA
-    // ============================================================
-
-    const formattedUsers = users.map(
-      (user) => ({
-        ...user.toJSON(),
-
-        nombre_completo:
-          user.getNombreCompleto(),
-      })
-    );
-
-    return res.json({
+    
+    // Formatear respuesta para incluir nombre completo
+    const formattedUsers = users.map(user => ({
+      ...user.toJSON(),
+      nombre_completo: user.getNombreCompleto(),
+    }));
+    
+    res.json({
       success: true,
       data: formattedUsers,
-      total: formattedUsers.length,
-
-      filters: {
-        rol: rol || null,
-        role_id: role_id || null,
-        activo:
-          activo !== undefined
-            ? activo
-            : null,
-        search: termino || null,
-      },
     });
   } catch (error) {
-    console.error(
-      'Error al obtener usuarios:',
-      error
-    );
-
-    return res.status(500).json({
+    console.error('Error al obtener usuarios:', error);
+    res.status(500).json({
       success: false,
-      message:
-        'Error al obtener usuarios',
-      error:
-        process.env.NODE_ENV ===
-        'development'
-          ? error.message
-          : undefined,
+      message: 'Error al obtener usuarios',
+      error: error.message,
     });
   }
 };
@@ -254,281 +81,134 @@ const getUserById = async (req, res) => {
 // CREAR USUARIO
 // ============================================================
 const createUser = async (req, res) => {
+  const t = await sequelize.transaction();
+  
   try {
-    const {
-      nombre1,
-      nombre2,
-      apellidos,
-      email,
-      password,
-      usuario,
-      cedula,
-      celular,
-      role_id,
+    const { 
+      nombre1, nombre2, apellidos, email, password, 
+      usuario, cedula, celular, role_id, rol 
     } = req.body;
-
-    // ============================================================
-    // VALIDACIONES BÃSICAS
-    // ============================================================
-
-    if (!nombre1?.trim()) {
+    
+    // Validaciones
+    if (!email || !password) {
+      await t.rollback();
       return res.status(400).json({
         success: false,
-        message: 'El nombre es requerido',
+        message: 'Email y contraseña son requeridos',
       });
     }
-
-    if (!apellidos?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Los apellidos son requeridos',
-      });
-    }
-
-    if (!email?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'El correo electrÃ³nico es requerido',
-      });
-    }
-
-    if (!usuario?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'El nombre de usuario es requerido',
-      });
-    }
-
-    if (!cedula?.toString().trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'La cÃ©dula es requerida',
-      });
-    }
-
-    if (!password || password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'La contraseÃ±a debe tener al menos 8 caracteres',
-      });
-    }
-
-    if (!role_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Debes seleccionar un rol',
-      });
-    }
-
-    // ============================================================
-    // NORMALIZAR
-    // ============================================================
-
-    const emailNormalizado =
-      email.trim().toLowerCase();
-
-    const usuarioNormalizado =
-      usuario.trim().toLowerCase();
-
-    const cedulaNormalizada =
-      cedula.toString().trim();
-
-    // ============================================================
-    // VALIDAR ROL
-    // El navegador NO decide el nombre del rol.
-    // ============================================================
-
-    const role = await Role.findOne({
-      where: {
-        id: role_id,
-        active: true,
-      },
+    
+    // Verificar si el email ya existe
+    const existingUser = await Usuario.findOne({
+      where: { email },
+      transaction: t,
     });
-
-    if (!role) {
+    
+    if (existingUser) {
+      await t.rollback();
       return res.status(400).json({
         success: false,
-        message: 'El rol seleccionado no existe o estÃ¡ inactivo',
+        message: 'Ya existe un usuario con ese email',
       });
     }
-
-    // ============================================================
-    // VALIDAR DUPLICADOS
-    // ============================================================
-
-    const [duplicados] = await sequelize.query(
-      `
-        SELECT
-          id,
-          email,
-          usuario,
-          cedula
-        FROM usuarios
-        WHERE
-          LOWER(COALESCE(email, '')) = LOWER(:email)
-          OR LOWER(COALESCE(usuario, '')) = LOWER(:usuario)
-          OR cedula = :cedula
-        LIMIT 1
-      `,
-      {
-        replacements: {
-          email: emailNormalizado,
-          usuario: usuarioNormalizado,
-          cedula: cedulaNormalizada,
-        },
-      }
-    );
-
-    if (duplicados.length > 0) {
-      const existente = duplicados[0];
-
-      if (
-        existente.email?.toLowerCase() ===
-        emailNormalizado
-      ) {
-        return res.status(409).json({
-          success: false,
-          message: 'Ya existe una cuenta con ese correo electrÃ³nico',
-        });
-      }
-
-      if (
-        existente.usuario?.toLowerCase() ===
-        usuarioNormalizado
-      ) {
-        return res.status(409).json({
-          success: false,
-          message: 'Ya existe una cuenta con ese nombre de usuario',
-        });
-      }
-
-      if (
-        existente.cedula ===
-        cedulaNormalizada
-      ) {
-        return res.status(409).json({
-          success: false,
-          message: 'Ya existe una cuenta con esa cÃ©dula',
-        });
-      }
-
-      return res.status(409).json({
-        success: false,
-        message: 'El usuario ya existe',
+    
+    // Verificar si el usuario ya existe
+    if (usuario) {
+      const existingUsuario = await Usuario.findOne({
+        where: { usuario },
+        transaction: t,
       });
-    }
-
-    // ============================================================
-    // HASH CONTRASEÃ‘A
-    // ============================================================
-
-    const hashedPassword =
-      await bcrypt.hash(password, 12);
-
-    // ============================================================
-    // CREAR USUARIO
-    // ============================================================
-
-    const user = await sequelize.transaction(
-      async (transaction) => {
-        return Usuario.create(
-          {
-            nombre1: nombre1.trim(),
-            nombre2:
-              nombre2?.trim() || null,
-
-            apellidos:
-              apellidos.trim(),
-
-            email:
-              emailNormalizado,
-
-            usuario:
-              usuarioNormalizado,
-
-            cedula:
-              cedulaNormalizada,
-
-            celular:
-              celular?.toString().trim() || null,
-
-            password:
-              hashedPassword,
-
-            // Fuente oficial
-            role_id:
-              role.id,
-
-            // Compatibilidad con cÃ³digo antiguo
-            rol:
-              role.name,
-
-            activo:
-              true,
-
-            password_changed_at:
-              new Date(),
-          },
-          {
-            transaction,
-          }
-        );
+      
+      if (existingUsuario) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con ese nombre de usuario',
+        });
       }
-    );
-
-    // ============================================================
-    // RESPUESTA SEGURA
-    // ============================================================
-
-    const createdUser =
-      await Usuario.findByPk(
-        user.id,
-        {
-          include: [
-            {
-              model: Role,
-              as: 'role',
-              include: ['permissions'],
-            },
-          ],
-
-          attributes: {
-            exclude: [
-              'password',
-              'two_factor_secret',
-            ],
-          },
-        }
-      );
-
-    return res.status(201).json({
+    }
+    
+    // Verificar si la cédula ya existe
+    if (cedula) {
+      const existingCedula = await Usuario.findOne({
+        where: { cedula },
+        transaction: t,
+      });
+      
+      if (existingCedula) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con esa cédula',
+        });
+      }
+    }
+    
+    // Verificar que el rol existe si se proporciona
+    let roleId = role_id;
+    let roleName = rol;
+    
+    if (roleId) {
+      const role = await Role.findByPk(roleId, { transaction: t });
+      if (!role) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Rol no encontrado',
+        });
+      }
+      roleName = role.name;
+    }
+    
+    // Hash de la contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Crear usuario
+    const user = await Usuario.create({
+      nombre1: nombre1 || null,
+      nombre2: nombre2 || null,
+      apellidos: apellidos || null,
+      email,
+      password: hashedPassword,
+      usuario: usuario || null,
+      cedula: cedula || null,
+      celular: celular || null,
+      role_id: roleId || null,
+      rol: roleName || 'usuario',
+      activo: true,
+    }, { transaction: t });
+    
+    await t.commit();
+    
+    // Obtener usuario creado con su rol
+    const createdUser = await Usuario.findByPk(user.id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+    });
+    
+    res.status(201).json({
       success: true,
-
       data: {
         ...createdUser.toJSON(),
-
-        nombre_completo:
-          createdUser.getNombreCompleto(),
+        nombre_completo: createdUser.getNombreCompleto(),
       },
-
-      message:
-        role.name === 'tecnico'
-          ? 'Cuenta de tÃ©cnico creada exitosamente'
-          : 'Usuario creado exitosamente',
+      message: 'Usuario creado exitosamente',
     });
-
   } catch (error) {
-    console.error(
-      'Error al crear usuario:',
-      error
-    );
-
-    return res.status(500).json({
+    await t.rollback();
+    console.error('Error al crear usuario:', error);
+    res.status(500).json({
       success: false,
       message: 'Error al crear usuario',
+      error: error.message,
     });
   }
 };
+
 // ============================================================
 // ACTUALIZAR USUARIO
 // ============================================================
@@ -584,7 +264,7 @@ const updateUser = async (req, res) => {
       }
     }
     
-    // Verificar si la cÃ©dula ya existe
+    // Verificar si la cédula ya existe
     if (cedula && cedula !== user.cedula) {
       const existingCedula = await Usuario.findOne({
         where: { cedula },
@@ -595,7 +275,7 @@ const updateUser = async (req, res) => {
         await t.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Ya existe un usuario con esa cÃ©dula',
+          message: 'Ya existe un usuario con esa cédula',
         });
       }
     }
@@ -630,7 +310,7 @@ const updateUser = async (req, res) => {
       activo: activo !== undefined ? activo : user.activo,
     };
     
-    // Si se proporciona contraseÃ±a, hashearla
+    // Si se proporciona contraseña, hashearla
     if (password) {
       updateData.password = await bcrypt.hash(password, 10);
       updateData.password_changed_at = new Date();
@@ -808,7 +488,7 @@ const getUsersByRole = async (req, res) => {
 };
 
 // ============================================================
-// CAMBIAR CONTRASEÃ‘A
+// CAMBIAR CONTRASEÑA
 // ============================================================
 const changePassword = async (req, res) => {
   try {
@@ -818,14 +498,14 @@ const changePassword = async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'ContraseÃ±a actual y nueva son requeridas',
+        message: 'Contraseña actual y nueva son requeridas',
       });
     }
     
     if (newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message: 'La nueva contraseÃ±a debe tener al menos 8 caracteres',
+        message: 'La nueva contraseña debe tener al menos 8 caracteres',
       });
     }
     
@@ -838,17 +518,17 @@ const changePassword = async (req, res) => {
       });
     }
     
-    // Verificar contraseÃ±a actual
+    // Verificar contraseña actual
     const isValid = await bcrypt.compare(currentPassword, user.password);
     
     if (!isValid) {
       return res.status(401).json({
         success: false,
-        message: 'ContraseÃ±a actual incorrecta',
+        message: 'Contraseña actual incorrecta',
       });
     }
     
-    // Hash de la nueva contraseÃ±a
+    // Hash de la nueva contraseña
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
     await user.update({
@@ -858,13 +538,13 @@ const changePassword = async (req, res) => {
     
     res.json({
       success: true,
-      message: 'ContraseÃ±a actualizada exitosamente',
+      message: 'Contraseña actualizada exitosamente',
     });
   } catch (error) {
-    console.error('Error al cambiar contraseÃ±a:', error);
+    console.error('Error al cambiar contraseña:', error);
     res.status(500).json({
       success: false,
-      message: 'Error al cambiar contraseÃ±a',
+      message: 'Error al cambiar contraseña',
       error: error.message,
     });
   }
@@ -883,4 +563,3 @@ module.exports = {
   getUsersByRole,
   changePassword,
 };
-

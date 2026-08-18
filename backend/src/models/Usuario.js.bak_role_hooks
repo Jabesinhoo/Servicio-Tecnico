@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 const { Op } = require('sequelize');
 const Permission = require('./Permission');
 
@@ -94,7 +94,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
-    // Campos de auditorÃ­a y seguridad
+    // Campos de auditoría y seguridad
     last_login: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -124,7 +124,7 @@ module.exports = (sequelize, DataTypes) => {
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
-    // Ãndices para mejorar el rendimiento
+    // Índices para mejorar el rendimiento
     indexes: [
       {
         fields: ['email'],
@@ -179,7 +179,7 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   // ============================================================
-  // MÃ‰TODOS DE INSTANCIA
+  // MÉTODOS DE INSTANCIA
   // ============================================================
 
   // Obtener nombre completo
@@ -190,14 +190,14 @@ module.exports = (sequelize, DataTypes) => {
     return `${n1} ${n2} ${ap}`.trim();
   };
 
-  // Verificar si tiene un permiso especÃ­fico
+  // Verificar si tiene un permiso específico
   Usuario.prototype.hasPermission = async function(permissionName) {
     // Si el usuario es admin por rol antiguo, tiene todos los permisos
     if (this.rol === 'admin') return true;
 
     if (!this.role_id) return false;
     
-    // Cargar el rol con sus permisos si no estÃ¡n cargados
+    // Cargar el rol con sus permisos si no están cargados
     if (!this.role || !this.role.permissions) {
       const { Role } = require('../models');
       const role = await Role.findByPk(this.role_id, {
@@ -232,7 +232,7 @@ module.exports = (sequelize, DataTypes) => {
     return this.role.permissions || [];
   };
 
-  // Verificar si tiene algÃºn permiso de una lista
+  // Verificar si tiene algún permiso de una lista
   Usuario.prototype.hasAnyPermission = async function(permissionNames) {
     for (const name of permissionNames) {
       if (await this.hasPermission(name)) return true;
@@ -249,10 +249,10 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   // ============================================================
-  // MÃ‰TODOS DE CLASE
+  // MÉTODOS DE CLASE
   // ============================================================
 
-  // Verificar si un usuario tiene un permiso especÃ­fico
+  // Verificar si un usuario tiene un permiso específico
   Usuario.hasPermission = async function(userId, permissionName) {
     const user = await this.findByPk(userId, {
       include: [{
@@ -334,8 +334,8 @@ Usuario.findByRole = async function(roleName) {
   });
 };
 
-  // Obtener usuarios con permisos especÃ­ficos
-  // Obtener usuarios con permisos especÃ­ficos
+  // Obtener usuarios con permisos específicos
+  // Obtener usuarios con permisos específicos
 Usuario.findWithPermission = async function(permissionName) {
   const Permission = sequelize.models.Permission;
   const Role = sequelize.models.Role;
@@ -402,211 +402,38 @@ Usuario.findWithPermission = async function(permissionName) {
   // HOOKS
   // ============================================================
 
-  /**
-   * Obtener la instancia REAL del modelo Role registrada
-   * dentro de esta misma instancia de Sequelize.
-   *
-   * IMPORTANTE:
-   * NO usar require('./Role') aquí porque Role.js exporta
-   * una función factory (sequelize, DataTypes) => Role.
-   */
-  const getRoleModel = () => {
-    const Role = sequelize.models.Role;
-
-    if (
-      !Role ||
-      typeof Role.findOne !== 'function' ||
-      typeof Role.findByPk !== 'function'
-    ) {
-      throw new Error(
-        'El modelo Role no está inicializado correctamente en Sequelize'
-      );
-    }
-
-    return Role;
-  };
-
-  // ============================================================
-  // ANTES DE CREAR
-  // ============================================================
-
-  Usuario.beforeCreate(async (usuario, options) => {
-    const Role = getRoleModel();
-
-    const transaction = options?.transaction;
-
-    // ------------------------------------------------------------
-    // CASO 1:
-    // role_id viene informado.
-    // role_id es la fuente oficial del rol.
-    // ------------------------------------------------------------
-
-    if (usuario.role_id) {
-      const role = await Role.findOne({
-        where: {
-          id: usuario.role_id,
-          active: true,
-        },
-        transaction,
-      });
-
-      if (!role) {
-        throw new Error(
-          'El rol asignado al usuario no existe o está inactivo'
-        );
+  // Antes de crear, asegurar que el usuario tenga un rol
+  Usuario.beforeCreate(async (usuario) => {
+    if (!usuario.rol && !usuario.role_id) {
+      // Asignar rol por defecto
+      const Role = require('./Role');
+      const defaultRole = await Role.getDefault();
+      if (defaultRole) {
+        usuario.role_id = defaultRole.id;
+        usuario.rol = defaultRole.name;
+      } else {
+        usuario.rol = 'usuario';
       }
-
-      // Nunca confiar en un "rol" recibido desde el frontend.
-      usuario.rol = role.name;
-
-      return;
     }
-
-    // ------------------------------------------------------------
-    // CASO 2:
-    // Código legacy envió solamente "rol".
-    // Resolverlo contra la tabla roles y obtener role_id.
-    // ------------------------------------------------------------
-
-    if (usuario.rol) {
-      const role = await Role.findOne({
-        where: {
-          name: usuario.rol,
-          active: true,
-        },
-        transaction,
-      });
-
-      if (!role) {
-        throw new Error(
-          'El nombre de rol asignado al usuario no existe o está inactivo'
-        );
-      }
-
-      usuario.role_id = role.id;
-      usuario.rol = role.name;
-
-      return;
-    }
-
-    // ------------------------------------------------------------
-    // CASO 3:
-    // No se recibió ningún rol.
-    // Intentar el rol marcado como predeterminado.
-    // ------------------------------------------------------------
-
-    let defaultRole = await Role.findOne({
-      where: {
-        is_default: true,
-        active: true,
-      },
-      transaction,
-    });
-
-    // ------------------------------------------------------------
-    // Compatibilidad:
-    // Si no existe un rol default, buscar "usuario".
-    // ------------------------------------------------------------
-
-    if (!defaultRole) {
-      defaultRole = await Role.findOne({
-        where: {
-          name: 'usuario',
-          active: true,
-        },
-        transaction,
-      });
-    }
-
-    // ------------------------------------------------------------
-    // FAIL CLOSED:
-    // No crear una cuenta sin un rol válido.
-    // ------------------------------------------------------------
-
-    if (!defaultRole) {
-      throw new Error(
-        'No existe un rol predeterminado activo para crear el usuario'
-      );
-    }
-
-    usuario.role_id = defaultRole.id;
-    usuario.rol = defaultRole.name;
-  });
-
-  // ============================================================
-  // ANTES DE ACTUALIZAR
-  // ============================================================
-
-  Usuario.beforeUpdate(async (usuario, options) => {
-    const transaction = options?.transaction;
-
-    // ------------------------------------------------------------
-    // Si existe role_id, SIEMPRE será la fuente oficial.
-    //
-    // Esto también evita que alguien intente modificar solamente:
-    //
-    // rol = "admin"
-    //
-    // sin tener realmente role_id del administrador.
-    // ------------------------------------------------------------
-
-    if (usuario.role_id) {
-      // Solo consultar si cambió alguno de los dos campos.
-      if (
-        usuario.changed('role_id') ||
-        usuario.changed('rol')
-      ) {
-        const Role = getRoleModel();
-
-        const role = await Role.findOne({
-          where: {
-            id: usuario.role_id,
-            active: true,
-          },
-          transaction,
-        });
-
-        if (!role) {
-          throw new Error(
-            'El rol asignado al usuario no existe o está inactivo'
-          );
-        }
-
-        // role_id manda.
+    
+    // Sincronizar role_id y rol
+    if (usuario.role_id && !usuario.rol) {
+      const Role = require('./Role');
+      const role = await Role.findByPk(usuario.role_id);
+      if (role) {
         usuario.rol = role.name;
       }
-
-      return;
     }
+  });
 
-    // ------------------------------------------------------------
-    // Compatibilidad legacy:
-    // existe rol pero no existe role_id.
-    // ------------------------------------------------------------
-
-    if (
-      !usuario.role_id &&
-      usuario.rol &&
-      usuario.changed('rol')
-    ) {
-      const Role = getRoleModel();
-
-      const role = await Role.findOne({
-        where: {
-          name: usuario.rol,
-          active: true,
-        },
-        transaction,
-      });
-
-      if (!role) {
-        throw new Error(
-          'El rol asignado al usuario no existe o está inactivo'
-        );
+  // Antes de actualizar, sincronizar role_id y rol
+  Usuario.beforeUpdate(async (usuario) => {
+    if (usuario.changed('role_id') && usuario.role_id) {
+      const Role = require('./Role');
+      const role = await Role.findByPk(usuario.role_id);
+      if (role) {
+        usuario.rol = role.name;
       }
-
-      usuario.role_id = role.id;
-      usuario.rol = role.name;
     }
   });
 

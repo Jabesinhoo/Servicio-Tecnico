@@ -10,6 +10,7 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
     cedula: '',
     email: '',
     celular: '',
+    role_id: 2,
     password: '',
     confirmPassword: '',
   });
@@ -25,6 +26,7 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
         cedula: initialData.cedula || '',
         email: initialData.email || '',
         celular: initialData.celular || '',
+        role_id: 2,
         password: '',
         confirmPassword: '',
       });
@@ -36,6 +38,7 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
         cedula: '',
         email: '',
         celular: '',
+        role_id: 2,
         password: '',
         confirmPassword: '',
       });
@@ -56,8 +59,8 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
     if (!initialData && !formData.password) {
       newErrors.password = 'La contraseña es requerida';
     }
-    if (!initialData && formData.password.length < 6) {
-      newErrors.password = 'La contraseña debe tener mínimo 6 caracteres';
+    if (!initialData && formData.password.length < 8) {
+      newErrors.password = 'La contraseña debe tener mínimo 8 caracteres';
     }
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Las contraseñas no coinciden';
@@ -68,24 +71,40 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!validate()) return;
-    
+
     setLoading(true);
+
     try {
-      const submitData = { ...formData };
+      const submitData = {
+        ...formData,
+
+        // Un técnico SIEMPRE se crea como técnico
+        role_id: 2,
+      };
+
+      // Este campo es solamente visual
+      delete submitData.confirmPassword;
+
       if (initialData) {
         delete submitData.password;
-        delete submitData.confirmPassword;
       }
+
       await onSubmit(submitData);
+
       onClose();
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error(
+        'Error submitting tecnico:',
+        error.response?.data || error
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -120,9 +139,8 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                   name="nombre1"
                   value={formData.nombre1}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                    errors.nombre1 ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${errors.nombre1 ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
+                    }`}
                 />
                 {errors.nombre1 && <p className="mt-1 text-xs text-red-500">{errors.nombre1}</p>}
               </div>
@@ -135,9 +153,8 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                   name="apellidos"
                   value={formData.apellidos}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                    errors.apellidos ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${errors.apellidos ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
+                    }`}
                 />
                 {errors.apellidos && <p className="mt-1 text-xs text-red-500">{errors.apellidos}</p>}
               </div>
@@ -150,9 +167,8 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                   name="usuario"
                   value={formData.usuario}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                    errors.usuario ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${errors.usuario ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
+                    }`}
                 />
                 {errors.usuario && <p className="mt-1 text-xs text-red-500">{errors.usuario}</p>}
               </div>
@@ -165,9 +181,8 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                   name="cedula"
                   value={formData.cedula}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                    errors.cedula ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${errors.cedula ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
+                    }`}
                 />
                 {errors.cedula && <p className="mt-1 text-xs text-red-500">{errors.cedula}</p>}
               </div>
@@ -180,9 +195,8 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                    errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
+                    }`}
                 />
                 {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
               </div>
@@ -212,10 +226,9 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                      errors.password ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                    }`}
-                    placeholder={initialData ? 'Dejar en blanco para mantener' : 'Mínimo 6 caracteres'}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${errors.password ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
+                      }`}
+                    placeholder={initialData ? '' : 'Mínimo 8 caracteres'}
                   />
                   {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
                 </div>
@@ -228,9 +241,8 @@ const TecnicoForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                      errors.confirmPassword ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
+                      }`}
                   />
                   {errors.confirmPassword && <p className="mt-1 text-xs text-red-500">{errors.confirmPassword}</p>}
                 </div>

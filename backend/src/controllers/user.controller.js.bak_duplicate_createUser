@@ -1,211 +1,38 @@
-﻿// backend/src/controllers/user.controller.js
-const db = require('../models');
-const { Usuario, sequelize } = db;
-const Role = sequelize.models.Role || db.Role;
+// backend/src/controllers/user.controller.js
+const { Usuario, Role, sequelize } = require('../models');
 const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
+
 // ============================================================
 // OBTENER TODOS LOS USUARIOS
 // ============================================================
-// ============================================================
-// OBTENER TODOS LOS USUARIOS + FILTROS
-// ============================================================
-
 const getUsers = async (req, res) => {
   try {
-    const {
-      rol,
-      role_id,
-      activo,
-      search,
-      q,
-    } = req.query;
-
-    const where = {};
-
-    // ============================================================
-    // FILTRO POR ROL
-    // ============================================================
-
-    if (rol && String(rol).trim()) {
-      where.rol = String(rol)
-        .trim()
-        .toLowerCase();
-    }
-
-    // También permitir filtrar directamente por role_id.
-    if (
-      role_id !== undefined &&
-      role_id !== null &&
-      String(role_id).trim() !== ''
-    ) {
-      const parsedRoleId = Number(role_id);
-
-      if (
-        !Number.isInteger(parsedRoleId) ||
-        parsedRoleId <= 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: 'El role_id no es válido',
-        });
-      }
-
-      where.role_id = parsedRoleId;
-    }
-
-    // ============================================================
-    // FILTRO ACTIVO / INACTIVO
-    // ============================================================
-
-    if (
-      activo !== undefined &&
-      activo !== null &&
-      String(activo).trim() !== ''
-    ) {
-      const activoNormalizado = String(activo)
-        .trim()
-        .toLowerCase();
-
-      if (
-        ![
-          'true',
-          'false',
-          '1',
-          '0',
-        ].includes(activoNormalizado)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'El filtro activo debe ser true o false',
-        });
-      }
-
-      where.activo =
-        activoNormalizado === 'true' ||
-        activoNormalizado === '1';
-    }
-
-    // ============================================================
-    // BÚSQUEDA
-    // ============================================================
-
-    const termino = String(
-      search || q || ''
-    ).trim();
-
-    if (termino) {
-      where[Op.or] = [
-        {
-          nombre1: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          nombre2: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          apellidos: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          usuario: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          email: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          cedula: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          celular: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-      ];
-    }
-
-    // ============================================================
-    // CONSULTA
-    // ============================================================
-
     const users = await Usuario.findAll({
-      where,
-
-      include: [
-        {
-          model: Role,
-          as: 'role',
-          include: ['permissions'],
-        },
-      ],
-
-      attributes: {
-        exclude: [
-          'password',
-          'two_factor_secret',
-        ],
-      },
-
-      order: [
-        ['nombre1', 'ASC'],
-        ['apellidos', 'ASC'],
-      ],
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+      order: [['created_at', 'DESC']],
     });
-
-    // ============================================================
-    // RESPUESTA
-    // ============================================================
-
-    const formattedUsers = users.map(
-      (user) => ({
-        ...user.toJSON(),
-
-        nombre_completo:
-          user.getNombreCompleto(),
-      })
-    );
-
-    return res.json({
+    
+    // Formatear respuesta para incluir nombre completo
+    const formattedUsers = users.map(user => ({
+      ...user.toJSON(),
+      nombre_completo: user.getNombreCompleto(),
+    }));
+    
+    res.json({
       success: true,
       data: formattedUsers,
-      total: formattedUsers.length,
-
-      filters: {
-        rol: rol || null,
-        role_id: role_id || null,
-        activo:
-          activo !== undefined
-            ? activo
-            : null,
-        search: termino || null,
-      },
     });
   } catch (error) {
-    console.error(
-      'Error al obtener usuarios:',
-      error
-    );
-
-    return res.status(500).json({
+    console.error('Error al obtener usuarios:', error);
+    res.status(500).json({
       success: false,
-      message:
-        'Error al obtener usuarios',
-      error:
-        process.env.NODE_ENV ===
-        'development'
-          ? error.message
-          : undefined,
+      message: 'Error al obtener usuarios',
+      error: error.message,
     });
   }
 };
@@ -254,6 +81,134 @@ const getUserById = async (req, res) => {
 // CREAR USUARIO
 // ============================================================
 const createUser = async (req, res) => {
+  const t = await sequelize.transaction();
+  
+  try {
+    const { 
+      nombre1, nombre2, apellidos, email, password, 
+      usuario, cedula, celular, role_id, rol 
+    } = req.body;
+    
+    // Validaciones
+    if (!email || !password) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Email y contraseña son requeridos',
+      });
+    }
+    
+    // Verificar si el email ya existe
+    const existingUser = await Usuario.findOne({
+      where: { email },
+      transaction: t,
+    });
+    
+    if (existingUser) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe un usuario con ese email',
+      });
+    }
+    
+    // Verificar si el usuario ya existe
+    if (usuario) {
+      const existingUsuario = await Usuario.findOne({
+        where: { usuario },
+        transaction: t,
+      });
+      
+      if (existingUsuario) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con ese nombre de usuario',
+        });
+      }
+    }
+    
+    // Verificar si la cédula ya existe
+    if (cedula) {
+      const existingCedula = await Usuario.findOne({
+        where: { cedula },
+        transaction: t,
+      });
+      
+      if (existingCedula) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Ya existe un usuario con esa cédula',
+        });
+      }
+    }
+    
+    // Verificar que el rol existe si se proporciona
+    let roleId = role_id;
+    let roleName = rol;
+    
+    if (roleId) {
+      const role = await Role.findByPk(roleId, { transaction: t });
+      if (!role) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Rol no encontrado',
+        });
+      }
+      roleName = role.name;
+    }
+    
+    // Hash de la contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Crear usuario
+    const user = await Usuario.create({
+      nombre1: nombre1 || null,
+      nombre2: nombre2 || null,
+      apellidos: apellidos || null,
+      email,
+      password: hashedPassword,
+      usuario: usuario || null,
+      cedula: cedula || null,
+      celular: celular || null,
+      role_id: roleId || null,
+      rol: roleName || 'usuario',
+      activo: true,
+    }, { transaction: t });
+    
+    await t.commit();
+    
+    // Obtener usuario creado con su rol
+    const createdUser = await Usuario.findByPk(user.id, {
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+    });
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        ...createdUser.toJSON(),
+        nombre_completo: createdUser.getNombreCompleto(),
+      },
+      message: 'Usuario creado exitosamente',
+    });
+  } catch (error) {
+    await t.rollback();
+    console.error('Error al crear usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al crear usuario',
+      error: error.message,
+    });
+  }
+};
+const createUser = async (req, res) => {
   try {
     const {
       nombre1,
@@ -268,7 +223,7 @@ const createUser = async (req, res) => {
     } = req.body;
 
     // ============================================================
-    // VALIDACIONES BÃSICAS
+    // VALIDACIONES BÁSICAS
     // ============================================================
 
     if (!nombre1?.trim()) {
@@ -288,7 +243,7 @@ const createUser = async (req, res) => {
     if (!email?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'El correo electrÃ³nico es requerido',
+        message: 'El correo electrónico es requerido',
       });
     }
 
@@ -302,14 +257,14 @@ const createUser = async (req, res) => {
     if (!cedula?.toString().trim()) {
       return res.status(400).json({
         success: false,
-        message: 'La cÃ©dula es requerida',
+        message: 'La cédula es requerida',
       });
     }
 
     if (!password || password.length < 8) {
       return res.status(400).json({
         success: false,
-        message: 'La contraseÃ±a debe tener al menos 8 caracteres',
+        message: 'La contraseña debe tener al menos 8 caracteres',
       });
     }
 
@@ -348,7 +303,7 @@ const createUser = async (req, res) => {
     if (!role) {
       return res.status(400).json({
         success: false,
-        message: 'El rol seleccionado no existe o estÃ¡ inactivo',
+        message: 'El rol seleccionado no existe o está inactivo',
       });
     }
 
@@ -388,7 +343,7 @@ const createUser = async (req, res) => {
       ) {
         return res.status(409).json({
           success: false,
-          message: 'Ya existe una cuenta con ese correo electrÃ³nico',
+          message: 'Ya existe una cuenta con ese correo electrónico',
         });
       }
 
@@ -408,7 +363,7 @@ const createUser = async (req, res) => {
       ) {
         return res.status(409).json({
           success: false,
-          message: 'Ya existe una cuenta con esa cÃ©dula',
+          message: 'Ya existe una cuenta con esa cédula',
         });
       }
 
@@ -419,7 +374,7 @@ const createUser = async (req, res) => {
     }
 
     // ============================================================
-    // HASH CONTRASEÃ‘A
+    // HASH CONTRASEÑA
     // ============================================================
 
     const hashedPassword =
@@ -459,7 +414,7 @@ const createUser = async (req, res) => {
             role_id:
               role.id,
 
-            // Compatibilidad con cÃ³digo antiguo
+            // Compatibilidad con código antiguo
             rol:
               role.name,
 
@@ -513,7 +468,7 @@ const createUser = async (req, res) => {
 
       message:
         role.name === 'tecnico'
-          ? 'Cuenta de tÃ©cnico creada exitosamente'
+          ? 'Cuenta de técnico creada exitosamente'
           : 'Usuario creado exitosamente',
     });
 
@@ -584,7 +539,7 @@ const updateUser = async (req, res) => {
       }
     }
     
-    // Verificar si la cÃ©dula ya existe
+    // Verificar si la cédula ya existe
     if (cedula && cedula !== user.cedula) {
       const existingCedula = await Usuario.findOne({
         where: { cedula },
@@ -595,7 +550,7 @@ const updateUser = async (req, res) => {
         await t.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Ya existe un usuario con esa cÃ©dula',
+          message: 'Ya existe un usuario con esa cédula',
         });
       }
     }
@@ -630,7 +585,7 @@ const updateUser = async (req, res) => {
       activo: activo !== undefined ? activo : user.activo,
     };
     
-    // Si se proporciona contraseÃ±a, hashearla
+    // Si se proporciona contraseña, hashearla
     if (password) {
       updateData.password = await bcrypt.hash(password, 10);
       updateData.password_changed_at = new Date();
@@ -808,7 +763,7 @@ const getUsersByRole = async (req, res) => {
 };
 
 // ============================================================
-// CAMBIAR CONTRASEÃ‘A
+// CAMBIAR CONTRASEÑA
 // ============================================================
 const changePassword = async (req, res) => {
   try {
@@ -818,14 +773,14 @@ const changePassword = async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'ContraseÃ±a actual y nueva son requeridas',
+        message: 'Contraseña actual y nueva son requeridas',
       });
     }
     
     if (newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message: 'La nueva contraseÃ±a debe tener al menos 8 caracteres',
+        message: 'La nueva contraseña debe tener al menos 8 caracteres',
       });
     }
     
@@ -838,17 +793,17 @@ const changePassword = async (req, res) => {
       });
     }
     
-    // Verificar contraseÃ±a actual
+    // Verificar contraseña actual
     const isValid = await bcrypt.compare(currentPassword, user.password);
     
     if (!isValid) {
       return res.status(401).json({
         success: false,
-        message: 'ContraseÃ±a actual incorrecta',
+        message: 'Contraseña actual incorrecta',
       });
     }
     
-    // Hash de la nueva contraseÃ±a
+    // Hash de la nueva contraseña
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
     await user.update({
@@ -858,13 +813,13 @@ const changePassword = async (req, res) => {
     
     res.json({
       success: true,
-      message: 'ContraseÃ±a actualizada exitosamente',
+      message: 'Contraseña actualizada exitosamente',
     });
   } catch (error) {
-    console.error('Error al cambiar contraseÃ±a:', error);
+    console.error('Error al cambiar contraseña:', error);
     res.status(500).json({
       success: false,
-      message: 'Error al cambiar contraseÃ±a',
+      message: 'Error al cambiar contraseña',
       error: error.message,
     });
   }
@@ -883,4 +838,3 @@ module.exports = {
   getUsersByRole,
   changePassword,
 };
-

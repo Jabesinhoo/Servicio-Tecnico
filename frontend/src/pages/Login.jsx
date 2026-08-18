@@ -58,7 +58,7 @@ export default function Login() {
       });
       const response = await publicApi.post("/api/auth/login", {
         identifier: normalizedIdentifier,
-        password: password.trim(),
+        password,
       });
 
       const data = response.data;

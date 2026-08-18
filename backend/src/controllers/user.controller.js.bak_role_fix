@@ -1,211 +1,38 @@
 ﻿// backend/src/controllers/user.controller.js
-const db = require('../models');
-const { Usuario, sequelize } = db;
-const Role = sequelize.models.Role || db.Role;
+const { Usuario, Role, sequelize } = require('../models');
 const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
+
 // ============================================================
 // OBTENER TODOS LOS USUARIOS
 // ============================================================
-// ============================================================
-// OBTENER TODOS LOS USUARIOS + FILTROS
-// ============================================================
-
 const getUsers = async (req, res) => {
   try {
-    const {
-      rol,
-      role_id,
-      activo,
-      search,
-      q,
-    } = req.query;
-
-    const where = {};
-
-    // ============================================================
-    // FILTRO POR ROL
-    // ============================================================
-
-    if (rol && String(rol).trim()) {
-      where.rol = String(rol)
-        .trim()
-        .toLowerCase();
-    }
-
-    // También permitir filtrar directamente por role_id.
-    if (
-      role_id !== undefined &&
-      role_id !== null &&
-      String(role_id).trim() !== ''
-    ) {
-      const parsedRoleId = Number(role_id);
-
-      if (
-        !Number.isInteger(parsedRoleId) ||
-        parsedRoleId <= 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: 'El role_id no es válido',
-        });
-      }
-
-      where.role_id = parsedRoleId;
-    }
-
-    // ============================================================
-    // FILTRO ACTIVO / INACTIVO
-    // ============================================================
-
-    if (
-      activo !== undefined &&
-      activo !== null &&
-      String(activo).trim() !== ''
-    ) {
-      const activoNormalizado = String(activo)
-        .trim()
-        .toLowerCase();
-
-      if (
-        ![
-          'true',
-          'false',
-          '1',
-          '0',
-        ].includes(activoNormalizado)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'El filtro activo debe ser true o false',
-        });
-      }
-
-      where.activo =
-        activoNormalizado === 'true' ||
-        activoNormalizado === '1';
-    }
-
-    // ============================================================
-    // BÚSQUEDA
-    // ============================================================
-
-    const termino = String(
-      search || q || ''
-    ).trim();
-
-    if (termino) {
-      where[Op.or] = [
-        {
-          nombre1: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          nombre2: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          apellidos: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          usuario: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          email: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          cedula: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-        {
-          celular: {
-            [Op.iLike]: `%${termino}%`,
-          },
-        },
-      ];
-    }
-
-    // ============================================================
-    // CONSULTA
-    // ============================================================
-
     const users = await Usuario.findAll({
-      where,
-
-      include: [
-        {
-          model: Role,
-          as: 'role',
-          include: ['permissions'],
-        },
-      ],
-
-      attributes: {
-        exclude: [
-          'password',
-          'two_factor_secret',
-        ],
-      },
-
-      order: [
-        ['nombre1', 'ASC'],
-        ['apellidos', 'ASC'],
-      ],
+      include: [{
+        model: Role,
+        as: 'role',
+        include: ['permissions'],
+      }],
+      attributes: { exclude: ['password'] },
+      order: [['created_at', 'DESC']],
     });
-
-    // ============================================================
-    // RESPUESTA
-    // ============================================================
-
-    const formattedUsers = users.map(
-      (user) => ({
-        ...user.toJSON(),
-
-        nombre_completo:
-          user.getNombreCompleto(),
-      })
-    );
-
-    return res.json({
+    
+    // Formatear respuesta para incluir nombre completo
+    const formattedUsers = users.map(user => ({
+      ...user.toJSON(),
+      nombre_completo: user.getNombreCompleto(),
+    }));
+    
+    res.json({
       success: true,
       data: formattedUsers,
-      total: formattedUsers.length,
-
-      filters: {
-        rol: rol || null,
-        role_id: role_id || null,
-        activo:
-          activo !== undefined
-            ? activo
-            : null,
-        search: termino || null,
-      },
     });
   } catch (error) {
-    console.error(
-      'Error al obtener usuarios:',
-      error
-    );
-
-    return res.status(500).json({
+    console.error('Error al obtener usuarios:', error);
+    res.status(500).json({
       success: false,
-      message:
-        'Error al obtener usuarios',
-      error:
-        process.env.NODE_ENV ===
-        'development'
-          ? error.message
-          : undefined,
+      message: 'Error al obtener usuarios',
+      error: error.message,
     });
   }
 };
@@ -883,4 +710,3 @@ module.exports = {
   getUsersByRole,
   changePassword,
 };
-

@@ -78,15 +78,29 @@ const login = async (req, res) => {
     const { identifier, password } = req.body;
 
     if (!identifier || !password) {
-      return res.status(400).json({ message: "Completa todos los campos." });
+      return res.status(400).json({
+        message: "Completa todos los campos."
+      });
     }
 
-    // Buscar por usuario o email
+    const normalizedIdentifier = String(identifier)
+      .trim()
+      .toLowerCase();
+
+    // Buscar indistintamente por usuario o correo
     const user = await Usuario.findOne({
       where: {
         [Op.or]: [
-          { usuario: identifier },
-          { email: identifier },
+          {
+            usuario: {
+              [Op.iLike]: normalizedIdentifier
+            }
+          },
+          {
+            email: {
+              [Op.iLike]: normalizedIdentifier
+            }
+          },
         ],
       },
     });
@@ -116,16 +130,16 @@ const login = async (req, res) => {
       });
     }
     const token = jwt.sign(
-    {
+      {
         id: user.id,
         email: user.email,
         rol: user.rol,
-    },
-    jwtSecret,
-    {
+      },
+      jwtSecret,
+      {
         expiresIn: '8h',
-    }
-);
+      }
+    );
 
     return res.json({
       message: "Login exitoso.",
