@@ -1,31 +1,48 @@
+// backend/src/routes/user.routes.js
 const { Usuario, Role } = require('../models');
 const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middlewares/auth');
 const userController = require('../controllers/user.controller');
+const userLocationController = require('../controllers/user-location.controller');
 
+// Todas las rutas requieren autenticación.
 router.use(authenticate);
 
 // ============================================================
-// RUTAS PÚBLICAS (para técnicos y usuarios logueados)
+// RUTAS PARA USUARIOS AUTENTICADOS
 // ============================================================
 
-// Obtener usuarios por rol (para selección en formularios)
-router.get('/usuarios/role/:roleName', userController.getUsersByRole);
+// Obtener usuarios por rol (para selección en formularios).
+router.get(
+  '/usuarios/role/:roleName',
+  userController.getUsersByRole
+);
 
-// Obtener usuario actual
+// Obtener usuario actual.
 router.get('/usuarios/me', async (req, res) => {
   try {
     const user = await Usuario.findByPk(req.user.id, {
-      include: [{
-        model: Role,
-        as: 'role',
-        include: ['permissions'],
-      }],
-      attributes: { exclude: ['password'] },
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          include: ['permissions'],
+        },
+      ],
+      attributes: {
+        exclude: ['password', 'two_factor_secret'],
+      },
     });
 
-    res.json({
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+    }
+
+    return res.json({
       success: true,
       data: {
         ...user.toJSON(),
@@ -35,40 +52,103 @@ router.get('/usuarios/me', async (req, res) => {
   } catch (error) {
     console.error('Error en GET /usuarios/me:', error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Error al obtener usuario actual',
-      error: error.message,
+      error:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : undefined,
     });
   }
 });
 
-// Cambiar propia contraseña
-router.put('/usuarios/me/password', userController.changePassword);
+// Cambiar la propia contraseña: exige contraseña actual.
+router.put(
+  '/usuarios/me/password',
+  userController.changeOwnPassword
+);
+
+// Compartir la propia ubicación de alta precisión.
+// El navegador siempre solicita permiso explícito al usuario.
+router.post(
+  '/usuarios/me/location',
+  userLocationController.updateOwnLocation
+);
 
 // ============================================================
-// RUTAS CON PERMISOS (requieren permisos específicos)
+// RUTAS CON PERMISOS
 // ============================================================
 
-// Ver usuarios
-router.get('/usuarios', authorize('usuarios_view'), userController.getUsers);
+// Ver usuarios.
+router.get(
+  '/usuarios',
+  authorize('usuarios_view'),
+  userController.getUsers
+);
 
-// Ver usuario específico
-router.get('/usuarios/:id', authorize('usuarios_view'), userController.getUserById);
+// Ficha administrativa e historial de accesos (solo admin en controlador).
+router.get(
+  '/usuarios/:id/activity',
+  authorize('usuarios_view'),
+  userController.getUserActivity
+);
 
-// Crear usuario
-router.post('/usuarios', authorize('usuarios_create'), userController.createUser);
+// Ubicación actual e historial: permiso de lectura + validación admin en controlador.
+router.get(
+  '/usuarios/:id/location',
+  authorize('usuarios_view'),
+  userLocationController.getUserCurrentLocation
+);
 
-// Actualizar usuario
-router.put('/usuarios/:id', authorize('usuarios_edit'), userController.updateUser);
+router.get(
+  '/usuarios/:id/location/history',
+  authorize('usuarios_view'),
+  userLocationController.getUserLocationHistory
+);
 
-// Eliminar usuario (soft delete)
-router.delete('/usuarios/:id', authorize('usuarios_delete'), userController.deleteUser);
+// Ver usuario específico.
+router.get(
+  '/usuarios/:id',
+  authorize('usuarios_view'),
+  userController.getUserById
+);
 
-// Asignar rol a usuario
-router.put('/usuarios/:id/role', authorize('usuarios_edit'), userController.assignRole);
+// Crear usuario.
+router.post(
+  '/usuarios',
+  authorize('usuarios_create'),
+  userController.createUser
+);
 
-// Cambiar contraseña de otro usuario (solo admin)
-router.put('/usuarios/:id/password', authorize('usuarios_edit'), userController.changePassword);
+// Actualizar usuario.
+router.put(
+  '/usuarios/:id',
+  authorize('usuarios_edit'),
+  userController.updateUser
+);
+
+// Eliminar usuario (soft delete).
+router.delete(
+  '/usuarios/:id',
+  authorize('usuarios_delete'),
+  userController.deleteUser
+);
+
+// Asignar rol a usuario.
+router.put(
+  '/usuarios/:id/role',
+  authorize('usuarios_edit'),
+  userController.assignRole
+);
+
+// Restablecer contraseña de un usuario.
+// El middleware exige permiso de edición y el controlador vuelve a
+// validar que la cuenta autenticada tenga realmente el rol admin.
+router.put(
+  '/usuarios/:id/password',
+  authorize('usuarios_edit'),
+  userController.resetPasswordByAdmin
+);
 
 module.exports = router;

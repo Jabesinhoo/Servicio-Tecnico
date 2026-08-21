@@ -1,10 +1,11 @@
-// frontend/src/App.jsx
+﻿// frontend/src/App.jsx
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
 import DashboardLayout from './components/DashboardLayout';
+import MisServicios from './pages/Dashboard/MisServicios';
 
 // ============================================================
 // AUTH
@@ -158,6 +159,7 @@ const App = () => {
                   path="/dashboard/servicios"
                   element={<Servicios />}
                 />
+                <Route path="/dashboard/mis-servicios" element={<MisServicios />} />
 
                 <Route
                   path="/dashboard/inventarios"

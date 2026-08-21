@@ -1,4 +1,4 @@
-﻿// src/pages/Dashboard/Usuarios.jsx
+// src/pages/Dashboard/Usuarios.jsx
 
 import React, {
   useCallback,
@@ -12,6 +12,7 @@ import api from '../../services/api';
 
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import UsuarioForm from './usuarios/UsuarioForm';
+import UsuarioDetailModal from './usuarios/UsuarioDetailModal';
 
 import {
   Plus,
@@ -24,6 +25,10 @@ import {
   Shield,
   Mail,
   UserRound,
+  KeyRound,
+  Eye,
+  EyeOff,
+  CheckCircle2,
 } from 'lucide-react';
 
 // ============================================================
@@ -63,6 +68,23 @@ const getRoleName = (usuario) =>
   usuario?.rol ||
   'Sin rol';
 
+const formatDateTimeShort = (value) => {
+  if (!value) {
+    return 'Nunca';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat('es-CO', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+};
+
 // ============================================================
 // COMPONENTE
 // ============================================================
@@ -86,6 +108,9 @@ const Usuarios = () => {
     useState(false);
 
   const [pageError, setPageError] =
+    useState('');
+
+  const [pageSuccess, setPageSuccess] =
     useState('');
 
   const [filters, setFilters] =
@@ -118,6 +143,47 @@ const Usuarios = () => {
   const [
     statusAction,
     setStatusAction,
+  ] = useState(null);
+
+
+  const [
+    showPasswordModal,
+    setShowPasswordModal,
+  ] = useState(false);
+
+  const [
+    passwordUsuario,
+    setPasswordUsuario,
+  ] = useState(null);
+
+  const [
+    newPassword,
+    setNewPassword,
+  ] = useState('');
+
+  const [
+    confirmNewPassword,
+    setConfirmNewPassword,
+  ] = useState('');
+
+  const [
+    showNewPassword,
+    setShowNewPassword,
+  ] = useState(false);
+
+  const [
+    passwordLoading,
+    setPasswordLoading,
+  ] = useState(false);
+
+  const [
+    passwordError,
+    setPasswordError,
+  ] = useState('');
+
+  const [
+    detailUsuarioId,
+    setDetailUsuarioId,
   ] = useState(null);
 
   // ============================================================
@@ -504,6 +570,121 @@ const Usuarios = () => {
     };
 
   // ============================================================
+  // RESTABLECER CONTRASEÑA (ADMIN)
+  // ============================================================
+
+  const openPasswordModal = (usuario) => {
+    if (!isAdmin) {
+      return;
+    }
+
+    setPasswordUsuario(usuario);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setShowNewPassword(false);
+    setPasswordError('');
+    setPageSuccess('');
+    setShowPasswordModal(true);
+  };
+
+  const closePasswordModal = () => {
+    if (passwordLoading) {
+      return;
+    }
+
+    setShowPasswordModal(false);
+    setPasswordUsuario(null);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setShowNewPassword(false);
+    setPasswordError('');
+  };
+
+  const handleAdminPasswordReset = async (event) => {
+    event.preventDefault();
+
+    if (!isAdmin || !passwordUsuario?.id) {
+      setPasswordError(
+        'Solo un administrador puede restablecer contraseñas.'
+      );
+      return;
+    }
+
+    if (!newPassword) {
+      setPasswordError('La nueva contraseña es requerida.');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError(
+        'La nueva contraseña debe tener mínimo 8 caracteres.'
+      );
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('Las contraseñas no coinciden.');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      setPasswordError('');
+      setPageError('');
+      setPageSuccess('');
+
+      await api.put(
+        `/api/usuarios/${passwordUsuario.id}/password`,
+        {
+          // No se aplica trim: las contraseñas se respetan exactamente.
+          newPassword,
+        }
+      );
+
+      const nombre =
+        getNombreCompleto(passwordUsuario) ||
+        passwordUsuario.usuario ||
+        'el usuario';
+
+      await fetchUsuarios();
+
+      setShowPasswordModal(false);
+      setPasswordUsuario(null);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setShowNewPassword(false);
+
+      setPageSuccess(
+        `Contraseña de ${nombre} actualizada correctamente.`
+      );
+    } catch (error) {
+      console.error(
+        'Error restableciendo contraseña:',
+        error.response?.data || error
+      );
+
+      setPasswordError(
+        error.response?.data?.message ||
+          'No fue posible restablecer la contraseña.'
+      );
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  // ============================================================
+  // FICHA DEL USUARIO (ADMIN)
+  // ============================================================
+
+  const openUserDetail = (usuario) => {
+    if (!isAdmin || !usuario?.id) {
+      return;
+    }
+
+    setDetailUsuarioId(usuario.id);
+  };
+
+  // ============================================================
   // FILTROS
   // ============================================================
 
@@ -638,6 +819,26 @@ const Usuarios = () => {
               }
               className="text-red-500 hover:text-red-700"
               aria-label="Cerrar error"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pageSuccess && (
+        <div className="p-4 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{pageSuccess}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPageSuccess('')}
+              className="text-green-600 hover:text-green-800"
+              aria-label="Cerrar mensaje"
             >
               <X className="w-4 h-4" />
             </button>
@@ -922,6 +1123,10 @@ const Usuarios = () => {
                     Estado
                   </th>
 
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Último acceso
+                  </th>
+
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     Acciones
                   </th>
@@ -935,7 +1140,7 @@ const Usuarios = () => {
                 0 ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="px-4 py-12 text-center text-gray-500 dark:text-gray-400"
                     >
                       No hay usuarios
@@ -1058,6 +1263,14 @@ const Usuarios = () => {
                             </span>
                           </td>
 
+                          {/* Último acceso */}
+
+                          <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                            {formatDateTimeShort(
+                              usuario.last_login
+                            )}
+                          </td>
+
                           {/* Acciones */}
 
                           <td className="px-4 py-4">
@@ -1066,6 +1279,21 @@ const Usuarios = () => {
 
                               {canEdit && (
                                 <>
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openUserDetail(
+                                          usuario
+                                        )
+                                      }
+                                      className="p-2 rounded-lg text-sky-600 hover:text-sky-800 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-900/30 transition-colors"
+                                      title="Ver ficha y accesos"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+                                  )}
+
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1078,6 +1306,21 @@ const Usuarios = () => {
                                   >
                                     <Edit className="w-4 h-4" />
                                   </button>
+
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openPasswordModal(
+                                          usuario
+                                        )
+                                      }
+                                      className="p-2 rounded-lg text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 transition-colors"
+                                      title="Cambiar contraseña"
+                                    >
+                                      <KeyRound className="w-4 h-4" />
+                                    </button>
+                                  )}
 
                                   <button
                                     type="button"
@@ -1168,6 +1411,158 @@ const Usuarios = () => {
           'activar'
             ? 'success'
             : 'warning'
+        }
+      />
+
+      {/* ======================================================
+          MODAL CAMBIAR CONTRASEÑA
+      ====================================================== */}
+
+      {showPasswordModal && passwordUsuario && (
+        <div
+          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center overflow-hidden p-0 sm:p-4 bg-black/50"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closePasswordModal();
+            }
+          }}
+        >
+          <div className="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-xl max-w-md w-full h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3 sm:gap-4 shrink-0">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  Cambiar contraseña
+                </h3>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {getNombreCompleto(passwordUsuario) ||
+                    passwordUsuario.usuario}
+                  {passwordUsuario.usuario
+                    ? ` · @${passwordUsuario.usuario}`
+                    : ''}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closePasswordModal}
+                disabled={passwordLoading}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-800 disabled:opacity-50"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminPasswordReset} className="flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+
+                {passwordError && (
+                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">
+                    {passwordError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Nueva contraseña *
+                  </label>
+
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(event) => {
+                        setNewPassword(event.target.value);
+                        if (passwordError) {
+                          setPasswordError('');
+                        }
+                      }}
+                      autoComplete="new-password"
+                      disabled={passwordLoading}
+                      placeholder="Mínimo 8 caracteres"
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowNewPassword((previous) => !previous)
+                      }
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      aria-label={
+                        showNewPassword
+                          ? 'Ocultar contraseña'
+                          : 'Mostrar contraseña'
+                      }
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Confirmar contraseña *
+                  </label>
+
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={confirmNewPassword}
+                    onChange={(event) => {
+                      setConfirmNewPassword(event.target.value);
+                      if (passwordError) {
+                        setPasswordError('');
+                      }
+                    }}
+                    autoComplete="new-password"
+                    disabled={passwordLoading}
+                    placeholder="Repite la nueva contraseña"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-t border-gray-200 dark:border-gray-800 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={closePasswordModal}
+                  disabled={passwordLoading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  {passwordLoading
+                    ? 'Actualizando...'
+                    : 'Cambiar contraseña'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          FICHA / ACTIVIDAD DEL USUARIO
+      ====================================================== */}
+
+      <UsuarioDetailModal
+        isOpen={Boolean(detailUsuarioId)}
+        userId={detailUsuarioId}
+        onClose={() =>
+          setDetailUsuarioId(null)
         }
       />
 

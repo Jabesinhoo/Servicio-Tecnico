@@ -1,29 +1,143 @@
 // backend/src/routes/service-orders.routes.js
+'use strict';
+
 const express = require('express');
+
 const router = express.Router();
-const { authRequired } = require('../middlewares/auth.middleware');
-const { allowRoles } = require('../middlewares/role.middleware');
-const serviceOrderController = require('../controllers/service-order.controller');
+
+const {
+  authRequired,
+} = require('../middlewares/auth.middleware');
+
+const {
+  allowRoles,
+} = require('../middlewares/role.middleware');
+
+const serviceOrderController =
+  require('../controllers/service-order.controller');
 
 router.use(authRequired);
 
-router.get('/service-orders', serviceOrderController.list);
+// ============================================================
+// P2 · FLUJO DEL TÉCNICO
+// IMPORTANTE: estas rutas deben ir antes de "/:id"
+// ============================================================
 
-router.get('/service-orders/:id', serviceOrderController.getById);
+router.get(
+  '/service-orders/my-work',
+  allowRoles('tecnico'),
+  serviceOrderController.myWork
+);
 
-router.post('/service-orders', serviceOrderController.create);
+router.get(
+  '/service-orders/work-board',
+  allowRoles('admin'),
+  serviceOrderController.adminWorkBoard
+);
 
-router.put('/service-orders/:id', serviceOrderController.update);
+router.post(
+  '/service-orders/:id/assignment/accept',
+  allowRoles('tecnico'),
+  serviceOrderController.acceptAssignment
+);
 
-router.patch('/service-orders/:id/status', serviceOrderController.changeStatus);
+router.post(
+  '/service-orders/:id/assignment/impediment',
+  allowRoles('tecnico'),
+  serviceOrderController.reportAssignmentImpediment
+);
 
-router.patch('/service-orders/:id/assign', allowRoles('admin'), serviceOrderController.assignTech);
+router.post(
+  '/service-orders/:id/custody/take',
+  allowRoles('tecnico'),
+  serviceOrderController.takeCustody
+);
 
-router.post('/service-orders/:id/parts', serviceOrderController.addPart);
+router.get(
+  '/service-orders/:id/reception-checklist',
+  allowRoles('admin', 'tecnico'),
+  serviceOrderController.getReceptionChecklist
+);
 
-router.delete('/service-orders/:id', allowRoles('admin'), serviceOrderController.delete);
+router.put(
+  '/service-orders/:id/reception-checklist',
+  allowRoles('tecnico'),
+  serviceOrderController.saveReceptionChecklist
+);
 
-router.patch('/service-orders/:id/approve', allowRoles('admin'), serviceOrderController.approve);
-router.patch('/service-orders/:id/reject', allowRoles('admin'), serviceOrderController.reject);
-router.put('/service-orders/:id', allowRoles('admin', 'tecnico'), serviceOrderController.update);
+router.post(
+  '/service-orders/:id/reception-checklist/confirm',
+  allowRoles('tecnico'),
+  serviceOrderController.confirmReceptionChecklist
+);
+
+// ============================================================
+// CONSULTA / CREACIÓN
+// ============================================================
+
+router.get(
+  '/service-orders',
+  serviceOrderController.list
+);
+
+router.get(
+  '/service-orders/:id',
+  serviceOrderController.getById
+);
+
+router.post(
+  '/service-orders',
+  serviceOrderController.create
+);
+
+// ============================================================
+// LIFECYCLE
+// ============================================================
+
+router.patch(
+  '/service-orders/:id/status',
+  allowRoles('admin', 'tecnico'),
+  serviceOrderController.changeStatus
+);
+
+router.patch(
+  '/service-orders/:id/assign',
+  allowRoles('admin'),
+  serviceOrderController.assignTech
+);
+
+router.patch(
+  '/service-orders/:id/approve',
+  allowRoles('admin'),
+  serviceOrderController.approve
+);
+
+router.patch(
+  '/service-orders/:id/reject',
+  allowRoles('admin'),
+  serviceOrderController.reject
+);
+
+// ============================================================
+// DIAGNÓSTICO / REPUESTOS / CANCELACIÓN
+// ============================================================
+
+router.put(
+  '/service-orders/:id',
+  allowRoles('admin', 'tecnico'),
+  serviceOrderController.update
+);
+
+router.post(
+  '/service-orders/:id/parts',
+  allowRoles('admin', 'tecnico'),
+  serviceOrderController.addPart
+);
+
+router.delete(
+  '/service-orders/:id',
+  allowRoles('admin'),
+  serviceOrderController.delete
+);
+
 module.exports = router;

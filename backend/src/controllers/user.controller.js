@@ -1,9 +1,9 @@
-﻿// backend/src/controllers/user.controller.js
+// backend/src/controllers/user.controller.js
 const db = require('../models');
 const { Usuario, sequelize } = db;
 const Role = sequelize.models.Role || db.Role;
 const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 // ============================================================
 // OBTENER TODOS LOS USUARIOS
 // ============================================================
@@ -223,7 +223,7 @@ const getUserById = async (req, res) => {
         as: 'role',
         include: ['permissions'],
       }],
-      attributes: { exclude: ['password'] },
+      attributes: { exclude: ['password', 'two_factor_secret'] },
     });
     
     if (!user) {
@@ -646,7 +646,7 @@ const updateUser = async (req, res) => {
         as: 'role',
         include: ['permissions'],
       }],
-      attributes: { exclude: ['password'] },
+      attributes: { exclude: ['password', 'two_factor_secret'] },
     });
     
     res.json({
@@ -753,7 +753,7 @@ const assignRole = async (req, res) => {
         as: 'role',
         include: ['permissions'],
       }],
-      attributes: { exclude: ['password'] },
+      attributes: { exclude: ['password', 'two_factor_secret'] },
     });
     
     res.json({
@@ -808,64 +808,357 @@ const getUsersByRole = async (req, res) => {
 };
 
 // ============================================================
-// CAMBIAR CONTRASEÃ‘A
+// CAMBIAR PROPIA CONTRASEÑA
 // ============================================================
-const changePassword = async (req, res) => {
+const changeOwnPassword = async (req, res) => {
   try {
-    const { id } = req.params;
+    const userId = req.user?.id;
     const { currentPassword, newPassword } = req.body;
-    
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario no autenticado',
+      });
+    }
+
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'ContraseÃ±a actual y nueva son requeridas',
+        message: 'La contraseña actual y la nueva contraseña son requeridas',
       });
     }
-    
-    if (newPassword.length < 8) {
+
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message: 'La nueva contraseÃ±a debe tener al menos 8 caracteres',
+        message: 'La nueva contraseña debe tener al menos 8 caracteres',
       });
     }
-    
-    const user = await Usuario.findByPk(id);
-    
+
+    const user = await Usuario.findByPk(userId);
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'Usuario no encontrado',
       });
     }
-    
-    // Verificar contraseÃ±a actual
-    const isValid = await bcrypt.compare(currentPassword, user.password);
-    
-    if (!isValid) {
+
+    const validPassword = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+
+    if (!validPassword) {
       return res.status(401).json({
         success: false,
-        message: 'ContraseÃ±a actual incorrecta',
+        message: 'La contraseña actual es incorrecta',
       });
     }
-    
-    // Hash de la nueva contraseÃ±a
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
+
+    const samePassword = await bcrypt.compare(
+      newPassword,
+      user.password
+    );
+
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'La nueva contraseña debe ser diferente a la actual',
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
     await user.update({
       password: hashedPassword,
       password_changed_at: new Date(),
+      failed_attempts: 0,
+      locked_until: null,
     });
-    
-    res.json({
+
+    return res.json({
       success: true,
-      message: 'ContraseÃ±a actualizada exitosamente',
+      message: 'Contraseña actualizada exitosamente',
     });
   } catch (error) {
-    console.error('Error al cambiar contraseÃ±a:', error);
-    res.status(500).json({
+    console.error('Error cambiando propia contraseña:', error);
+
+    return res.status(500).json({
       success: false,
-      message: 'Error al cambiar contraseÃ±a',
-      error: error.message,
+      message: 'Error al cambiar la contraseña',
+      error:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : undefined,
+    });
+  }
+};
+
+// ============================================================
+// RESTABLECER CONTRASEÑA POR ADMINISTRADOR
+// ============================================================
+const resetPasswordByAdmin = async (req, res) => {
+  try {
+    const adminId = req.user?.id;
+    const { id: targetUserId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!adminId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario no autenticado',
+      });
+    }
+
+    // Segunda barrera de seguridad: además del middleware de permisos,
+    // esta operación exige que la cuenta autenticada sea realmente admin.
+    const admin = await Usuario.findByPk(adminId, {
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          attributes: ['id', 'name', 'active'],
+        },
+      ],
+      attributes: ['id', 'rol', 'role_id', 'activo'],
+    });
+
+    if (!admin || admin.activo === false) {
+      return res.status(401).json({
+        success: false,
+        message: 'Administrador no encontrado o inactivo',
+      });
+    }
+
+    const adminRole = String(
+      admin.role?.name || admin.rol || ''
+    )
+      .trim()
+      .toLowerCase();
+
+    if (adminRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Solo un administrador puede restablecer contraseñas de otros usuarios',
+      });
+    }
+
+    if (!newPassword || typeof newPassword !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'La nueva contraseña es requerida',
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'La nueva contraseña debe tener al menos 8 caracteres',
+      });
+    }
+
+    const targetUser = await Usuario.findByPk(targetUserId);
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+    }
+
+    const samePassword = await bcrypt.compare(
+      newPassword,
+      targetUser.password
+    );
+
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'La nueva contraseña debe ser diferente a la contraseña actual',
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const changedAt = new Date();
+
+    await targetUser.update({
+      password: hashedPassword,
+      password_changed_at: changedAt,
+      failed_attempts: 0,
+      locked_until: null,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Contraseña restablecida exitosamente',
+      data: {
+        user_id: targetUser.id,
+        password_changed_at: changedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error restableciendo contraseña:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Error al restablecer la contraseña',
+      error:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : undefined,
+    });
+  }
+};
+
+// ============================================================
+// FICHA ADMINISTRATIVA + HISTORIAL DE ACCESOS
+// ============================================================
+const getUserActivity = async (req, res) => {
+  try {
+    const adminId = req.user?.id;
+    const { id: targetUserId } = req.params;
+
+    const parsedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isInteger(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), 100)
+      : 25;
+
+    if (!adminId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario no autenticado',
+      });
+    }
+
+    // Esta ficha contiene información de seguridad y accesos.
+    // Se restringe deliberadamente al rol admin, incluso si otro rol
+    // recibe accidentalmente el permiso usuarios_view.
+    const admin = await Usuario.findByPk(adminId, {
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          attributes: ['id', 'name', 'active'],
+        },
+      ],
+      attributes: ['id', 'rol', 'role_id', 'activo'],
+    });
+
+    const adminRole = String(
+      admin?.role?.name || admin?.rol || ''
+    )
+      .trim()
+      .toLowerCase();
+
+    if (!admin || admin.activo === false || adminRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Solo un administrador puede consultar la ficha de actividad de usuarios',
+      });
+    }
+
+    const targetUser = await Usuario.findByPk(targetUserId, {
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          attributes: ['id', 'name', 'description', 'active'],
+        },
+      ],
+      attributes: [
+        'id',
+        'nombre1',
+        'nombre2',
+        'apellidos',
+        'usuario',
+        'email',
+        'cedula',
+        'celular',
+        'rol',
+        'role_id',
+        'activo',
+        'last_login',
+        'password_changed_at',
+        'failed_attempts',
+        'locked_until',
+        'two_factor_enabled',
+        'created_at',
+        'updated_at',
+      ],
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+    }
+
+    let loginEvents = [];
+
+    try {
+      loginEvents = await sequelize.query(
+        `
+          SELECT
+            id,
+            user_id,
+            identifier,
+            success,
+            ip_address,
+            user_agent,
+            failure_reason,
+            created_at
+          FROM user_login_events
+          WHERE user_id = :userId
+          ORDER BY created_at DESC
+          LIMIT :limit
+        `,
+        {
+          replacements: {
+            userId: targetUserId,
+            limit,
+          },
+          type: QueryTypes.SELECT,
+        }
+      );
+    } catch (error) {
+      // Permite abrir la ficha incluso antes de aplicar el SQL de
+      // user_login_events. Así el despliegue no deja Usuarios inutilizable.
+      if (error?.original?.code !== '42P01' && error?.parent?.code !== '42P01') {
+        throw error;
+      }
+
+      console.warn(
+        'Tabla user_login_events aún no existe; se devuelve historial vacío.'
+      );
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        user: {
+          ...targetUser.toJSON(),
+          nombre_completo: targetUser.getNombreCompleto(),
+        },
+        login_events: loginEvents,
+        total_returned: loginEvents.length,
+      },
+    });
+  } catch (error) {
+    console.error('Error obteniendo ficha de actividad:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Error al obtener la ficha de actividad del usuario',
+      error:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : undefined,
     });
   }
 };
@@ -881,6 +1174,8 @@ module.exports = {
   deleteUser,
   assignRole,
   getUsersByRole,
-  changePassword,
+  getUserActivity,
+  changeOwnPassword,
+  resetPasswordByAdmin,
 };
 

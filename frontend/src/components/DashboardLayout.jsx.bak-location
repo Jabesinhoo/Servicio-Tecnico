@@ -1,4 +1,4 @@
-﻿// frontend/src/components/DashboardLayout.jsx
+// frontend/src/components/DashboardLayout.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -6,7 +6,6 @@ import ThemeToggle from './ThemeToggle';
 import ColorPicker from './ui/ColorPicker';
 import NotificacionesCampana from './ui/NotificacionesCampana';
 import IAChat from './ui/IAChat';
-import LocationTracker from './LocationTracker';
 
 import {
   LayoutDashboard,
@@ -54,18 +53,6 @@ const DashboardLayout = () => {
   // Navegación con permisos
   const navigation = useMemo(() => {
     const allNav = [
-      ...(
-        ['admin', 'tecnico'].includes(user?.role?.name || user?.rol)
-          ? [
-              {
-                name: 'Mis servicios',
-                href: '/dashboard/mis-servicios',
-                icon: Wrench,
-                permission: null,
-              },
-            ]
-          : []
-      ),
       { 
         name: 'Dashboard', 
         href: '/dashboard', 
@@ -145,7 +132,7 @@ const DashboardLayout = () => {
       if (!item.permission) return true;
       return canViewModule(item.permission);
     });
-  }, [canViewModule, user]);
+  }, [canViewModule]);
 
   const isActive = (href) => location.pathname === href;
 
@@ -325,7 +312,6 @@ const DashboardLayout = () => {
                 </span>
               </button>
               
-              <LocationTracker />
               <NotificacionesCampana />
               <ColorPicker />
               <ThemeToggle />

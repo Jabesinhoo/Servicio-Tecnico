@@ -1189,12 +1189,6 @@ const UsuarioForm = ({
             {initialData && (
               <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
 
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  La contraseña no se modifica desde esta pantalla.
-                  Los cambios de contraseña se gestionan mediante
-                  el endpoint específico de contraseña.
-                </p>
-
               </div>
             )}
           </div>
