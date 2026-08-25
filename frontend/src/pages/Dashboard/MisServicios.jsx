@@ -19,8 +19,10 @@ import {
   PlayCircle,
   RefreshCw,
   Save,
+  Search,
   ShieldCheck,
   TriangleAlert,
+  UserCheck,
   UserRoundCog,
   Wrench,
   X,
@@ -110,6 +112,39 @@ const technicianName = (service) =>
   service?.tecnico_nombre ||
   'Técnico sin nombre';
 
+
+const directoryTechnicianName = (tech) => {
+  const fullName = [tech?.nombre1, tech?.nombre2, tech?.apellidos]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return fullName || tech?.usuario || 'Técnico sin nombre';
+};
+
+const normalizeSearch = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const integrityBadge = (tech) => {
+  const status = tech?.location_integrity_status || 'unverified';
+  const network = tech?.network_trust_status || 'unknown';
+  const device = tech?.device_trust_status || 'unknown';
+  if (!tech?.last_location_at) return { label: 'Sin GPS reciente', cls: 'text-slate-500' };
+  if (network === 'blocked' || tech?.network_vpn || tech?.network_proxy || tech?.network_tor) {
+    return { label: 'Red anónima bloqueada', cls: 'text-red-600 dark:text-red-400' };
+  }
+  if (device === 'pending') return { label: 'Dispositivo pendiente', cls: 'text-amber-600 dark:text-amber-400' };
+  if (status === 'trusted') return { label: 'GPS validado', cls: 'text-emerald-600 dark:text-emerald-400' };
+  if (status === 'suspicious') return { label: 'GPS para revisar', cls: 'text-amber-600 dark:text-amber-400' };
+  if (status === 'rejected') return { label: 'GPS rechazado', cls: 'text-red-600 dark:text-red-400' };
+  return { label: 'GPS sin validar', cls: 'text-slate-500' };
+};
+
 const getActionState = (service) => {
   const assignment = service?.assignment_status;
   const hasCustody = Boolean(service?.has_custody);
@@ -181,6 +216,9 @@ const ServiceCard = ({
   onTakeCustody,
   onChangeStatus,
   onChecklist,
+  onEnRoute,
+  onArrived,
+  onConfigureGeofence,
   busyId,
   gps,
 }) => {
@@ -260,15 +298,36 @@ const ServiceCard = ({
         </div>
       </button>
 
-      {isAdmin && service.reception_checklist_id && (
-        <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4">
+      {isAdmin && (
+        <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => onChecklist(service)}
-            className="w-full min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold px-4 flex items-center justify-center gap-2"
+            onClick={() => onConfigureGeofence(service)}
+            className="min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-4 flex items-center justify-center gap-2"
           >
-            <Eye className="w-4 h-4" />
-            Ver checklist de recepción
+            <MapPin className="w-4 h-4" />
+            Punto del servicio
+          </button>
+          {service.reception_checklist_id && (
+            <button
+              type="button"
+              onClick={() => onChecklist(service)}
+              className="min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold px-4 flex items-center justify-center gap-2"
+            >
+              <Eye className="w-4 h-4" />
+              Ver checklist
+            </button>
+          )}
+        </div>
+      )}
+
+      {!isAdmin && ['asignada', 'en_ejecucion', 'en_espera'].includes(service.estado) && service.assignment_status === 'aceptada' && (
+        <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button type="button" disabled={busy} onClick={() => onEnRoute(service)} className="min-h-11 rounded-xl border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-semibold px-4">
+            En camino
+          </button>
+          <button type="button" disabled={busy} onClick={() => onArrived(service)} className="min-h-11 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-semibold px-4">
+            Llegué al sitio
           </button>
         </div>
       )}
@@ -768,12 +827,14 @@ export default function MisServicios() {
   const { user } = useAuth();
 
   const [services, setServices] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [gps, setGps] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('activos');
   const [technicianFilter, setTechnicianFilter] = useState('todos');
+  const [technicianSearch, setTechnicianSearch] = useState('');
   const [selectedService, setSelectedService] = useState(null);
   const [checklistService, setChecklistService] = useState(null);
   const [impedimentService, setImpedimentService] = useState(null);
@@ -803,7 +864,17 @@ export default function MisServicios() {
           : []
       );
 
-      if (!isAdmin) {
+      if (isAdmin) {
+        const techResponse = await api.get(
+          '/api/service-orders/work-board/technicians'
+        );
+
+        setTechnicians(
+          Array.isArray(techResponse.data?.data)
+            ? techResponse.data.data
+            : []
+        );
+      } else {
         setGps(response.data?.gps || null);
       }
     } catch (requestError) {
@@ -828,20 +899,30 @@ export default function MisServicios() {
     return () => window.clearInterval(timer);
   }, [canOpenModule, load]);
 
-  const technicians = useMemo(() => {
+  const filteredTechnicians = useMemo(() => {
     if (!isAdmin) return [];
 
-    const map = new Map();
+    const term = normalizeSearch(technicianSearch);
 
-    services.forEach((service) => {
-      if (!service.tecnico_id) return;
-      map.set(service.tecnico_id, technicianName(service));
+    return technicians.filter((tech) => {
+      if (!term) return true;
+
+      const haystack = normalizeSearch([
+        directoryTechnicianName(tech),
+        tech.usuario,
+        tech.cedula,
+        tech.celular,
+        tech.email,
+      ].filter(Boolean).join(' '));
+
+      return haystack.includes(term);
     });
+  }, [isAdmin, technicianSearch, technicians]);
 
-    return [...map.entries()]
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'es'));
-  }, [isAdmin, services]);
+  const selectedTechnician = useMemo(
+    () => technicians.find((tech) => tech.id === technicianFilter) || null,
+    [technicianFilter, technicians]
+  );
 
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
@@ -905,6 +986,67 @@ export default function MisServicios() {
       })
     );
 
+  const markEnRoute = (service) =>
+    runAction(service, () =>
+      api.post(`/api/service-orders/${service.id}/visit/en-route`)
+    );
+
+  const markArrived = (service) =>
+    runAction(service, () =>
+      api.post(`/api/service-orders/${service.id}/visit/arrived`)
+    );
+
+  const configureGeofence = async (service) => {
+    try {
+      const current = await api.get(`/api/service-orders/${service.id}/geofence`);
+      const existing = current.data?.data || {};
+      const latitude = window.prompt('Latitud del punto del servicio', existing.latitude ?? '');
+      if (latitude === null) return;
+      const longitude = window.prompt('Longitud del punto del servicio', existing.longitude ?? '');
+      if (longitude === null) return;
+      const radius = window.prompt('Radio permitido en metros (recomendado 150)', existing.radius_m ?? '150');
+      if (radius === null) return;
+      await api.put(`/api/service-orders/${service.id}/geofence`, {
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        radius_m: Number(radius),
+      });
+      window.alert('Punto del servicio guardado.');
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No fue posible configurar el punto del servicio');
+    }
+  };
+
+  const manageTechnicianDevices = async (tech) => {
+    try {
+      const response = await api.get(`/api/service-orders/work-board/technicians/${tech.id}/devices`);
+      const devices = Array.isArray(response.data?.data) ? response.data.data : [];
+      if (devices.length === 0) {
+        window.alert('Este técnico todavía no ha registrado un dispositivo.');
+        return;
+      }
+      const pending = devices.find((item) => item.trust_status === 'pending');
+      const summary = devices.map((item, index) => `${index + 1}. ${item.platform || 'Dispositivo'} · ${item.trust_status}`).join('\n');
+      if (!pending) {
+        window.alert(`Dispositivos registrados:
+
+${summary}`);
+        return;
+      }
+      const approve = window.confirm(`Dispositivos registrados:
+
+${summary}
+
+Hay un dispositivo pendiente. ¿Autorizarlo?`);
+      if (!approve) return;
+      await api.post(`/api/service-orders/work-board/technicians/${tech.id}/devices/${pending.id}/approve`);
+      window.alert('Dispositivo autorizado.');
+      await load(true);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No fue posible gestionar dispositivos');
+    }
+  };
+
   const confirmImpediment = async () => {
     if (!impedimentService) return;
 
@@ -960,12 +1102,80 @@ export default function MisServicios() {
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 sm:p-4">
         <div className={`grid grid-cols-1 ${isAdmin ? 'sm:grid-cols-2' : ''} gap-3`}>
           {isAdmin && (
-            <select value={technicianFilter} onChange={(event) => setTechnicianFilter(event.target.value)} className="min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3">
-              <option value="todos">Todos los técnicos</option>
-              {technicians.map((tech) => (
-                <option key={tech.id} value={tech.id}>{tech.name}</option>
-              ))}
-            </select>
+            <div className="sm:col-span-2 space-y-3 min-w-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="search"
+                  value={technicianSearch}
+                  onChange={(event) => setTechnicianSearch(event.target.value)}
+                  placeholder="Buscar técnico por nombre, usuario, cédula, celular o correo..."
+                  className="w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 pl-10 pr-3 text-sm"
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-950/60 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
+                  <span>{technicians.length} técnico(s) registrados en la base de datos</span>
+                  {selectedTechnician && (
+                    <button type="button" onClick={() => setTechnicianFilter('todos')} className="font-semibold text-blue-600 dark:text-blue-400">
+                      Quitar filtro
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-56 overflow-y-auto overscroll-contain p-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  <button
+                    type="button"
+                    onClick={() => setTechnicianFilter('todos')}
+                    className={`min-h-14 text-left rounded-xl border px-3 py-2 transition-colors ${technicianFilter === 'todos' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="font-semibold text-sm">Todos los técnicos</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">Ver toda la operación técnica</p>
+                  </button>
+
+                  {filteredTechnicians.map((tech) => {
+                    const badge = integrityBadge(tech);
+                    const selected = technicianFilter === tech.id;
+
+                    return (
+                      <div
+                        key={tech.id}
+                        className={`min-h-14 text-left rounded-xl border px-3 py-2 transition-colors ${selected ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-700'}`}
+                      >
+                        <button type="button" onClick={() => setTechnicianFilter(tech.id)} className="w-full text-left">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{directoryTechnicianName(tech)}</p>
+                            <p className="text-xs text-slate-500 truncate">@{tech.usuario || 'sin-usuario'} · {tech.activo === false ? 'Inactivo' : 'Activo'}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold">
+                            {Number(tech.active_service_count || 0)} OS
+                          </span>
+                        </div>
+                        <p className={`mt-1 text-[11px] ${badge.cls}`}>
+                          {badge.label}
+                          {tech.location_accuracy_m ? ` · ±${Math.round(Number(tech.location_accuracy_m))} m` : ''}
+                        </p>
+                        </button>
+                        <button type="button" onClick={() => manageTechnicianDevices(tech)} className="mt-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300 underline underline-offset-2">
+                          Dispositivos de ubicación
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {filteredTechnicians.length === 0 && (
+                    <div className="md:col-span-2 xl:col-span-3 p-6 text-center text-sm text-slate-500">
+                      No hay técnicos que coincidan con la búsqueda.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           <select value={filter} onChange={(event) => setFilter(event.target.value)} className="min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3">
@@ -1002,6 +1212,9 @@ export default function MisServicios() {
               onTakeCustody={takeCustody}
               onChangeStatus={changeStatus}
               onChecklist={setChecklistService}
+              onEnRoute={markEnRoute}
+              onArrived={markArrived}
+              onConfigureGeofence={configureGeofence}
               busyId={busyId}
               gps={gps}
             />

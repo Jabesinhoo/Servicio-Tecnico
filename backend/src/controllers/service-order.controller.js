@@ -29,6 +29,15 @@ function isUuid(value) {
   return typeof value === 'string' && UUID_RE.test(value);
 }
 
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1);
+  const dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 async function safeRollback(client) {
   try {
     await client.query('ROLLBACK');
@@ -52,6 +61,11 @@ const CUSTODY_MAX_ACCURACY_M = Math.max(
 const CUSTODY_LOCATION_MAX_AGE_MINUTES = Math.max(
   1,
   Number(process.env.CUSTODY_LOCATION_MAX_AGE_MINUTES || 5)
+);
+
+const CUSTODY_MAX_LOCATION_RISK_SCORE = Math.max(
+  0,
+  Math.min(100, Number(process.env.CUSTODY_MAX_LOCATION_RISK_SCORE || 34))
 );
 
 const CUSTODY_REQUIRE_PRECISE_LOCATION =
@@ -87,15 +101,33 @@ async function getRecentPreciseLocation(
           altitude_m,
           heading_deg,
           speed_mps,
+          integrity_status,
+          integrity_score,
+          integrity_flags,
+          movement_speed_kmh,
+          network_changed,
+          network_trust_status,
+          network_proxy,
+          network_vpn,
+          network_tor,
+          network_hosting,
+          network_fraud_score,
+          device_id,
+          device_trust_status,
+          precision_tier,
           captured_at,
           received_at
         FROM user_current_locations
         WHERE user_id = $1
           AND accuracy_m <= $2
           AND captured_at >= NOW() - ($3::text || ' minutes')::interval
+          AND COALESCE(integrity_status, 'unverified') = 'trusted'
+          AND COALESCE(integrity_score, 0) <= $4
+          AND COALESCE(network_trust_status, 'unknown') <> 'blocked'
+          AND COALESCE(device_trust_status, 'unknown') = 'trusted'
         LIMIT 1
       `,
-      [userId, maxAccuracyM, maxAgeMinutes]
+      [userId, maxAccuracyM, maxAgeMinutes, CUSTODY_MAX_LOCATION_RISK_SCORE]
     );
 
     if (result.rows.length === 0) return null;
@@ -112,6 +144,21 @@ async function getRecentPreciseLocation(
         row.heading_deg === null ? null : Number(row.heading_deg),
       speed_mps:
         row.speed_mps === null ? null : Number(row.speed_mps),
+      integrity_status: row.integrity_status || 'unverified',
+      integrity_score: Number(row.integrity_score || 0),
+      integrity_flags: row.integrity_flags || [],
+      movement_speed_kmh:
+        row.movement_speed_kmh === null ? null : Number(row.movement_speed_kmh),
+      network_changed: Boolean(row.network_changed),
+      network_trust_status: row.network_trust_status || 'unknown',
+      network_proxy: Boolean(row.network_proxy),
+      network_vpn: Boolean(row.network_vpn),
+      network_tor: Boolean(row.network_tor),
+      network_hosting: Boolean(row.network_hosting),
+      network_fraud_score: row.network_fraud_score === null ? null : Number(row.network_fraud_score),
+      device_id: row.device_id || null,
+      device_trust_status: row.device_trust_status || 'unknown',
+      precision_tier: row.precision_tier || 'precise',
       captured_at: row.captured_at,
       received_at: row.received_at,
     };
@@ -1553,6 +1600,118 @@ exports.adminWorkBoard = async (req, res) => {
 };
 
 // ============================================================
+// P4 · DIRECTORIO DE TÉCNICOS PARA EL TABLERO ADMIN
+// Devuelve TODOS los técnicos de la base de datos, incluso sin OS activas.
+// ============================================================
+
+exports.workBoardTechnicians = async (req, res) => {
+  try {
+    if (!isAdminRole(req)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Solo el administrador puede consultar el directorio técnico',
+      });
+    }
+
+    let result;
+
+    try {
+      result = await pool.query(`
+        SELECT
+          u.id,
+          u.nombre1,
+          u.nombre2,
+          u.apellidos,
+          u.usuario,
+          u.cedula,
+          u.celular,
+          u.email,
+          u.activo,
+          COUNT(so.id) FILTER (
+            WHERE so.estado::text NOT IN ('cerrada', 'cancelado', 'rechazado')
+          )::int AS active_service_count,
+          loc.latitude,
+          loc.longitude,
+          loc.accuracy_m AS location_accuracy_m,
+          loc.captured_at AS last_location_at,
+          loc.integrity_status AS location_integrity_status,
+          loc.integrity_score AS location_integrity_score,
+          loc.network_changed AS location_network_changed,
+          loc.network_trust_status,
+          loc.network_proxy,
+          loc.network_vpn,
+          loc.network_tor,
+          loc.network_hosting,
+          loc.network_fraud_score,
+          loc.device_id,
+          loc.device_trust_status,
+          loc.precision_tier
+        FROM usuarios u
+        LEFT JOIN roles r ON r.id = u.role_id
+        LEFT JOIN service_orders so ON so.tecnico_id = u.id
+        LEFT JOIN user_current_locations loc ON loc.user_id = u.id
+        WHERE LOWER(COALESCE(r.name, u.rol::text, '')) = 'tecnico'
+        GROUP BY
+          u.id, u.nombre1, u.nombre2, u.apellidos, u.usuario,
+          u.cedula, u.celular, u.email, u.activo,
+          loc.latitude, loc.longitude, loc.accuracy_m, loc.captured_at,
+          loc.integrity_status, loc.integrity_score, loc.network_changed,
+          loc.network_trust_status, loc.network_proxy, loc.network_vpn, loc.network_tor,
+          loc.network_hosting, loc.network_fraud_score, loc.device_id, loc.device_trust_status, loc.precision_tier
+        ORDER BY u.activo DESC, u.nombre1 ASC NULLS LAST, u.apellidos ASC NULLS LAST
+      `);
+    } catch (error) {
+      // Si el módulo de ubicación/integridad aún no está migrado,
+      // el directorio debe seguir mostrando todos los técnicos.
+      if (error?.code !== '42P01' && error?.code !== '42703') throw error;
+
+      result = await pool.query(`
+        SELECT
+          u.id,
+          u.nombre1,
+          u.nombre2,
+          u.apellidos,
+          u.usuario,
+          u.cedula,
+          u.celular,
+          u.email,
+          u.activo,
+          COUNT(so.id) FILTER (
+            WHERE so.estado::text NOT IN ('cerrada', 'cancelado', 'rechazado')
+          )::int AS active_service_count,
+          NULL::numeric AS latitude,
+          NULL::numeric AS longitude,
+          NULL::numeric AS location_accuracy_m,
+          NULL::timestamptz AS last_location_at,
+          'unverified'::varchar AS location_integrity_status,
+          0::int AS location_integrity_score,
+          FALSE AS location_network_changed,
+          'unknown'::varchar AS network_trust_status,
+          FALSE AS network_proxy, FALSE AS network_vpn, FALSE AS network_tor, FALSE AS network_hosting,
+          NULL::numeric AS network_fraud_score, NULL::varchar AS device_id,
+          'unknown'::varchar AS device_trust_status, 'provisional'::varchar AS precision_tier
+        FROM usuarios u
+        LEFT JOIN roles r ON r.id = u.role_id
+        LEFT JOIN service_orders so ON so.tecnico_id = u.id
+        WHERE LOWER(COALESCE(r.name, u.rol::text, '')) = 'tecnico'
+        GROUP BY
+          u.id, u.nombre1, u.nombre2, u.apellidos, u.usuario,
+          u.cedula, u.celular, u.email, u.activo
+        ORDER BY u.activo DESC, u.nombre1 ASC NULLS LAST, u.apellidos ASC NULLS LAST
+      `);
+    }
+
+    return res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error loading technician directory:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error al cargar el directorio de técnicos',
+    });
+  }
+};
+
+// ============================================================
 // P2 · ACEPTAR ASIGNACIÓN
 // ============================================================
 
@@ -2954,6 +3113,178 @@ exports.delete = async (req, res) => {
     return res.status(500).json({
       message: 'Error al cancelar la orden',
     });
+  } finally {
+    client.release();
+  }
+};
+
+// ============================================================
+// V6 · DISPOSITIVOS DE UBICACIÓN - ADMIN
+// ============================================================
+exports.getTechnicianLocationDevices = async (req, res) => {
+  try {
+    if (!isAdminRole(req)) return res.status(403).json({ success: false, message: 'Solo administrador' });
+    const { technicianId } = req.params;
+    if (!isUuid(technicianId)) return res.status(400).json({ success: false, message: 'ID de técnico no válido' });
+
+    const result = await pool.query(
+      `SELECT id, user_id, device_id, trust_status, platform, first_seen_at, last_seen_at, approved_at, revoked_at
+       FROM user_location_devices
+       WHERE user_id = $1
+       ORDER BY last_seen_at DESC`,
+      [technicianId]
+    );
+    return res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error loading technician devices:', error);
+    return res.status(500).json({ success: false, message: 'Error al cargar dispositivos' });
+  }
+};
+
+exports.approveTechnicianLocationDevice = async (req, res) => {
+  try {
+    if (!isAdminRole(req)) return res.status(403).json({ success: false, message: 'Solo administrador' });
+    const { technicianId, deviceId } = req.params;
+    if (!isUuid(technicianId) || !isUuid(deviceId)) return res.status(400).json({ success: false, message: 'Identificador no válido' });
+
+    const result = await pool.query(
+      `UPDATE user_location_devices
+       SET trust_status = 'trusted', approved_at = NOW(), approved_by = $1, revoked_at = NULL
+       WHERE id = $2 AND user_id = $3
+       RETURNING id, user_id, device_id, trust_status, platform, approved_at, last_seen_at`,
+      [req.user.id, deviceId, technicianId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ success: false, message: 'Dispositivo no encontrado' });
+    return res.json({ success: true, data: result.rows[0], message: 'Dispositivo autorizado' });
+  } catch (error) {
+    console.error('Error approving technician device:', error);
+    return res.status(500).json({ success: false, message: 'Error al autorizar dispositivo' });
+  }
+};
+
+exports.revokeTechnicianLocationDevice = async (req, res) => {
+  try {
+    if (!isAdminRole(req)) return res.status(403).json({ success: false, message: 'Solo administrador' });
+    const { technicianId, deviceId } = req.params;
+    const result = await pool.query(
+      `UPDATE user_location_devices
+       SET trust_status = 'revoked', revoked_at = NOW(), approved_at = NULL, approved_by = $1
+       WHERE id = $2 AND user_id = $3
+       RETURNING id, user_id, device_id, trust_status, revoked_at`,
+      [req.user.id, deviceId, technicianId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ success: false, message: 'Dispositivo no encontrado' });
+    return res.json({ success: true, data: result.rows[0], message: 'Dispositivo revocado' });
+  } catch (error) {
+    console.error('Error revoking technician device:', error);
+    return res.status(500).json({ success: false, message: 'Error al revocar dispositivo' });
+  }
+};
+
+// ============================================================
+// V6 · GEOCERCA DE SERVICIO - ADMIN
+// ============================================================
+exports.getServiceGeofence = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) return res.status(400).json({ success: false, message: 'ID de orden no válido' });
+    const result = await pool.query(`SELECT * FROM service_order_geofences WHERE service_order_id = $1 LIMIT 1`, [id]);
+    return res.json({ success: true, data: result.rows[0] || null });
+  } catch (error) {
+    console.error('Error loading geofence:', error);
+    return res.status(500).json({ success: false, message: 'Error al cargar geocerca' });
+  }
+};
+
+exports.setServiceGeofence = async (req, res) => {
+  try {
+    if (!isAdminRole(req)) return res.status(403).json({ success: false, message: 'Solo administrador' });
+    const { id } = req.params;
+    const latitude = Number(req.body?.latitude);
+    const longitude = Number(req.body?.longitude);
+    const radiusM = Number(req.body?.radius_m || 150);
+    if (!isUuid(id) || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180 || !Number.isFinite(radiusM) || radiusM < 25 || radiusM > 2000) {
+      return res.status(400).json({ success: false, message: 'Coordenadas o radio no válidos' });
+    }
+    const result = await pool.query(
+      `INSERT INTO service_order_geofences (service_order_id, latitude, longitude, radius_m, created_by, updated_by, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$5,NOW(),NOW())
+       ON CONFLICT (service_order_id) DO UPDATE SET latitude=EXCLUDED.latitude, longitude=EXCLUDED.longitude, radius_m=EXCLUDED.radius_m, updated_by=EXCLUDED.updated_by, updated_at=NOW()
+       RETURNING *`,
+      [id, latitude, longitude, radiusM, req.user.id]
+    );
+    return res.json({ success: true, data: result.rows[0], message: 'Geocerca guardada' });
+  } catch (error) {
+    console.error('Error setting geofence:', error);
+    return res.status(500).json({ success: false, message: 'Error al guardar geocerca' });
+  }
+};
+
+// ============================================================
+// V6 · VISITA TÉCNICA: EN CAMINO / LLEGADA VALIDADA
+// ============================================================
+exports.markEnRoute = async (req, res) => {
+  try {
+    if (!isTechnicianRole(req)) return res.status(403).json({ success: false, message: 'Solo técnico' });
+    const { id } = req.params;
+    const own = await pool.query(`SELECT id FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1`, [id, req.user.id]);
+    if (!own.rows[0]) return res.status(404).json({ success: false, message: 'Servicio no asignado a este técnico' });
+    await pool.query(
+      `INSERT INTO service_order_visit_events (id, service_order_id, tecnico_id, event_type, created_at)
+       VALUES ($1,$2,$3,'en_camino',NOW())`,
+      [randomUUID(), id, req.user.id]
+    );
+    return res.json({ success: true, message: 'Estado de visita actualizado' });
+  } catch (error) {
+    console.error('Error marking en route:', error);
+    return res.status(500).json({ success: false, message: 'Error al actualizar visita' });
+  }
+};
+
+exports.markArrived = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    if (!isTechnicianRole(req)) return res.status(403).json({ success: false, message: 'Solo técnico' });
+    const { id } = req.params;
+    await client.query('BEGIN');
+    const own = await client.query(`SELECT id FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1 FOR UPDATE`, [id, req.user.id]);
+    if (!own.rows[0]) { await safeRollback(client); return res.status(404).json({ success: false, message: 'Servicio no asignado a este técnico' }); }
+
+    const fenceResult = await client.query(`SELECT * FROM service_order_geofences WHERE service_order_id=$1 LIMIT 1`, [id]);
+    const fence = fenceResult.rows[0];
+    if (!fence) { await safeRollback(client); return res.status(409).json({ success: false, code: 'GEOFENCE_NOT_CONFIGURED', message: 'La ubicación objetivo del servicio todavía no está configurada' }); }
+
+    const location = await getRecentPreciseLocation(client, req.user.id);
+    if (!location) { await safeRollback(client); return res.status(409).json({ success: false, code: 'TRUSTED_PRECISE_LOCATION_REQUIRED', message: 'No fue posible validar una ubicación precisa y confiable para confirmar la llegada' }); }
+
+    const distance = haversineMeters(
+      location.latitude,
+      location.longitude,
+      Number(fence.latitude),
+      Number(fence.longitude)
+    );
+
+    if (distance > Number(fence.radius_m)) {
+      await safeRollback(client);
+      return res.status(409).json({
+        success: false,
+        code: 'OUTSIDE_SERVICE_GEOFENCE',
+        message: 'No fue posible validar la llegada en el punto del servicio',
+      });
+    }
+
+    await client.query(
+      `INSERT INTO service_order_visit_events
+       (id, service_order_id, tecnico_id, event_type, latitude, longitude, accuracy_m, distance_to_target_m, network_trust_status, device_trust_status, created_at)
+       VALUES ($1,$2,$3,'llegada_validada',$4,$5,$6,$7,$8,$9,NOW())`,
+      [randomUUID(), id, req.user.id, location.latitude, location.longitude, location.accuracy_m, distance, location.network_trust_status, location.device_trust_status]
+    );
+    await client.query('COMMIT');
+    return res.json({ success: true, message: 'Llegada validada correctamente' });
+  } catch (error) {
+    await safeRollback(client);
+    console.error('Error marking arrival:', error);
+    return res.status(500).json({ success: false, message: 'Error al validar llegada' });
   } finally {
     client.release();
   }

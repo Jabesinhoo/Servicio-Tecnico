@@ -35,6 +35,54 @@ router.get(
   serviceOrderController.adminWorkBoard
 );
 
+router.get(
+  '/service-orders/work-board/technicians',
+  allowRoles('admin'),
+  serviceOrderController.workBoardTechnicians
+);
+
+router.get(
+  '/service-orders/work-board/technicians/:technicianId/devices',
+  allowRoles('admin'),
+  serviceOrderController.getTechnicianLocationDevices
+);
+
+router.post(
+  '/service-orders/work-board/technicians/:technicianId/devices/:deviceId/approve',
+  allowRoles('admin'),
+  serviceOrderController.approveTechnicianLocationDevice
+);
+
+router.post(
+  '/service-orders/work-board/technicians/:technicianId/devices/:deviceId/revoke',
+  allowRoles('admin'),
+  serviceOrderController.revokeTechnicianLocationDevice
+);
+
+router.get(
+  '/service-orders/:id/geofence',
+  allowRoles('admin', 'tecnico'),
+  serviceOrderController.getServiceGeofence
+);
+
+router.put(
+  '/service-orders/:id/geofence',
+  allowRoles('admin'),
+  serviceOrderController.setServiceGeofence
+);
+
+router.post(
+  '/service-orders/:id/visit/en-route',
+  allowRoles('tecnico'),
+  serviceOrderController.markEnRoute
+);
+
+router.post(
+  '/service-orders/:id/visit/arrived',
+  allowRoles('tecnico'),
+  serviceOrderController.markArrived
+);
+
 router.post(
   '/service-orders/:id/assignment/accept',
   allowRoles('tecnico'),

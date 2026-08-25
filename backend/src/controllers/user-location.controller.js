@@ -7,6 +7,7 @@ const db = require('../models');
 
 const { Usuario, sequelize } = db;
 const Role = sequelize.models.Role || db.Role;
+const { checkIpReputation } = require('../services/ip-reputation.service');
 
 const readPositiveNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -16,7 +17,12 @@ const readPositiveNumber = (value, fallback) => {
 };
 
 const MAX_ACCURACY_METERS = readPositiveNumber(
-  process.env.LOCATION_MAX_ACCURACY_M,
+  process.env.LOCATION_TRACKING_MAX_ACCURACY_M,
+  80
+);
+
+const PRECISE_ACCURACY_METERS = readPositiveNumber(
+  process.env.LOCATION_PRECISE_ACCURACY_M,
   25
 );
 
@@ -33,6 +39,30 @@ const HISTORY_MIN_SECONDS = readPositiveNumber(
 const HISTORY_MIN_DISTANCE_METERS = readPositiveNumber(
   process.env.LOCATION_HISTORY_MIN_DISTANCE_M,
   50
+);
+
+
+// Señales de integridad. Una VPN por sí sola NO cambia navigator.geolocation;
+// estas reglas buscan saltos físicamente imposibles, cambios bruscos de red
+// y contradicciones de telemetría. Los umbrales son configurables.
+const SUSPICIOUS_SPEED_KMH = readPositiveNumber(
+  process.env.LOCATION_SUSPICIOUS_SPEED_KMH,
+  140
+);
+
+const REJECT_SPEED_KMH = readPositiveNumber(
+  process.env.LOCATION_REJECT_SPEED_KMH,
+  220
+);
+
+const RISK_REJECT_SCORE = Math.min(
+  100,
+  readPositiveNumber(process.env.LOCATION_RISK_REJECT_SCORE, 70)
+);
+
+const IP_CHANGE_WINDOW_SECONDS = readPositiveNumber(
+  process.env.LOCATION_IP_CHANGE_WINDOW_SECONDS,
+  600
 );
 
 const TABLE_MISSING_CODE = '42P01';
@@ -100,6 +130,142 @@ const haversineMeters = (lat1, lon1, lat2, lon2) => {
   );
 
   return earthRadius * c;
+
+};
+
+const getClientSignals = (body = {}) => ({
+  timezone: clampString(body.client_timezone, 100),
+  platform: clampString(body.client_platform, 100),
+  language: clampString(body.client_language, 40),
+  connectionType: clampString(body.client_connection_type, 40),
+});
+
+const getDeviceId = (body = {}) =>
+  clampString(body.device_id, 100);
+
+async function resolveDeviceTrust(userId, deviceId, clientSignals, userAgent, transaction) {
+  if (!deviceId) return 'unknown';
+
+  const existing = await sequelize.query(
+    `SELECT id, trust_status FROM user_location_devices WHERE user_id = :userId AND device_id = :deviceId LIMIT 1`,
+    { replacements: { userId, deviceId }, type: QueryTypes.SELECT, transaction }
+  );
+
+  if (existing[0]) {
+    await sequelize.query(
+      `UPDATE user_location_devices SET last_seen_at = NOW(), platform = COALESCE(:platform, platform), user_agent = COALESCE(:userAgent, user_agent) WHERE id = :id`,
+      { replacements: { id: existing[0].id, platform: clientSignals.platform, userAgent }, type: QueryTypes.UPDATE, transaction }
+    );
+    return existing[0].trust_status;
+  }
+
+  const trustedCount = await sequelize.query(
+    `SELECT COUNT(*)::int AS total FROM user_location_devices WHERE user_id = :userId AND trust_status = 'trusted'`,
+    { replacements: { userId }, type: QueryTypes.SELECT, transaction }
+  );
+
+  const trustStatus = Number(trustedCount[0]?.total || 0) === 0 ? 'trusted' : 'pending';
+  await sequelize.query(
+    `INSERT INTO user_location_devices (id, user_id, device_id, trust_status, platform, user_agent, first_seen_at, last_seen_at, approved_at) VALUES (:id, :userId, :deviceId, :trustStatus, :platform, :userAgent, NOW(), NOW(), CASE WHEN :trustStatus = 'trusted' THEN NOW() ELSE NULL END)`,
+    { replacements: { id: crypto.randomUUID(), userId, deviceId, trustStatus, platform: clientSignals.platform, userAgent }, type: QueryTypes.INSERT, transaction }
+  );
+  return trustStatus;
+}
+
+const evaluateLocationIntegrity = ({
+  previous,
+  location,
+  ipAddress,
+  userAgent,
+}) => {
+  const flags = [];
+  let score = 0;
+  let movementSpeedKmh = null;
+  let networkChanged = false;
+
+  // Precisión de 0-1 m en un teléfono convencional no prueba fraude,
+  // pero es una señal débil que conviene auditar.
+  if (location.accuracy_m < 1) {
+    score += 8;
+    flags.push('unusually_high_reported_accuracy');
+  }
+
+  if (previous) {
+    const previousCaptured = new Date(previous.captured_at);
+    const elapsedSeconds =
+      (location.captured_at.getTime() - previousCaptured.getTime()) / 1000;
+
+    if (elapsedSeconds > 0) {
+      const distanceMeters = haversineMeters(
+        Number(previous.latitude),
+        Number(previous.longitude),
+        location.latitude,
+        location.longitude
+      );
+
+      movementSpeedKmh = (distanceMeters / elapsedSeconds) * 3.6;
+
+      if (movementSpeedKmh > REJECT_SPEED_KMH) {
+        score = 100;
+        flags.push('physically_impossible_travel');
+      } else if (movementSpeedKmh > SUSPICIOUS_SPEED_KMH) {
+        score += 45;
+        flags.push('implausible_travel_speed');
+      }
+
+      const browserSpeedKmh =
+        location.speed_mps === null ? null : location.speed_mps * 3.6;
+
+      if (
+        browserSpeedKmh !== null &&
+        browserSpeedKmh > 25 &&
+        movementSpeedKmh < 3
+      ) {
+        score += 15;
+        flags.push('speed_coordinate_mismatch');
+      }
+
+      if (
+        previous.ip_address &&
+        ipAddress &&
+        previous.ip_address !== ipAddress &&
+        elapsedSeconds <= IP_CHANGE_WINDOW_SECONDS
+      ) {
+        networkChanged = true;
+        score += 10;
+        flags.push('network_ip_changed');
+      }
+    }
+
+    if (
+      previous.user_agent &&
+      userAgent &&
+      previous.user_agent !== userAgent
+    ) {
+      score += 15;
+      flags.push('user_agent_changed');
+    }
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const status =
+    score >= RISK_REJECT_SCORE
+      ? 'rejected'
+      : score >= 35
+        ? 'suspicious'
+        : 'trusted';
+
+  return {
+    status,
+    score,
+    flags,
+    movementSpeedKmh:
+      movementSpeedKmh === null
+        ? null
+        : Math.round(movementSpeedKmh * 10) / 10,
+    networkChanged,
+  };
 };
 
 const getAdmin = async (userId) => {
@@ -279,10 +445,25 @@ const updateOwnLocation = async (req, res) => {
     req.headers['user-agent'],
     1000
   );
+  const clientSignals = getClientSignals(req.body || {});
+  const deviceId = getDeviceId(req.body || {});
+  const precisionTier =
+    location.accuracy_m <= PRECISE_ACCURACY_METERS
+      ? 'precise'
+      : 'provisional';
+
+  const networkReputation = await checkIpReputation(ipAddress, {
+    userAgent,
+    language: clientSignals.language,
+  });
 
   const transaction = await sequelize.transaction();
 
   try {
+    const deviceTrustStatus = await resolveDeviceTrust(
+      userId, deviceId, clientSignals, userAgent, transaction
+    );
+
     // Rechazamos silenciosamente una posición más antigua que la actual.
     const currentRows = await sequelize.query(
       `
@@ -291,6 +472,10 @@ const updateOwnLocation = async (req, res) => {
           latitude,
           longitude,
           accuracy_m,
+          ip_address,
+          user_agent,
+          integrity_status,
+          integrity_score,
           captured_at,
           received_at
         FROM user_current_locations
@@ -321,6 +506,81 @@ const updateOwnLocation = async (req, res) => {
       });
     }
 
+    const integrity = evaluateLocationIntegrity({
+      previous: current,
+      location,
+      ipAddress,
+      userAgent,
+    });
+
+    if (integrity.status === 'rejected') {
+      await sequelize.query(
+        `
+          INSERT INTO user_location_integrity_events (
+            id, user_id, event_type, risk_score, flags,
+            latitude, longitude, accuracy_m, movement_speed_kmh,
+            ip_address, user_agent, captured_at, created_at
+          ) VALUES (
+            :id, :userId, 'location_rejected', :riskScore,
+            CAST(:flags AS jsonb), :latitude, :longitude, :accuracyM,
+            :movementSpeedKmh, :ipAddress, :userAgent, :capturedAt, :createdAt
+          )
+        `,
+        {
+          replacements: {
+            id: crypto.randomUUID(),
+            userId,
+            riskScore: integrity.score,
+            flags: JSON.stringify(integrity.flags),
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracyM: location.accuracy_m,
+            movementSpeedKmh: integrity.movementSpeedKmh,
+            ipAddress,
+            userAgent,
+            integrityStatus: integrity.status,
+            integrityScore: integrity.score,
+            integrityFlags: JSON.stringify(integrity.flags),
+            movementSpeedKmh: integrity.movementSpeedKmh,
+            networkChanged: integrity.networkChanged,
+            clientTimezone: clientSignals.timezone,
+            clientPlatform: clientSignals.platform,
+            clientLanguage: clientSignals.language,
+            clientConnectionType: clientSignals.connectionType,
+            precisionTier,
+            networkTrustStatus: networkReputation.status,
+            networkProvider: networkReputation.provider,
+            networkProxy: Boolean(networkReputation.proxy),
+            networkVpn: Boolean(networkReputation.vpn),
+            networkTor: Boolean(networkReputation.tor),
+            networkHosting: Boolean(networkReputation.hosting),
+            networkFraudScore: networkReputation.fraudScore,
+            deviceId,
+            deviceTrustStatus,
+            capturedAt: location.captured_at,
+            createdAt: receivedAt,
+          },
+          type: QueryTypes.INSERT,
+          transaction,
+        }
+      );
+
+      await transaction.commit();
+
+      return res.status(422).json({
+        success: false,
+        code: 'LOCATION_INTEGRITY_REJECTED',
+        message: 'No fue posible validar la integridad de esta lectura de ubicación',
+      });
+    }
+
+    if (networkReputation.block) {
+      await sequelize.query(
+        `INSERT INTO user_location_integrity_events (id, user_id, event_type, risk_score, flags, latitude, longitude, accuracy_m, ip_address, user_agent, captured_at, created_at) VALUES (:id, :userId, 'network_anonymizer_detected', :riskScore, CAST(:flags AS jsonb), :latitude, :longitude, :accuracyM, :ipAddress, :userAgent, :capturedAt, NOW())`,
+        { replacements: { id: crypto.randomUUID(), userId, riskScore: Math.max(70, Number(networkReputation.fraudScore || 70)), flags: JSON.stringify([networkReputation.vpn ? 'vpn' : null, networkReputation.proxy ? 'proxy' : null, networkReputation.tor ? 'tor' : null].filter(Boolean)), latitude: location.latitude, longitude: location.longitude, accuracyM: location.accuracy_m, ipAddress, userAgent, capturedAt: location.captured_at }, type: QueryTypes.INSERT, transaction }
+      );
+    }
+
     await sequelize.query(
       `
         INSERT INTO user_current_locations (
@@ -335,6 +595,18 @@ const updateOwnLocation = async (req, res) => {
           source,
           ip_address,
           user_agent,
+          integrity_status,
+          integrity_score,
+          integrity_flags,
+          movement_speed_kmh,
+          network_changed,
+          client_timezone,
+          client_platform,
+          client_language,
+          client_connection_type,
+          precision_tier, network_trust_status, network_provider,
+          network_proxy, network_vpn, network_tor, network_hosting, network_fraud_score,
+          device_id, device_trust_status,
           captured_at,
           received_at
         )
@@ -350,6 +622,18 @@ const updateOwnLocation = async (req, res) => {
           'browser_geolocation',
           :ipAddress,
           :userAgent,
+          :integrityStatus,
+          :integrityScore,
+          CAST(:integrityFlags AS jsonb),
+          :movementSpeedKmh,
+          :networkChanged,
+          :clientTimezone,
+          :clientPlatform,
+          :clientLanguage,
+          :clientConnectionType,
+          :precisionTier, :networkTrustStatus, :networkProvider,
+          :networkProxy, :networkVpn, :networkTor, :networkHosting, :networkFraudScore,
+          :deviceId, :deviceTrustStatus,
           :capturedAt,
           :receivedAt
         )
@@ -365,6 +649,25 @@ const updateOwnLocation = async (req, res) => {
           source = EXCLUDED.source,
           ip_address = EXCLUDED.ip_address,
           user_agent = EXCLUDED.user_agent,
+          integrity_status = EXCLUDED.integrity_status,
+          integrity_score = EXCLUDED.integrity_score,
+          integrity_flags = EXCLUDED.integrity_flags,
+          movement_speed_kmh = EXCLUDED.movement_speed_kmh,
+          network_changed = EXCLUDED.network_changed,
+          client_timezone = EXCLUDED.client_timezone,
+          client_platform = EXCLUDED.client_platform,
+          client_language = EXCLUDED.client_language,
+          client_connection_type = EXCLUDED.client_connection_type,
+          precision_tier = EXCLUDED.precision_tier,
+          network_trust_status = EXCLUDED.network_trust_status,
+          network_provider = EXCLUDED.network_provider,
+          network_proxy = EXCLUDED.network_proxy,
+          network_vpn = EXCLUDED.network_vpn,
+          network_tor = EXCLUDED.network_tor,
+          network_hosting = EXCLUDED.network_hosting,
+          network_fraud_score = EXCLUDED.network_fraud_score,
+          device_id = EXCLUDED.device_id,
+          device_trust_status = EXCLUDED.device_trust_status,
           captured_at = EXCLUDED.captured_at,
           received_at = EXCLUDED.received_at
         WHERE
@@ -384,6 +687,25 @@ const updateOwnLocation = async (req, res) => {
           speedMps: location.speed_mps,
           ipAddress,
           userAgent,
+          integrityStatus: integrity.status,
+          integrityScore: integrity.score,
+          integrityFlags: JSON.stringify(integrity.flags),
+          movementSpeedKmh: integrity.movementSpeedKmh,
+          networkChanged: integrity.networkChanged,
+          clientTimezone: clientSignals.timezone,
+          clientPlatform: clientSignals.platform,
+          clientLanguage: clientSignals.language,
+          clientConnectionType: clientSignals.connectionType,
+          precisionTier,
+          networkTrustStatus: networkReputation.status,
+          networkProvider: networkReputation.provider,
+          networkProxy: Boolean(networkReputation.proxy),
+          networkVpn: Boolean(networkReputation.vpn),
+          networkTor: Boolean(networkReputation.tor),
+          networkHosting: Boolean(networkReputation.hosting),
+          networkFraudScore: networkReputation.fraudScore,
+          deviceId,
+          deviceTrustStatus,
           capturedAt: location.captured_at,
           receivedAt,
         },
@@ -451,6 +773,25 @@ const updateOwnLocation = async (req, res) => {
             source,
             ip_address,
             user_agent,
+            integrity_status,
+            integrity_score,
+            integrity_flags,
+            movement_speed_kmh,
+            network_changed,
+            client_timezone,
+            client_platform,
+            client_language,
+            client_connection_type,
+            precision_tier,
+            network_trust_status,
+            network_provider,
+            network_proxy,
+            network_vpn,
+            network_tor,
+            network_hosting,
+            network_fraud_score,
+            device_id,
+            device_trust_status,
             captured_at,
             created_at
           )
@@ -467,6 +808,25 @@ const updateOwnLocation = async (req, res) => {
             'browser_geolocation',
             :ipAddress,
             :userAgent,
+            :integrityStatus,
+            :integrityScore,
+            CAST(:integrityFlags AS jsonb),
+            :movementSpeedKmh,
+            :networkChanged,
+            :clientTimezone,
+            :clientPlatform,
+            :clientLanguage,
+            :clientConnectionType,
+            :precisionTier,
+            :networkTrustStatus,
+            :networkProvider,
+            :networkProxy,
+            :networkVpn,
+            :networkTor,
+            :networkHosting,
+            :networkFraudScore,
+            :deviceId,
+            :deviceTrustStatus,
             :capturedAt,
             :createdAt
           )
@@ -485,6 +845,25 @@ const updateOwnLocation = async (req, res) => {
             speedMps: location.speed_mps,
             ipAddress,
             userAgent,
+            integrityStatus: integrity.status,
+            integrityScore: integrity.score,
+            integrityFlags: JSON.stringify(integrity.flags),
+            movementSpeedKmh: integrity.movementSpeedKmh,
+            networkChanged: integrity.networkChanged,
+            clientTimezone: clientSignals.timezone,
+            clientPlatform: clientSignals.platform,
+            clientLanguage: clientSignals.language,
+            clientConnectionType: clientSignals.connectionType,
+            precisionTier,
+            networkTrustStatus: networkReputation.status,
+            networkProvider: networkReputation.provider,
+            networkProxy: Boolean(networkReputation.proxy),
+            networkVpn: Boolean(networkReputation.vpn),
+            networkTor: Boolean(networkReputation.tor),
+            networkHosting: Boolean(networkReputation.hosting),
+            networkFraudScore: networkReputation.fraudScore,
+            deviceId,
+            deviceTrustStatus,
             capturedAt: location.captured_at,
             createdAt: receivedAt,
           },
@@ -506,6 +885,15 @@ const updateOwnLocation = async (req, res) => {
         captured_at: location.captured_at,
         received_at: receivedAt,
         history_saved: shouldSaveHistory,
+        integrity_status: integrity.status,
+        integrity_score: integrity.score,
+        movement_speed_kmh: integrity.movementSpeedKmh,
+        network_changed: integrity.networkChanged,
+        precision_tier: precisionTier,
+        precise_for_critical_actions: precisionTier === 'precise',
+        network_trust_status: networkReputation.status,
+        network_provider: networkReputation.provider,
+        device_trust_status: deviceTrustStatus,
         distance_from_last_history_m:
           distanceFromLastHistory === null
             ? null
@@ -586,6 +974,11 @@ const getUserCurrentLocation = async (req, res) => {
             heading_deg,
             speed_mps,
             source,
+            integrity_status,
+            integrity_score,
+            integrity_flags,
+            movement_speed_kmh,
+            network_changed,
             captured_at,
             received_at
           FROM user_current_locations
@@ -652,6 +1045,11 @@ const getUserCurrentLocation = async (req, res) => {
           current.speed_mps === null
             ? null
             : Number(current.speed_mps),
+        integrity_score: Number(current.integrity_score || 0),
+        movement_speed_kmh:
+          current.movement_speed_kmh === null
+            ? null
+            : Number(current.movement_speed_kmh),
         age_seconds: ageSeconds,
         is_stale: ageSeconds > CURRENT_STALE_SECONDS,
         stale_after_seconds: CURRENT_STALE_SECONDS,
@@ -714,6 +1112,11 @@ const getUserLocationHistory = async (req, res) => {
             heading_deg,
             speed_mps,
             source,
+            integrity_status,
+            integrity_score,
+            integrity_flags,
+            movement_speed_kmh,
+            network_changed,
             captured_at,
             created_at
           FROM user_location_history
@@ -761,6 +1164,11 @@ const getUserLocationHistory = async (req, res) => {
           row.speed_mps === null
             ? null
             : Number(row.speed_mps),
+        integrity_score: Number(row.integrity_score || 0),
+        movement_speed_kmh:
+          row.movement_speed_kmh === null
+            ? null
+            : Number(row.movement_speed_kmh),
       })),
       total_returned: rows.length,
     });
