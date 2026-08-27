@@ -460,13 +460,6 @@ const Tecnicos = () => {
 
     try {
       setError('');
-
-      /*
-       * Utilizamos el endpoint existente.
-       *
-       * El backend es quien define la política
-       * de eliminación / soft-delete.
-       */
       await api.delete(
         `/api/usuarios/${selectedTecnico.id}`
       );
