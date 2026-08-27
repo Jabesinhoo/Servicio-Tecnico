@@ -58,6 +58,13 @@ const CHECKLIST_LABELS = {
   confirmed: 'Recepción confirmada',
 };
 
+const AUTHORIZATION_LABELS = {
+  pending: 'Autorización pendiente',
+  approved: 'Autorizado por cliente',
+  rejected: 'Rechazado por cliente',
+  cancelled: 'Autorización cancelada',
+};
+
 const CONDITION_OPTIONS = [
   ['good', 'Buen estado'],
   ['scratches', 'Rayones'],
@@ -215,6 +222,22 @@ const getActionState = (service) => {
     return 'pause';
   }
 
+  if (
+    service?.estado === 'en_espera' &&
+    hasCustody &&
+    service?.authorization_status === 'pending'
+  ) {
+    return 'authorization_wait';
+  }
+
+  if (
+    service?.estado === 'en_espera' &&
+    hasCustody &&
+    service?.authorization_status === 'rejected'
+  ) {
+    return 'authorization_rejected';
+  }
+
   if (service?.estado === 'en_espera' && hasCustody) {
     return 'resume';
   }
@@ -248,6 +271,7 @@ const ServiceCard = ({
   onEvidence,
   onReceptionAct,
   onDiagnosis,
+  onAuthorization,
   busyId,
   gps,
 }) => {
@@ -346,6 +370,21 @@ const ServiceCard = ({
               Diagnóstico {service.diagnosis_status === 'confirmed' ? 'confirmado' : 'en borrador'}
             </span>
           )}
+
+          {service.authorization_status && (
+            <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${
+              service.authorization_status === 'approved'
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : service.authorization_status === 'rejected'
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                  : service.authorization_status === 'pending'
+                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+            }`}>
+              <BadgeCheck className="w-3.5 h-3.5" />
+              {AUTHORIZATION_LABELS[service.authorization_status] || service.authorization_status}
+            </span>
+          )}
         </div>
       </button>
 
@@ -374,6 +413,12 @@ const ServiceCard = ({
               <FileText className="w-4 h-4" /> Diagnóstico / resultado
             </button>
           )}
+
+          {service.diagnosis_status === 'confirmed' && (
+            <button type="button" onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold px-4 flex items-center justify-center gap-2 sm:col-span-2">
+              <BadgeCheck className="w-4 h-4" /> Autorización del cliente
+            </button>
+          )}
         </div>
       )}
 
@@ -397,6 +442,11 @@ const ServiceCard = ({
           <button type="button" disabled={busy} onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-semibold px-4 flex items-center justify-center gap-2">
             <FileText className="w-4 h-4" /> Diagnóstico / resultado
           </button>
+          {service.diagnosis_status === 'confirmed' && (
+            <button type="button" disabled={busy} onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold px-4 flex items-center justify-center gap-2 sm:col-span-2">
+              <BadgeCheck className="w-4 h-4" /> Autorización del cliente
+            </button>
+          )}
         </div>
       )}
 
@@ -497,6 +547,28 @@ const ServiceCard = ({
               <PauseCircle className="w-4 h-4" />
               Poner en espera
             </button>
+          )}
+
+          {action === 'authorization_wait' && (
+            <div className="space-y-2">
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-800 dark:text-amber-300">
+                El trabajo adicional está en espera de la decisión del cliente.
+              </div>
+              <button type="button" onClick={() => onAuthorization(service)} className="w-full min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold px-4">
+                Ver autorización
+              </button>
+            </div>
+          )}
+
+          {action === 'authorization_rejected' && (
+            <div className="space-y-2">
+              <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 p-3 text-sm text-rose-800 dark:text-rose-300">
+                El cliente rechazó el trabajo adicional. Revisa la autorización antes de continuar.
+              </div>
+              <button type="button" onClick={() => onAuthorization(service)} className="w-full min-h-11 rounded-xl border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-semibold px-4">
+                Ver decisión
+              </button>
+            </div>
           )}
 
           {action === 'resume' && (
@@ -1633,6 +1705,560 @@ const DiagnosisModal = ({ service, isAdmin, onClose, onEvidence, onRefresh }) =>
 };
 
 
+const AUTH_REQUEST_TYPES = [
+  ['additional_work', 'Trabajo adicional'],
+  ['repair', 'Reparación'],
+  ['materials', 'Materiales / repuestos'],
+  ['other', 'Otro'],
+];
+
+const AUTH_CHANNELS = [
+  ['whatsapp', 'WhatsApp'],
+  ['email', 'Correo'],
+  ['phone', 'Llamada'],
+  ['in_person', 'Presencial'],
+  ['other', 'Otro'],
+];
+
+const AuthorizationModal = ({
+  service,
+  isAdmin,
+  onClose,
+  onRefresh,
+}) => {
+  const [records, setRecords] = useState([]);
+  const [diagnosis, setDiagnosis] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [requestForm, setRequestForm] = useState({
+    request_type: 'additional_work',
+    subject: 'Autorización para trabajo adicional',
+    description: '',
+    estimated_amount: '',
+    requested_components: '',
+  });
+  const [decisionForm, setDecisionForm] = useState({
+    client_name: '',
+    client_document: '',
+    decision_channel: 'whatsapp',
+    decision_reference: '',
+    decision_note: '',
+  });
+
+  const current = records[0] || null;
+  const pending = current?.status === 'pending';
+
+  const loadAuthorization = useCallback(async () => {
+    if (!service?.id) return;
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const [authorizationResponse, diagnosisResponse] =
+        await Promise.all([
+          api.get(`/api/service-orders/${service.id}/authorizations`),
+          api.get(`/api/service-orders/${service.id}/diagnosis`),
+        ]);
+
+      const data = Array.isArray(authorizationResponse.data?.data)
+        ? authorizationResponse.data.data
+        : [];
+
+      setRecords(data);
+
+      const diagnosisData = diagnosisResponse.data?.data || null;
+      setDiagnosis(diagnosisData);
+
+      if (data.length === 0 && diagnosisData) {
+        setRequestForm((previous) => ({
+          ...previous,
+          description:
+            previous.description ||
+            diagnosisData.description ||
+            diagnosisData.functional_result ||
+            '',
+          estimated_amount:
+            previous.estimated_amount ||
+            diagnosisData.approximate_cost ||
+            '',
+          requested_components:
+            previous.requested_components ||
+            diagnosisData.required_components ||
+            '',
+        }));
+      }
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible cargar las autorizaciones'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [service?.id]);
+
+  useEffect(() => {
+    if (!service) return undefined;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    loadAuthorization();
+
+    const handleKey = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKey);
+
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [service, onClose, loadAuthorization]);
+
+  const createRequest = async () => {
+    if (!requestForm.subject.trim() || !requestForm.description.trim()) {
+      setError('Completa el asunto y la descripción de lo que se debe autorizar.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+
+      await api.post(
+        `/api/service-orders/${service.id}/authorizations`,
+        {
+          ...requestForm,
+          estimated_amount:
+            requestForm.estimated_amount === ''
+              ? null
+              : Number(requestForm.estimated_amount),
+        }
+      );
+
+      await loadAuthorization();
+      await onRefresh();
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible crear la solicitud de autorización'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadEvidence = async (file) => {
+    if (!current?.id || !file) return;
+
+    try {
+      setSaving(true);
+      setError('');
+
+      await api.post(
+        `/api/service-orders/${service.id}/authorizations/${current.id}/evidences`,
+        file,
+        {
+          params: {
+            name: file.name,
+            note: 'Evidencia de decisión del cliente',
+          },
+          headers: {
+            'Content-Type':
+              file.type || 'application/octet-stream',
+          },
+        }
+      );
+
+      await loadAuthorization();
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible cargar la evidencia'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEvidence = async (authorizationId, evidence) => {
+    try {
+      const response = await api.get(
+        `/api/service-orders/${service.id}/authorizations/${authorizationId}/evidences/${evidence.id}/file`,
+        { responseType: 'blob' }
+      );
+
+      const url = URL.createObjectURL(response.data);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible abrir la evidencia'
+      );
+    }
+  };
+
+  const decide = async (decision) => {
+    if (!current?.id) return;
+
+    if (
+      !decisionForm.client_name.trim() ||
+      !decisionForm.decision_channel
+    ) {
+      setError('Registra el nombre del cliente y el canal de la decisión.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+
+      await api.post(
+        `/api/service-orders/${service.id}/authorizations/${current.id}/decision`,
+        {
+          decision,
+          ...decisionForm,
+        }
+      );
+
+      await loadAuthorization();
+      await onRefresh();
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible registrar la decisión'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelRequest = async () => {
+    if (!current?.id) return;
+
+    if (!window.confirm('¿Cancelar esta solicitud pendiente?')) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+
+      await api.post(
+        `/api/service-orders/${service.id}/authorizations/${current.id}/cancel`,
+        { reason: 'Cancelada desde Mis servicios' }
+      );
+
+      await loadAuthorization();
+      await onRefresh();
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible cancelar la solicitud'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!service) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
+      <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:max-w-4xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
+        <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide font-semibold text-amber-600 dark:text-amber-300">
+              {service.codigo_os}
+            </p>
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+              Autorización del cliente
+            </h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Trabajos adicionales, reparaciones y repuestos.
+            </p>
+          </div>
+
+          <button type="button" onClick={onClose} className="shrink-0 w-10 h-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center" aria-label="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5 space-y-5" style={{ WebkitOverflowScrolling: 'touch' }}>
+          {error && (
+            <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 p-3 text-sm text-rose-700 dark:text-rose-300">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="py-10 text-center text-slate-500">Cargando autorización...</div>
+          ) : (
+            <>
+              {diagnosis && (
+                <section className="rounded-2xl border border-sky-200 dark:border-sky-900 bg-sky-50/70 dark:bg-sky-950/20 p-4">
+                  <p className="text-xs uppercase tracking-wide font-semibold text-sky-700 dark:text-sky-300">
+                    Diagnóstico confirmado
+                  </p>
+                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                    {diagnosis.description || diagnosis.functional_result || 'Sin descripción'}
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <Info label="Costo aproximado" value={diagnosis.approximate_cost ? `$${Number(diagnosis.approximate_cost).toLocaleString('es-CO')}` : 'No definido'} />
+                    <Info label="Componentes" value={diagnosis.required_components || 'No definidos'} />
+                  </div>
+                </section>
+              )}
+
+              {current ? (
+                <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-slate-900 dark:text-white">
+                        {current.subject}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Solicitada {formatDateTime(current.requested_at)}
+                      </p>
+                    </div>
+
+                    <span className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${
+                      current.status === 'approved'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : current.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                          : current.status === 'pending'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                    }`}>
+                      {AUTHORIZATION_LABELS[current.status] || current.status}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                    {current.description}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Info
+                      label="Valor estimado"
+                      value={
+                        current.estimated_amount !== null &&
+                        current.estimated_amount !== undefined
+                          ? `$${Number(current.estimated_amount).toLocaleString('es-CO')}`
+                          : 'No definido'
+                      }
+                    />
+                    <Info
+                      label="Componentes / repuestos"
+                      value={current.requested_components || 'No definidos'}
+                    />
+                  </div>
+
+                  {current.status !== 'pending' && (
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-950/40 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Info label="Cliente que decidió" value={current.client_name} />
+                      <Info label="Documento" value={current.client_document} />
+                      <Info label="Canal" value={current.decision_channel} />
+                      <Info label="Fecha decisión" value={formatDateTime(current.decided_at)} />
+                      <div className="sm:col-span-2">
+                        <Info label="Referencia / evidencia descrita" value={current.decision_reference} />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Info label="Observación" value={current.decision_note} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      Evidencias ({current.evidences?.length || 0})
+                    </p>
+
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {(current.evidences || []).map((evidence) => (
+                        <button
+                          key={evidence.id}
+                          type="button"
+                          onClick={() => openEvidence(current.id, evidence)}
+                          className="min-h-11 rounded-xl border border-slate-200 dark:border-slate-700 px-3 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                        >
+                          <span className="font-semibold block truncate">
+                            {evidence.original_name || 'Evidencia'}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {formatDateTime(evidence.created_at)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {pending && (
+                      <label className="mt-3 min-h-12 rounded-xl border border-dashed border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold flex items-center justify-center gap-2 px-3 cursor-pointer">
+                        <Camera className="w-4 h-4" />
+                        Adjuntar captura, foto o PDF
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/jpeg,image/png,image/webp,application/pdf"
+                          disabled={saving}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) uploadEvidence(file);
+                            event.target.value = '';
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {isAdmin && pending && (
+                    <div className="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-4">
+                      <h4 className="font-bold text-slate-900 dark:text-white">
+                        Registrar decisión del cliente
+                      </h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="text-sm font-semibold">Nombre del cliente *</span>
+                          <input value={decisionForm.client_name} onChange={(event) => setDecisionForm((prev) => ({ ...prev, client_name: event.target.value }))} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                        </label>
+
+                        <label className="block">
+                          <span className="text-sm font-semibold">Documento</span>
+                          <input value={decisionForm.client_document} onChange={(event) => setDecisionForm((prev) => ({ ...prev, client_document: event.target.value }))} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                        </label>
+
+                        <label className="block">
+                          <span className="text-sm font-semibold">Canal *</span>
+                          <select value={decisionForm.decision_channel} onChange={(event) => setDecisionForm((prev) => ({ ...prev, decision_channel: event.target.value }))} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3">
+                            {AUTH_CHANNELS.map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="block">
+                          <span className="text-sm font-semibold">Referencia verificable</span>
+                          <input value={decisionForm.decision_reference} onChange={(event) => setDecisionForm((prev) => ({ ...prev, decision_reference: event.target.value }))} placeholder="Ej: WhatsApp recibido 14:32" className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                        </label>
+                      </div>
+
+                      <label className="block">
+                        <span className="text-sm font-semibold">Observación</span>
+                        <textarea rows={3} value={decisionForm.decision_note} onChange={(event) => setDecisionForm((prev) => ({ ...prev, decision_note: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2" />
+                      </label>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button type="button" disabled={saving} onClick={() => decide('rejected')} className="min-h-12 rounded-xl border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-semibold">
+                          Rechazar trabajo adicional
+                        </button>
+                        <button type="button" disabled={saving} onClick={() => decide('approved')} className="min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold">
+                          Aprobar trabajo adicional
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {pending && !isAdmin && (
+                    <button type="button" disabled={saving} onClick={cancelRequest} className="w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold">
+                      Cancelar mi solicitud
+                    </button>
+                  )}
+                </section>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-300">
+                  Aún no hay una autorización registrada para esta orden.
+                </div>
+              )}
+
+              {!pending && diagnosis?.status === 'confirmed' && (
+                <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-4">
+                  <h4 className="font-bold text-slate-900 dark:text-white">
+                    {current ? 'Nueva solicitud revisada' : 'Solicitar autorización'}
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-sm font-semibold">Tipo *</span>
+                      <select value={requestForm.request_type} onChange={(event) => setRequestForm((prev) => ({ ...prev, request_type: event.target.value }))} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3">
+                        {AUTH_REQUEST_TYPES.map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-sm font-semibold">Valor estimado</span>
+                      <input type="number" min="0" step="0.01" value={requestForm.estimated_amount} onChange={(event) => setRequestForm((prev) => ({ ...prev, estimated_amount: event.target.value }))} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                    </label>
+                  </div>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold">Asunto *</span>
+                    <input value={requestForm.subject} onChange={(event) => setRequestForm((prev) => ({ ...prev, subject: event.target.value }))} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold">Descripción de lo que se autoriza *</span>
+                    <textarea rows={5} value={requestForm.description} onChange={(event) => setRequestForm((prev) => ({ ...prev, description: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2" />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold">Componentes / repuestos</span>
+                    <textarea rows={4} value={requestForm.requested_components} onChange={(event) => setRequestForm((prev) => ({ ...prev, requested_components: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2" />
+                  </label>
+
+                  <button type="button" disabled={saving} onClick={createRequest} className="w-full min-h-12 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold">
+                    Enviar a autorización
+                  </button>
+                </section>
+              )}
+
+              {records.length > 1 && (
+                <section>
+                  <h4 className="font-bold text-slate-900 dark:text-white">
+                    Historial de autorizaciones
+                  </h4>
+
+                  <div className="mt-3 space-y-2">
+                    {records.slice(1).map((record) => (
+                      <div key={record.id} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-semibold text-sm">
+                            {record.subject}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {AUTHORIZATION_LABELS[record.status] || record.status}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {formatDateTime(record.created_at)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </div>
+
+        <footer className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 bg-white dark:bg-slate-900">
+          <button type="button" onClick={onClose} className="w-full sm:w-auto sm:min-w-36 min-h-11 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold px-4">
+            Cerrar
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+};
+
+
 export default function MisServicios() {
   const { user } = useAuth();
 
@@ -1650,6 +2276,7 @@ export default function MisServicios() {
   const [evidenceContext, setEvidenceContext] = useState(null);
   const [receptionActService, setReceptionActService] = useState(null);
   const [diagnosisService, setDiagnosisService] = useState(null);
+  const [authorizationService, setAuthorizationService] = useState(null);
   const [impedimentService, setImpedimentService] = useState(null);
   const [impedimentReason, setImpedimentReason] = useState('');
 
@@ -1671,11 +2298,48 @@ export default function MisServicios() {
           : '/api/service-orders/my-work'
       );
 
-      setServices(
+      const baseServices =
         Array.isArray(response.data?.data)
           ? response.data.data
-          : []
-      );
+          : [];
+
+      let enrichedServices = baseServices;
+
+      try {
+        const authorizationResponse = await api.get(
+          '/api/service-orders/authorizations/overview'
+        );
+
+        const authorizationRows =
+          Array.isArray(authorizationResponse.data?.data)
+            ? authorizationResponse.data.data
+            : [];
+
+        const authorizationByOrder = new Map(
+          authorizationRows.map((item) => [
+            item.service_order_id,
+            item,
+          ])
+        );
+
+        enrichedServices = baseServices.map((item) => ({
+          ...item,
+          ...(authorizationByOrder.get(item.id) || {}),
+        }));
+      } catch (authorizationError) {
+        if (
+          authorizationError.response?.status !== 404 &&
+          authorizationError.response?.data?.code !==
+            'V8_TABLES_NOT_INSTALLED'
+        ) {
+          console.warn(
+            'No fue posible cargar resumen de autorizaciones',
+            authorizationError
+          );
+        }
+      }
+
+      setServices(enrichedServices);
 
       if (isAdmin) {
         const techResponse = await api.get(
@@ -2035,6 +2699,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
               onEvidence={openEvidence}
               onReceptionAct={setReceptionActService}
               onDiagnosis={setDiagnosisService}
+              onAuthorization={setAuthorizationService}
               busyId={busyId}
               gps={gps}
             />
@@ -2067,6 +2732,13 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
         isAdmin={isAdmin}
         onClose={() => setDiagnosisService(null)}
         onEvidence={openEvidence}
+        onRefresh={() => load(true)}
+      />
+
+      <AuthorizationModal
+        service={authorizationService}
+        isAdmin={isAdmin}
+        onClose={() => setAuthorizationService(null)}
         onRefresh={() => load(true)}
       />
     </div>

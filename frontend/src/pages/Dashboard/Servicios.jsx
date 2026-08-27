@@ -1,4 +1,4 @@
-// src/pages/Dashboard/Servicios.jsx
+﻿// src/pages/Dashboard/Servicios.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -6,11 +6,13 @@ import ServicioTable from './servicios/ServicioTable';
 import ServicioFilters from './servicios/ServicioFilters';
 import ServicioDetail from './servicios/ServicioDetail';
 import ServicioForm from './servicios/ServicioForm';
+import ServicioCreateWizard from './servicios/ServicioCreateWizard';
+import ServiceIntakeBoard from './servicios/components/ServiceIntakeBoard';
 import AssignTechModal from './servicios/AssignTechModal';
 import AddPartModal from './servicios/components/AddPartModal';
 import ServiceCard from './servicios/components/ServiceCard';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import { Plus, RefreshCw, LayoutGrid, Table, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, Table, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { useServicios } from './servicios/hooks/useServicios';
 
 const Servicios = () => {
@@ -29,6 +31,7 @@ const Servicios = () => {
     } = useServicios();
 
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showIntakesModal, setShowIntakesModal] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showAddPartModal, setShowAddPartModal] = useState(false);
@@ -169,7 +172,15 @@ const Servicios = () => {
                         <RefreshCw className="w-4 h-4" />
                         Actualizar
                     </button>
-                    {canCreate && (
+                                        {isAdmin && (
+                        <button
+                            onClick={() => setShowIntakesModal(true)}
+                            className="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors flex items-center gap-2"
+                        >
+                            <ClipboardList className="w-4 h-4" />
+                            Solicitudes previas
+                        </button>
+                    )}{canCreate && (
                         <button
                             onClick={() => setShowCreateModal(true)}
                             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -244,10 +255,17 @@ const Servicios = () => {
             )}
 
             {/* Modales */}
-            <ServicioForm
+            <ServicioCreateWizard
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
-                onSubmit={createServicio}
+                onCreated={fetchServicios}
+                userRole={userRole}
+            />
+
+            <ServiceIntakeBoard
+                isOpen={showIntakesModal}
+                onClose={() => setShowIntakesModal(false)}
+                onActivated={fetchServicios}
             />
 
             <ServicioDetail

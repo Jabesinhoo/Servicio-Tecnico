@@ -16,7 +16,64 @@ const {
 const serviceOrderController =
   require('../controllers/service-order.controller');
 
+const serviceAuthorizationController =
+  require('../controllers/service-authorization.controller');
+
+const serviceIntakeController =
+  require('../controllers/service-intake.controller');
+
+const {
+  blockResumeWhileClientAuthorization,
+} = require('../middlewares/service-authorization-guard.middleware');
+
 router.use(authRequired);
+
+// ============================================================
+// V9 · SOLICITUD / CLASIFICACIÓN / ACTIVACIÓN DE SERVICIO
+// Deben ir antes de /service-orders/:id
+// ============================================================
+
+router.get(
+  '/service-orders/intakes',
+  allowRoles('admin', 'tecnico'),
+  serviceIntakeController.list
+);
+
+router.get(
+  '/service-orders/intakes/:intakeId',
+  allowRoles('admin', 'tecnico'),
+  serviceIntakeController.getById
+);
+
+router.post(
+  '/service-orders/intakes',
+  allowRoles('admin', 'tecnico'),
+  serviceIntakeController.create
+);
+
+router.put(
+  '/service-orders/intakes/:intakeId',
+  allowRoles('admin', 'tecnico'),
+  serviceIntakeController.update
+);
+
+router.post(
+  '/service-orders/intakes/:intakeId/verify-payment',
+  allowRoles('admin'),
+  serviceIntakeController.verifyPayment
+);
+
+router.post(
+  '/service-orders/intakes/:intakeId/activate',
+  allowRoles('admin'),
+  serviceIntakeController.activate
+);
+
+router.post(
+  '/service-orders/intakes/:intakeId/cancel',
+  allowRoles('admin', 'tecnico'),
+  serviceIntakeController.cancel
+);
 
 // ============================================================
 // P2 · FLUJO DEL TÉCNICO
@@ -185,6 +242,52 @@ router.post(
 );
 
 // ============================================================
+// V8 · AUTORIZACIONES DEL CLIENTE
+// ============================================================
+
+router.get(
+  '/service-orders/authorizations/overview',
+  allowRoles('admin', 'tecnico'),
+  serviceAuthorizationController.overview
+);
+
+router.get(
+  '/service-orders/:id/authorizations',
+  allowRoles('admin', 'tecnico'),
+  serviceAuthorizationController.list
+);
+
+router.post(
+  '/service-orders/:id/authorizations',
+  allowRoles('admin', 'tecnico'),
+  serviceAuthorizationController.create
+);
+
+router.post(
+  '/service-orders/:id/authorizations/:authorizationId/evidences',
+  allowRoles('admin', 'tecnico'),
+  serviceAuthorizationController.uploadEvidence
+);
+
+router.get(
+  '/service-orders/:id/authorizations/:authorizationId/evidences/:evidenceId/file',
+  allowRoles('admin', 'tecnico'),
+  serviceAuthorizationController.getEvidenceFile
+);
+
+router.post(
+  '/service-orders/:id/authorizations/:authorizationId/decision',
+  allowRoles('admin'),
+  serviceAuthorizationController.decide
+);
+
+router.post(
+  '/service-orders/:id/authorizations/:authorizationId/cancel',
+  allowRoles('admin', 'tecnico'),
+  serviceAuthorizationController.cancel
+);
+
+// ============================================================
 // CONSULTA / CREACIÓN
 // ============================================================
 
@@ -210,6 +313,7 @@ router.post(
 router.patch(
   '/service-orders/:id/status',
   allowRoles('admin', 'tecnico'),
+  blockResumeWhileClientAuthorization,
   serviceOrderController.changeStatus
 );
 
