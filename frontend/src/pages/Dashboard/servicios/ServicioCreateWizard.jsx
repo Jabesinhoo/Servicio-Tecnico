@@ -12,6 +12,8 @@ import {
   Wrench,
   UsersRound,
   UserCheck,
+  Calendar,
+  AlertCircle,
 } from 'lucide-react';
 import api from '../../../services/api';
 
@@ -26,10 +28,10 @@ function clientName(client) {
   if (client.tipo_persona === 'juridica') {
     return client.razon_social || 'Cliente';
   }
-  return [
-    client.primer_nombre,
-    client.primer_apellido,
-  ].filter(Boolean).join(' ') || 'Cliente';
+  return (
+    [client.primer_nombre, client.primer_apellido].filter(Boolean).join(' ') ||
+    'Cliente'
+  );
 }
 
 function money(value) {
@@ -68,6 +70,7 @@ export default function ServicioCreateWizard({
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('transfer');
   const [paymentReference, setPaymentReference] = useState('');
+  const [schedulingMode, setSchedulingMode] = useState('auto');
 
   const [form, setForm] = useState({
     request_description: '',
@@ -90,6 +93,8 @@ export default function ServicioCreateWizard({
     postpaid_reason: '',
     priority: 'normal',
     estimated_duration: 60,
+    scheduled_date: '',
+    scheduled_time: '09:00',
   });
 
   useEffect(() => {
@@ -98,7 +103,8 @@ export default function ServicioCreateWizard({
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    api.get('/api/tipos-servicio')
+    api
+      .get('/api/tipos-servicio')
       .then((response) => {
         const rows = Array.isArray(response.data) ? response.data : [];
         setTypes(rows.filter((item) => item.activo !== false));
@@ -106,15 +112,13 @@ export default function ServicioCreateWizard({
       .catch(() => setTypes([]));
 
     if (isAdmin) {
-      api.get('/api/usuarios/role/tecnico')
+      api
+        .get('/api/usuarios/role/tecnico')
         .then((response) => {
           const rows = Array.isArray(response.data)
             ? response.data
             : response.data?.data || [];
-
-          setTechnicians(
-            rows.filter((item) => item.activo !== false)
-          );
+          setTechnicians(rows.filter((item) => item.activo !== false));
         })
         .catch(() => setTechnicians([]));
     }
@@ -163,9 +167,7 @@ export default function ServicioCreateWizard({
 
   const filteredTechnicians = useMemo(() => {
     const term = technicianSearch.trim().toLowerCase();
-
     if (!term) return technicians;
-
     return technicians.filter((item) => {
       const name = [
         item.nombre1,
@@ -179,16 +181,12 @@ export default function ServicioCreateWizard({
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-
       return name.includes(term);
     });
   }, [technicianSearch, technicians]);
 
   const selectedPrimary = useMemo(
-    () =>
-      technicians.find(
-        (item) => item.id === primaryTechnicianId
-      ) || null,
+    () => technicians.find((item) => item.id === primaryTechnicianId) || null,
     [technicians, primaryTechnicianId]
   );
 
@@ -197,28 +195,16 @@ export default function ServicioCreateWizard({
 
   const chooseType = (id) => {
     const type = types.find((item) => String(item.id) === String(id));
-
     setForm((previous) => ({
       ...previous,
       service_type_id: id,
       service_type_name: type?.nombre || '',
       service_type_category: type?.categoria || '',
-      base_value:
-        previous.base_value !== ''
-          ? previous.base_value
-          : type?.valor_base ?? '',
-      estimated_minutes:
-        type?.duracion_estimada || previous.estimated_minutes || 60,
-      estimated_duration:
-        type?.duracion_estimada || previous.estimated_duration || 60,
-      scope_text:
-        previous.scope_text ||
-        type?.descripcion ||
-        '',
-      classification:
-        type?.requiere_diagnostico
-          ? 'diagnostic'
-          : previous.classification,
+      base_value: previous.base_value !== '' ? previous.base_value : type?.valor_base ?? '',
+      estimated_minutes: type?.duracion_estimada || previous.estimated_minutes || 60,
+      estimated_duration: type?.duracion_estimada || previous.estimated_duration || 60,
+      scope_text: previous.scope_text || type?.descripcion || '',
+      classification: type?.requiere_diagnostico ? 'diagnostic' : previous.classification,
     }));
   };
 
@@ -258,8 +244,14 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 4 && isAdmin && !primaryTechnicianId) {
-      return 'Selecciona el técnico responsable principal.';
+    if (step === 4) {
+      if (isAdmin && !primaryTechnicianId) {
+        return 'Selecciona el técnico responsable principal.';
+      }
+      // Validar fecha si es modo automático
+      if (schedulingMode === 'auto' && !form.scheduled_date) {
+        return 'Para programación automática, selecciona una fecha.';
+      }
     }
 
     if (step === 5 && form.billing_mode === 'prepaid') {
@@ -303,44 +295,32 @@ export default function ServicioCreateWizard({
 
       const createResponse = await api.post('/api/service-orders/intakes', {
         client_id: selectedClient.id,
-        client_origin:
-          selectedClient.origen || 'local',
-        client_external_id:
-          selectedClient.id_externo || null,
-        client_key:
-          selectedClient.cliente_key || null,
+        client_origin: selectedClient.origen || 'local',
+        client_external_id: selectedClient.id_externo || null,
+        client_key: selectedClient.cliente_key || null,
         client_snapshot: {
           id: selectedClient.id,
-          id_externo:
-            selectedClient.id_externo || null,
-          origen:
-            selectedClient.origen || 'local',
-          tipo_persona:
-            selectedClient.tipo_persona || null,
-          documento:
-            selectedClient.documento || null,
-          razon_social:
-            selectedClient.razon_social || null,
-          primer_nombre:
-            selectedClient.primer_nombre || null,
-          segundo_nombre:
-            selectedClient.segundo_nombre || null,
-          primer_apellido:
-            selectedClient.primer_apellido || null,
-          segundo_apellido:
-            selectedClient.segundo_apellido || null,
-          telefono:
-            selectedClient.telefono || null,
-          email:
-            selectedClient.email || null,
-          direccion:
-            selectedClient.direccion || null,
-          ciudad:
-            selectedClient.ciudad || null,
+          id_externo: selectedClient.id_externo || null,
+          origen: selectedClient.origen || 'local',
+          tipo_persona: selectedClient.tipo_persona || null,
+          documento: selectedClient.documento || null,
+          razon_social: selectedClient.razon_social || null,
+          primer_nombre: selectedClient.primer_nombre || null,
+          segundo_nombre: selectedClient.segundo_nombre || null,
+          primer_apellido: selectedClient.primer_apellido || null,
+          segundo_apellido: selectedClient.segundo_apellido || null,
+          telefono: selectedClient.telefono || null,
+          email: selectedClient.email || null,
+          direccion: selectedClient.direccion || null,
+          ciudad: selectedClient.ciudad || null,
         },
         source_type: isAdmin ? 'customer' : 'technician',
         created_from_technician: !isAdmin,
         ...form,
+        // Si es modo manual, no enviar fecha
+        scheduled_date: schedulingMode === 'auto' ? form.scheduled_date : null,
+        scheduled_time: schedulingMode === 'auto' ? form.scheduled_time : null,
+        scheduling_mode: schedulingMode,
         team: isAdmin
           ? [
               ...(primaryTechnicianId
@@ -351,24 +331,15 @@ export default function ServicioCreateWizard({
                     },
                   ]
                 : []),
-              ...supportTechnicianIds.map(
-                (technicianId) => ({
-                  technician_id: technicianId,
-                  member_role: 'support',
-                })
-              ),
+              ...supportTechnicianIds.map((technicianId) => ({
+                technician_id: technicianId,
+                member_role: 'support',
+              })),
             ]
           : [],
-        base_value:
-          form.base_value === '' ? null : Number(form.base_value),
-        estimated_minutes:
-          form.estimated_minutes
-            ? Number(form.estimated_minutes)
-            : null,
-        estimated_duration:
-          form.estimated_duration
-            ? Number(form.estimated_duration)
-            : null,
+        base_value: form.base_value === '' ? null : Number(form.base_value),
+        estimated_minutes: form.estimated_minutes ? Number(form.estimated_minutes) : null,
+        estimated_duration: form.estimated_duration ? Number(form.estimated_duration) : null,
       });
 
       const intake = createResponse.data?.data;
@@ -377,19 +348,12 @@ export default function ServicioCreateWizard({
         throw new Error('No se recibió el ID de la solicitud');
       }
 
-      if (
-        isAdmin &&
-        form.billing_mode === 'prepaid' &&
-        paymentVerified
-      ) {
-        await api.post(
-          `/api/service-orders/intakes/${intake.id}/verify-payment`,
-          {
-            invoice_reference: form.invoice_reference,
-            payment_method: paymentMethod,
-            payment_reference: paymentReference,
-          }
-        );
+      if (isAdmin && form.billing_mode === 'prepaid' && paymentVerified) {
+        await api.post(`/api/service-orders/intakes/${intake.id}/verify-payment`, {
+          invoice_reference: form.invoice_reference,
+          payment_method: paymentMethod,
+          payment_reference: paymentReference,
+        });
       }
 
       if (isAdmin) {
@@ -398,33 +362,23 @@ export default function ServicioCreateWizard({
             `/api/service-orders/intakes/${intake.id}/activate`
           );
 
-          const order =
-            activateResponse.data?.data || null;
+          const order = activateResponse.data?.data || null;
 
-          if (
-            order?.id &&
-            primaryTechnicianId
-          ) {
-            await api.patch(
-              `/api/service-orders/${order.id}/approve`,
-              {
-                observaciones:
-                  'Creada y asignada desde el flujo controlado V10',
-              }
-            );
+          if (order?.id && primaryTechnicianId) {
+            await api.patch(`/api/service-orders/${order.id}/approve`, {
+              observaciones: 'Creada y asignada desde el flujo controlado V10',
+            });
           }
         } catch (activateError) {
-          if (
-            activateError.response?.data?.code !== 'INTAKE_NOT_READY'
-          ) {
+          if (activateError.response?.data?.code !== 'INTAKE_NOT_READY') {
             throw activateError;
           }
 
-          const missing =
-            activateError.response?.data?.missing || [];
-
+          const missing = activateError.response?.data?.missing || [];
           setError(
-            `Solicitud guardada, pero aún no puede crear la OS. Falta: ${missing.join(', ')}`
+            `Solicitud guardada, pero aún no puede crear la OS. Falta: ${missing.join(
+              ', '
+            )}`
           );
           await onCreated?.();
           return;
@@ -519,7 +473,8 @@ export default function ServicioCreateWizard({
                   <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 p-3">
                     <p className="font-semibold">{clientName(selectedClient)}</p>
                     <p className="text-sm text-gray-500">
-                      {selectedClient.documento || 'Sin documento'} · {selectedClient.telefono || 'Sin teléfono'}
+                      {selectedClient.documento || 'Sin documento'} ·{' '}
+                      {selectedClient.telefono || 'Sin teléfono'}
                     </p>
                   </div>
                 )}
@@ -544,7 +499,8 @@ export default function ServicioCreateWizard({
                           {clientName(client)}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {client.documento || 'Sin documento'} · {client.telefono || 'Sin teléfono'}
+                          {client.documento || 'Sin documento'} ·{' '}
+                          {client.telefono || 'Sin teléfono'}
                         </span>
                       </button>
                     ))}
@@ -559,7 +515,9 @@ export default function ServicioCreateWizard({
                 <textarea
                   rows={5}
                   value={form.request_description}
-                  onChange={(event) => update('request_description', event.target.value)}
+                  onChange={(event) =>
+                    update('request_description', event.target.value)
+                  }
                   placeholder="Ej: Portátil no enciende. Cliente solicita revisión y diagnóstico..."
                   className="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2"
                 />
@@ -606,7 +564,8 @@ export default function ServicioCreateWizard({
                 >
                   <p className="font-bold">Revisión / diagnóstico</p>
                   <p className="text-sm text-gray-500 mt-1">
-                    Se determina la falla y posteriormente puede requerir autorización adicional.
+                    Se determina la falla y posteriormente puede requerir
+                    autorización adicional.
                   </p>
                 </button>
 
@@ -647,7 +606,9 @@ export default function ServicioCreateWizard({
                 <div className="rounded-xl bg-gray-50 dark:bg-gray-950/40 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <p className="text-xs text-gray-500">Categoría</p>
-                    <p className="font-semibold">{selectedType.categoria || 'Sin categoría'}</p>
+                    <p className="font-semibold">
+                      {selectedType.categoria || 'Sin categoría'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Valor base</p>
@@ -673,17 +634,23 @@ export default function ServicioCreateWizard({
                     type="number"
                     min="0"
                     value={form.base_value}
-                    onChange={(event) => update('base_value', event.target.value)}
+                    onChange={(event) =>
+                      update('base_value', event.target.value)
+                    }
                     className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                   />
                 </label>
                 <label>
-                  <span className="text-sm font-semibold">Tiempo estimado (min)</span>
+                  <span className="text-sm font-semibold">
+                    Tiempo estimado (min)
+                  </span>
                   <input
                     type="number"
                     min="1"
                     value={form.estimated_minutes}
-                    onChange={(event) => update('estimated_minutes', event.target.value)}
+                    onChange={(event) =>
+                      update('estimated_minutes', event.target.value)
+                    }
                     className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                   />
                 </label>
@@ -704,11 +671,15 @@ export default function ServicioCreateWizard({
               </label>
 
               <label className="block">
-                <span className="text-sm font-semibold">Condiciones informadas *</span>
+                <span className="text-sm font-semibold">
+                  Condiciones informadas *
+                </span>
                 <textarea
                   rows={6}
                   value={form.conditions_text}
-                  onChange={(event) => update('conditions_text', event.target.value)}
+                  onChange={(event) =>
+                    update('conditions_text', event.target.value)
+                  }
                   className="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2"
                 />
               </label>
@@ -720,7 +691,9 @@ export default function ServicioCreateWizard({
                 <textarea
                   rows={4}
                   value={form.additional_costs_notice}
-                  onChange={(event) => update('additional_costs_notice', event.target.value)}
+                  onChange={(event) =>
+                    update('additional_costs_notice', event.target.value)
+                  }
                   className="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2"
                 />
               </label>
@@ -733,7 +706,9 @@ export default function ServicioCreateWizard({
                 <input
                   type="checkbox"
                   checked={form.client_acceptance}
-                  onChange={(event) => update('client_acceptance', event.target.checked)}
+                  onChange={(event) =>
+                    update('client_acceptance', event.target.checked)
+                  }
                   className="mt-1 w-5 h-5"
                 />
                 <span>
@@ -741,17 +716,22 @@ export default function ServicioCreateWizard({
                     El cliente acepta las condiciones iniciales
                   </span>
                   <span className="text-sm text-gray-500">
-                    Confirma que comprendió alcance, costos iniciales, tiempos y posibles costos adicionales.
+                    Confirma que comprendió alcance, costos iniciales, tiempos y
+                    posibles costos adicionales.
                   </span>
                 </span>
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label>
-                  <span className="text-sm font-semibold">Nombre de quien acepta *</span>
+                  <span className="text-sm font-semibold">
+                    Nombre de quien acepta *
+                  </span>
                   <input
                     value={form.client_acceptance_name}
-                    onChange={(event) => update('client_acceptance_name', event.target.value)}
+                    onChange={(event) =>
+                      update('client_acceptance_name', event.target.value)
+                    }
                     className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                   />
                 </label>
@@ -759,7 +739,9 @@ export default function ServicioCreateWizard({
                   <span className="text-sm font-semibold">Documento</span>
                   <input
                     value={form.client_acceptance_document}
-                    onChange={(event) => update('client_acceptance_document', event.target.value)}
+                    onChange={(event) =>
+                      update('client_acceptance_document', event.target.value)
+                    }
                     className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                   />
                 </label>
@@ -767,7 +749,9 @@ export default function ServicioCreateWizard({
                   <span className="text-sm font-semibold">Canal *</span>
                   <select
                     value={form.client_acceptance_channel}
-                    onChange={(event) => update('client_acceptance_channel', event.target.value)}
+                    onChange={(event) =>
+                      update('client_acceptance_channel', event.target.value)
+                    }
                     className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                   >
                     <option value="whatsapp">WhatsApp</option>
@@ -778,10 +762,14 @@ export default function ServicioCreateWizard({
                   </select>
                 </label>
                 <label>
-                  <span className="text-sm font-semibold">Referencia / evidencia</span>
+                  <span className="text-sm font-semibold">
+                    Referencia / evidencia
+                  </span>
                   <input
                     value={form.client_acceptance_reference}
-                    onChange={(event) => update('client_acceptance_reference', event.target.value)}
+                    onChange={(event) =>
+                      update('client_acceptance_reference', event.target.value)
+                    }
                     placeholder="Ej: aceptación presencial / WhatsApp 10:42"
                     className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                   />
@@ -792,6 +780,108 @@ export default function ServicioCreateWizard({
 
           {step === 4 && (
             <div className="space-y-5">
+              {/* SECCIÓN: Opciones de programación */}
+              <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-4">
+                <h4 className="font-semibold text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Opciones de programación
+                </h4>
+                <p className="text-sm text-blue-600/80 dark:text-blue-300/80 mb-3">
+                  Elige cómo quieres que se programe esta orden de servicio
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label
+                    className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      schedulingMode === 'auto'
+                        ? 'border-blue-500 bg-blue-100/50 dark:bg-blue-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="scheduling_mode"
+                      value="auto"
+                      checked={schedulingMode === 'auto'}
+                      onChange={() => setSchedulingMode('auto')}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="font-medium">Programación automática</p>
+                      <p className="text-xs text-gray-500">
+                        El sistema buscará el primer espacio común disponible
+                        para todos los técnicos seleccionados
+                      </p>
+                    </div>
+                  </label>
+                  <label
+                    className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      schedulingMode === 'manual'
+                        ? 'border-blue-500 bg-blue-100/50 dark:bg-blue-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="scheduling_mode"
+                      value="manual"
+                      checked={schedulingMode === 'manual'}
+                      onChange={() => setSchedulingMode('manual')}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="font-medium">Programación manual</p>
+                      <p className="text-xs text-gray-500">
+                        La orden se creará sin fecha asignada. Se programará
+                        manualmente después
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                {schedulingMode === 'auto' && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-semibold">
+                        Fecha programada *
+                      </label>
+                      <input
+                        type="date"
+                        value={form.scheduled_date}
+                        onChange={(event) =>
+                          update('scheduled_date', event.target.value)
+                        }
+                        min={new Date().toISOString().split('T')[0]}
+                        className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">
+                        Hora de inicio
+                      </label>
+                      <input
+                        type="time"
+                        value={form.scheduled_time}
+                        onChange={(event) =>
+                          update('scheduled_time', event.target.value)
+                        }
+                        className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {schedulingMode === 'manual' && (
+                  <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 flex items-center gap-2">
+                      <AlertCircle className="w-3 h-3" />
+                      Modo manual: La orden quedará pendiente de programación.
+                      Deberás asignar fecha y hora después de la aprobación.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Resto del contenido del paso 4: Técnicos */}
               {!isAdmin ? (
                 <div className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-4">
                   <div className="flex items-start gap-3">
@@ -801,7 +891,8 @@ export default function ServicioCreateWizard({
                         Quedarás propuesto como técnico responsable
                       </p>
                       <p className="text-sm text-gray-500 mt-1">
-                        Administración revisará la solicitud antes de convertirla en OS y enviártela formalmente.
+                        Administración revisará la solicitud antes de
+                        convertirla en OS y enviártela formalmente.
                       </p>
                     </div>
                   </div>
@@ -848,8 +939,7 @@ export default function ServicioCreateWizard({
                         const ids = filteredTechnicians.map((tech) => tech.id);
                         if (ids.length === 0) return;
                         const nextPrimary =
-                          primaryTechnicianId &&
-                          ids.includes(primaryTechnicianId)
+                          primaryTechnicianId && ids.includes(primaryTechnicianId)
                             ? primaryTechnicianId
                             : ids[0];
 
@@ -880,12 +970,9 @@ export default function ServicioCreateWizard({
                     style={{ WebkitOverflowScrolling: 'touch' }}
                   >
                     {filteredTechnicians.map((tech) => {
-                      const isPrimary =
-                        primaryTechnicianId === tech.id;
-                      const isSupport =
-                        supportTechnicianIds.includes(tech.id);
-                      const isChecked =
-                        isPrimary || isSupport;
+                      const isPrimary = primaryTechnicianId === tech.id;
+                      const isSupport = supportTechnicianIds.includes(tech.id);
+                      const isChecked = isPrimary || isSupport;
 
                       return (
                         <label
@@ -922,20 +1009,16 @@ export default function ServicioCreateWizard({
                               }
 
                               if (isPrimary) {
-                                const remaining =
-                                  supportTechnicianIds.filter(
-                                    (id) => id !== tech.id
-                                  );
+                                const remaining = supportTechnicianIds.filter(
+                                  (id) => id !== tech.id
+                                );
 
-                                const nextPrimary =
-                                  remaining[0] || '';
+                                const nextPrimary = remaining[0] || '';
 
                                 setPrimaryTechnicianId(nextPrimary);
                                 setSupportTechnicianIds(
                                   nextPrimary
-                                    ? remaining.filter(
-                                        (id) => id !== nextPrimary
-                                      )
+                                    ? remaining.filter((id) => id !== nextPrimary)
                                     : []
                                 );
                               } else {
@@ -954,7 +1037,8 @@ export default function ServicioCreateWizard({
                                 .join(' ') || tech.usuario}
                             </p>
                             <p className="text-xs text-gray-500 truncate">
-                              @{tech.usuario || 'sin-usuario'} · {tech.celular || tech.email || 'sin contacto'}
+                              @{tech.usuario || 'sin-usuario'} ·{' '}
+                              {tech.celular || tech.email || 'sin contacto'}
                             </p>
 
                             {isChecked && (
@@ -964,8 +1048,7 @@ export default function ServicioCreateWizard({
                                   name="primary-technician"
                                   checked={isPrimary}
                                   onChange={() => {
-                                    const oldPrimary =
-                                      primaryTechnicianId;
+                                    const oldPrimary = primaryTechnicianId;
 
                                     setPrimaryTechnicianId(tech.id);
 
@@ -991,13 +1074,15 @@ export default function ServicioCreateWizard({
                             )}
                           </div>
 
-                          <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-semibold ${
-                            isPrimary
-                              ? 'bg-emerald-600 text-white'
-                              : isSupport
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-500 dark:bg-gray-800'
-                          }`}>
+                          <span
+                            className={`shrink-0 rounded-lg px-2 py-1 text-xs font-semibold ${
+                              isPrimary
+                                ? 'bg-emerald-600 text-white'
+                                : isSupport
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800'
+                            }`}
+                          >
                             {isPrimary
                               ? 'Principal'
                               : isSupport
@@ -1029,7 +1114,8 @@ export default function ServicioCreateWizard({
                       {supportTechnicianIds.length}
                     </p>
                     <p className="mt-1 text-gray-500">
-                      La agenda se bloqueará automáticamente para todos los seleccionados cuando la OS sea aprobada.
+                      La agenda se bloqueará automáticamente para todos los
+                      seleccionados cuando la OS sea aprobada.
                     </p>
                   </div>
                 </>
@@ -1074,17 +1160,22 @@ export default function ServicioCreateWizard({
 
               {!isAdmin && (
                 <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-4 text-sm text-blue-700 dark:text-blue-300">
-                  Tu solicitud quedará pendiente de validación administrativa, pago y activación como OS.
+                  Tu solicitud quedará pendiente de validación administrativa,
+                  pago y activación como OS.
                 </div>
               )}
 
               {form.billing_mode === 'prepaid' && (
                 <>
                   <label className="block">
-                    <span className="text-sm font-semibold">Referencia de factura *</span>
+                    <span className="text-sm font-semibold">
+                      Referencia de factura *
+                    </span>
                     <input
                       value={form.invoice_reference}
-                      onChange={(event) => update('invoice_reference', event.target.value)}
+                      onChange={(event) =>
+                        update('invoice_reference', event.target.value)
+                      }
                       placeholder="Número o referencia de factura"
                       className="mt-1 w-full min-h-12 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                     />
@@ -1096,7 +1187,9 @@ export default function ServicioCreateWizard({
                         <input
                           type="checkbox"
                           checked={paymentVerified}
-                          onChange={(event) => setPaymentVerified(event.target.checked)}
+                          onChange={(event) =>
+                            setPaymentVerified(event.target.checked)
+                          }
                           className="w-5 h-5"
                         />
                         <span className="font-semibold">
@@ -1107,10 +1200,14 @@ export default function ServicioCreateWizard({
                       {paymentVerified && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <label>
-                            <span className="text-sm font-semibold">Método</span>
+                            <span className="text-sm font-semibold">
+                              Método
+                            </span>
                             <select
                               value={paymentMethod}
-                              onChange={(event) => setPaymentMethod(event.target.value)}
+                              onChange={(event) =>
+                                setPaymentMethod(event.target.value)
+                              }
                               className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                             >
                               <option value="cash">Efectivo</option>
@@ -1121,10 +1218,14 @@ export default function ServicioCreateWizard({
                             </select>
                           </label>
                           <label>
-                            <span className="text-sm font-semibold">Referencia / soporte *</span>
+                            <span className="text-sm font-semibold">
+                              Referencia / soporte *
+                            </span>
                             <input
                               value={paymentReference}
-                              onChange={(event) => setPaymentReference(event.target.value)}
+                              onChange={(event) =>
+                                setPaymentReference(event.target.value)
+                              }
                               className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                             />
                           </label>
@@ -1143,7 +1244,9 @@ export default function ServicioCreateWizard({
                   <textarea
                     rows={4}
                     value={form.postpaid_reason}
-                    onChange={(event) => update('postpaid_reason', event.target.value)}
+                    onChange={(event) =>
+                      update('postpaid_reason', event.target.value)
+                    }
                     className="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2"
                   />
                 </label>
@@ -1154,11 +1257,15 @@ export default function ServicioCreateWizard({
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-gray-500">Cliente</p>
-                    <p className="font-semibold">{clientName(selectedClient)}</p>
+                    <p className="font-semibold">
+                      {clientName(selectedClient)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-gray-500">Tipo</p>
-                    <p className="font-semibold">{form.service_type_name || 'Sin definir'}</p>
+                    <p className="font-semibold">
+                      {form.service_type_name || 'Sin definir'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-gray-500">Clasificación</p>
@@ -1174,6 +1281,21 @@ export default function ServicioCreateWizard({
                       {form.billing_mode === 'prepaid' ? 'Prepago' : 'Pospago'}
                     </p>
                   </div>
+                  <div>
+                    <p className="text-gray-500">Programación</p>
+                    <p className="font-semibold">
+                      {schedulingMode === 'auto' ? 'Automática' : 'Manual'}
+                    </p>
+                  </div>
+                  {schedulingMode === 'auto' && form.scheduled_date && (
+                    <div>
+                      <p className="text-gray-500">Fecha</p>
+                      <p className="font-semibold">
+                        {form.scheduled_date}
+                        {form.scheduled_time ? ` ${form.scheduled_time}` : ''}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

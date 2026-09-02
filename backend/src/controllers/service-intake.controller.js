@@ -145,20 +145,12 @@ function canAccessIntake(req, intake) {
   return isTechnician(req) && intake.created_by === req.user?.id;
 }
 
-
-async function resolveClientForIntake(
-  client,
-  body
-) {
-  const requestedId =
-    cleanText(body?.client_id, 120);
-
-  const origin =
-    cleanText(
-      body?.client_origin ||
-      body?.client_snapshot?.origen,
-      30
-    ) || 'local';
+async function resolveClientForIntake(client, body) {
+  const requestedId = cleanText(body?.client_id, 120);
+  const origin = cleanText(
+    body?.client_origin || body?.client_snapshot?.origen,
+    30
+  ) || 'local';
 
   if (requestedId && isUuid(requestedId)) {
     const local = await client.query(
@@ -176,8 +168,7 @@ async function resolveClientForIntake(
       return {
         client_id: local.rows[0].id,
         origin: 'local',
-        source_reference:
-          cleanText(body?.source_reference, 180),
+        source_reference: cleanText(body?.source_reference, 180),
       };
     }
   }
@@ -185,18 +176,14 @@ async function resolveClientForIntake(
   const externalCandidate =
     body?.client_external_id ??
     body?.client_snapshot?.id_externo ??
-    (
-      origin === 'melissa' &&
-        requestedId &&
-        /^\d+$/.test(requestedId)
-        ? requestedId
-        : null
-    );
+    (origin === 'melissa' && requestedId && /^\d+$/.test(requestedId)
+      ? requestedId
+      : null);
 
   const externalId =
     externalCandidate !== null &&
-      externalCandidate !== undefined &&
-      /^\d+$/.test(String(externalCandidate))
+    externalCandidate !== undefined &&
+    /^\d+$/.test(String(externalCandidate))
       ? String(externalCandidate)
       : null;
 
@@ -257,10 +244,7 @@ async function resolveClientForIntake(
         END
       LIMIT 1
     `,
-    [
-      externalId,
-      String(syncClient.documento || ''),
-    ]
+    [externalId, String(syncClient.documento || '')]
   );
 
   if (localResult.rows[0]) {
@@ -275,10 +259,7 @@ async function resolveClientForIntake(
             "updatedAt" = NOW()
         WHERE id = $2
       `,
-      [
-        externalId,
-        localResult.rows[0].id,
-      ]
+      [externalId, localResult.rows[0].id]
     );
 
     return {
@@ -289,21 +270,16 @@ async function resolveClientForIntake(
   }
 
   const snapshot =
-    body?.client_snapshot &&
-      typeof body.client_snapshot === 'object'
+    body?.client_snapshot && typeof body.client_snapshot === 'object'
       ? body.client_snapshot
       : {};
 
   const inferredType =
-    snapshot.tipo_persona === 'natural' ||
-      snapshot.tipo_persona === 'juridica'
+    snapshot.tipo_persona === 'natural' || snapshot.tipo_persona === 'juridica'
       ? snapshot.tipo_persona
-      : (
-        syncClient.razon_social &&
-          !syncClient.primer_apellido
-          ? 'juridica'
-          : 'natural'
-      );
+      : syncClient.razon_social && !syncClient.primer_apellido
+        ? 'juridica'
+        : 'natural';
 
   const localId = randomUUID();
 
@@ -336,29 +312,17 @@ async function resolveClientForIntake(
     [
       localId,
       inferredType,
-      syncClient.primer_nombre ||
-      snapshot.primer_nombre ||
-      null,
-      syncClient.segundo_nombre ||
-      snapshot.segundo_nombre ||
-      null,
-      syncClient.primer_apellido ||
-      snapshot.primer_apellido ||
-      null,
-      syncClient.segundo_apellido ||
-      snapshot.segundo_apellido ||
-      null,
+      syncClient.primer_nombre || snapshot.primer_nombre || null,
+      syncClient.segundo_nombre || snapshot.segundo_nombre || null,
+      syncClient.primer_apellido || snapshot.primer_apellido || null,
+      syncClient.segundo_apellido || snapshot.segundo_apellido || null,
       inferredType === 'juridica'
-        ? (
-          syncClient.razon_social ||
+        ? syncClient.razon_social ||
           snapshot.razon_social ||
           syncClient.primer_nombre ||
           `Cliente WO ${externalId}`
-        )
         : null,
-      syncClient.documento ||
-      snapshot.documento ||
-      `WO-${externalId}`,
+      syncClient.documento || snapshot.documento || `WO-${externalId}`,
       snapshot.telefono || null,
       snapshot.email || null,
       snapshot.direccion || null,
@@ -384,6 +348,9 @@ function validateCorePayload(body, { partial = false } = {}) {
   const serviceTypeName = cleanText(body?.service_type_name, 180);
   const billingMode = cleanText(body?.billing_mode, 20) || 'prepaid';
   const priority = cleanText(body?.priority, 20) || 'normal';
+  const schedulingMode = cleanText(body?.scheduling_mode, 20) || 'auto';
+  const scheduledDate = normalizeDate(body?.scheduled_date);
+  const scheduledTime = normalizeTime(body?.scheduled_time);
 
   if (!partial || clientId !== null) {
     if (!clientId) errors.push('Cliente no válido');
@@ -407,6 +374,10 @@ function validateCorePayload(body, { partial = false } = {}) {
 
   if (!VALID_PRIORITIES.has(priority)) {
     errors.push('Prioridad no válida');
+  }
+
+  if (schedulingMode === 'auto' && !scheduledDate) {
+    errors.push('Para programación automática, la fecha es requerida');
   }
 
   const baseValue = parseMoney(body?.base_value);
@@ -444,9 +415,10 @@ function validateCorePayload(body, { partial = false } = {}) {
       invoiceReference: cleanText(body?.invoice_reference, 180),
       postpaidReason: cleanText(body?.postpaid_reason, 4000),
       priority,
-      scheduledDate: normalizeDate(body?.scheduled_date),
-      scheduledTime: normalizeTime(body?.scheduled_time),
+      scheduledDate,
+      scheduledTime,
       estimatedDuration,
+      schedulingMode,
     },
   };
 }
@@ -487,12 +459,7 @@ function evaluateReadiness(intake) {
   };
 }
 
-
-async function validateIntakeTeam(
-  client,
-  req,
-  rawMembers
-) {
+async function validateIntakeTeam(client, req, rawMembers) {
   if (isTechnician(req)) {
     return [
       {
@@ -507,8 +474,7 @@ async function validateIntakeTeam(
   let primaryCount = 0;
 
   for (const raw of Array.isArray(rawMembers) ? rawMembers : []) {
-    const technicianId =
-      raw?.technician_id || raw?.id || null;
+    const technicianId = raw?.technician_id || raw?.id || null;
 
     if (!isUuid(technicianId) || seen.has(technicianId)) {
       continue;
@@ -516,10 +482,7 @@ async function validateIntakeTeam(
 
     seen.add(technicianId);
 
-    const memberRole =
-      raw?.member_role === 'primary'
-        ? 'primary'
-        : 'support';
+    const memberRole = raw?.member_role === 'primary' ? 'primary' : 'support';
 
     if (memberRole === 'primary') primaryCount += 1;
 
@@ -530,9 +493,7 @@ async function validateIntakeTeam(
   }
 
   if (members.length > 10) {
-    const error = new Error(
-      'Máximo 10 técnicos por servicio'
-    );
+    const error = new Error('Máximo 10 técnicos por servicio');
     error.code = 'TEAM_TOO_LARGE';
     throw error;
   }
@@ -581,12 +542,7 @@ async function validateIntakeTeam(
   return members;
 }
 
-async function saveIntakeTeam(
-  client,
-  intakeId,
-  members,
-  actorUserId
-) {
+async function saveIntakeTeam(client, intakeId, members, actorUserId) {
   await client.query(
     `
       DELETE FROM service_order_intake_team_members
@@ -619,10 +575,7 @@ async function saveIntakeTeam(
   }
 }
 
-async function getIntakeTeam(
-  client,
-  intakeId
-) {
+async function getIntakeTeam(client, intakeId) {
   try {
     const result = await client.query(
       `
@@ -816,10 +769,7 @@ exports.getById = async (req, res) => {
       return res.status(403).json({ success: false, message: 'No autorizado' });
     }
 
-    const team = await getIntakeTeam(
-      client,
-      intake.id
-    );
+    const team = await getIntakeTeam(client, intake.id);
 
     return res.json({
       success: true,
@@ -864,24 +814,12 @@ exports.create = async (req, res) => {
 
     await client.query('BEGIN');
 
-    const resolvedClient =
-      await resolveClientForIntake(
-        client,
-        req.body || {}
-      );
+    const resolvedClient = await resolveClientForIntake(client, req.body || {});
 
-    const team = await validateIntakeTeam(
-      client,
-      req,
-      req.body?.team || []
-    );
+    const team = await validateIntakeTeam(client, req, req.body?.team || []);
 
-    if (
-      v.clientAcceptanceChannel &&
-      !VALID_CHANNELS.has(v.clientAcceptanceChannel)
-    ) {
+    if (v.clientAcceptanceChannel && !VALID_CHANNELS.has(v.clientAcceptanceChannel)) {
       await client.query('ROLLBACK');
-
       return res.status(400).json({
         success: false,
         message: 'Canal de aceptación no válido',
@@ -890,11 +828,9 @@ exports.create = async (req, res) => {
 
     if (v.billingMode === 'postpaid' && !isAdmin(req)) {
       await client.query('ROLLBACK');
-
       return res.status(403).json({
         success: false,
-        message:
-          'La modalidad pospago solo puede ser autorizada por administración',
+        message: 'La modalidad pospago solo puede ser autorizada por administración',
       });
     }
 
@@ -932,6 +868,7 @@ exports.create = async (req, res) => {
           scheduled_date,
           scheduled_time,
           estimated_duration,
+          scheduling_mode,
           status,
           created_at,
           updated_at
@@ -940,13 +877,13 @@ exports.create = async (req, res) => {
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
           $16,$17,$18,$19,$20,
           CASE WHEN $16::boolean THEN NOW() ELSE NULL END,
-          $21::varchar(20),$22,
+          $21,$22,
           CASE
-            WHEN $21::varchar(20) = 'postpaid'::varchar(20)
-            THEN 'not_required'::varchar(20)
-            ELSE 'pending'::varchar(20)
+            WHEN $21 = 'postpaid'
+            THEN 'not_required'
+            ELSE 'pending'
           END,
-          $23,$24,$25,$26,$27,
+          $23,$24,$25,$26,$27,$28,$29,
           'draft',NOW(),NOW()
         )
         RETURNING *
@@ -976,18 +913,14 @@ exports.create = async (req, res) => {
         v.invoiceReference,
         v.postpaidReason,
         v.priority,
-        null,
-        null,
+        v.scheduledDate,
+        v.scheduledTime,
         v.estimatedDuration || v.estimatedMinutes || 60,
+        v.schedulingMode,
       ]
     );
 
-    await saveIntakeTeam(
-      client,
-      id,
-      team,
-      req.user.id
-    );
+    await saveIntakeTeam(client, id, team, req.user.id);
 
     await addEvent(client, {
       intakeId: id,
@@ -998,20 +931,18 @@ exports.create = async (req, res) => {
         client_origin: resolvedClient.origin,
         classification: v.classification,
         billing_mode: v.billingMode,
+        scheduling_mode: v.schedulingMode,
       },
     });
 
     await client.query('COMMIT');
 
     const intake = result.rows[0];
-    const primary = team.find(
-      (item) => item.member_role === 'primary'
-    );
+    const primary = team.find((item) => item.member_role === 'primary');
 
     const enriched = {
       ...intake,
-      primary_technician_id:
-        primary?.technician_id || null,
+      primary_technician_id: primary?.technician_id || null,
       team_size: team.length,
       team,
     };
@@ -1027,15 +958,14 @@ exports.create = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) { }
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
     console.error('Error creating service intake:', error);
 
     if (
-      [
-        'CLIENT_REFERENCE_INVALID',
-        'SYNC_CLIENT_NOT_FOUND',
-      ].includes(error?.code)
+      ['CLIENT_REFERENCE_INVALID', 'SYNC_CLIENT_NOT_FOUND'].includes(error?.code)
     ) {
       return res.status(400).json({
         success: false,
@@ -1052,6 +982,7 @@ exports.create = async (req, res) => {
     client.release();
   }
 };
+
 
 exports.update = async (req, res) => {
   const client = await pool.connect();
@@ -1086,9 +1017,7 @@ exports.update = async (req, res) => {
     const v = validation.values;
 
     const mergedBillingMode =
-      req.body?.billing_mode !== undefined
-        ? v.billingMode
-        : intake.billing_mode;
+      req.body?.billing_mode !== undefined ? v.billingMode : intake.billing_mode;
 
     if (mergedBillingMode === 'postpaid' && !isAdmin(req)) {
       return res.status(403).json({
@@ -1097,10 +1026,7 @@ exports.update = async (req, res) => {
       });
     }
 
-    if (
-      req.body?.client_acceptance_channel &&
-      !VALID_CHANNELS.has(v.clientAcceptanceChannel)
-    ) {
+    if (req.body?.client_acceptance_channel && !VALID_CHANNELS.has(v.clientAcceptanceChannel)) {
       return res.status(400).json({
         success: false,
         message: 'Canal de aceptación no válido',
@@ -1161,8 +1087,9 @@ exports.update = async (req, res) => {
           scheduled_date = COALESCE($20, scheduled_date),
           scheduled_time = COALESCE($21, scheduled_time),
           estimated_duration = COALESCE($22, estimated_duration),
+          scheduling_mode = COALESCE($23, scheduling_mode),
           updated_at = NOW()
-        WHERE id = $23
+        WHERE id = $24
         RETURNING *
       `,
       [
@@ -1188,6 +1115,7 @@ exports.update = async (req, res) => {
         req.body?.scheduled_date !== undefined ? v.scheduledDate : null,
         req.body?.scheduled_time !== undefined ? v.scheduledTime : null,
         req.body?.estimated_duration !== undefined ? v.estimatedDuration : null,
+        req.body?.scheduling_mode !== undefined ? v.schedulingMode : null,
         intake.id,
       ]
     );
@@ -1214,7 +1142,9 @@ exports.update = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) { }
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
     console.error('Error updating service intake:', error);
 
@@ -1226,7 +1156,6 @@ exports.update = async (req, res) => {
     client.release();
   }
 };
-
 
 exports.updateTeam = async (req, res) => {
   const client = await pool.connect();
@@ -1241,11 +1170,7 @@ exports.updateTeam = async (req, res) => {
 
     await client.query('BEGIN');
 
-    const intake = await getIntake(
-      client,
-      req.params.intakeId,
-      true
-    );
+    const intake = await getIntake(client, req.params.intakeId, true);
 
     if (!intake) {
       await client.query('ROLLBACK');
@@ -1263,18 +1188,9 @@ exports.updateTeam = async (req, res) => {
       });
     }
 
-    const team = await validateIntakeTeam(
-      client,
-      req,
-      req.body?.members || []
-    );
+    const team = await validateIntakeTeam(client, req, req.body?.members || []);
 
-    await saveIntakeTeam(
-      client,
-      intake.id,
-      team,
-      req.user.id
-    );
+    await saveIntakeTeam(client, intake.id, team, req.user.id);
 
     await addEvent(client, {
       intakeId: intake.id,
@@ -1290,10 +1206,7 @@ exports.updateTeam = async (req, res) => {
 
     await client.query('COMMIT');
 
-    const refreshed = await getIntake(
-      client,
-      intake.id
-    );
+    const refreshed = await getIntake(client, intake.id);
 
     return res.json({
       success: true,
@@ -1305,13 +1218,16 @@ exports.updateTeam = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) { }
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
     console.error('Error updating intake team:', error);
 
     if (
-      ['TEAM_TOO_LARGE', 'PRIMARY_REQUIRED', 'INVALID_TECHNICIAN']
-        .includes(error?.code)
+      ['TEAM_TOO_LARGE', 'PRIMARY_REQUIRED', 'INVALID_TECHNICIAN'].includes(
+        error?.code
+      )
     ) {
       return res.status(409).json({
         success: false,
@@ -1361,8 +1277,7 @@ exports.verifyPayment = async (req, res) => {
     }
 
     const invoiceReference =
-      cleanText(req.body?.invoice_reference, 180) ||
-      intake.invoice_reference;
+      cleanText(req.body?.invoice_reference, 180) || intake.invoice_reference;
     const paymentReference = cleanText(req.body?.payment_reference, 220);
     const paymentMethod = cleanText(req.body?.payment_method, 60);
 
@@ -1402,13 +1317,7 @@ exports.verifyPayment = async (req, res) => {
         WHERE id = $5
         RETURNING *
       `,
-      [
-        invoiceReference,
-        paymentMethod,
-        paymentReference,
-        req.user.id,
-        intake.id,
-      ]
+      [invoiceReference, paymentMethod, paymentReference, req.user.id, intake.id]
     );
 
     await addEvent(client, {
@@ -1435,7 +1344,9 @@ exports.verifyPayment = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) { }
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
     console.error('Error verifying service payment:', error);
 
@@ -1524,7 +1435,7 @@ exports.activate = async (req, res) => {
     console.log('🔢 Getting next OS number...');
     const year = new Date().getFullYear();
     let counterResult;
-    
+
     try {
       counterResult = await client.query(
         `
@@ -1569,6 +1480,7 @@ exports.activate = async (req, res) => {
       `Costos adicionales informados: ${intake.additional_costs_notice || ''}`,
       `Modalidad: ${intake.billing_mode}`,
       `Factura: ${intake.invoice_reference || 'N/A'}`,
+      `Modo de programación: ${intake.scheduling_mode || 'auto'}`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -1595,8 +1507,14 @@ exports.activate = async (req, res) => {
             "updatedAt"
           )
           VALUES (
-            $1,$2,$3,'otro',NULL,$4,NULL,$5,$6,$7,$8,
-            'pendiente',$9,NOW(),NOW()
+            $1,$2,$3,'otro',NULL,$4,NULL,
+            $5,  -- scheduled_date
+            $6,  -- scheduled_time
+            $7,  -- estimated_duration
+            $8,  -- observaciones
+            'pendiente',
+            $9,  -- creado_por
+            NOW(),NOW()
           )
           RETURNING *
         `,
@@ -1617,7 +1535,7 @@ exports.activate = async (req, res) => {
       console.error('❌ Error creating service order:', {
         message: orderError.message,
         code: orderError.code,
-        detail: orderError.detail
+        detail: orderError.detail,
       });
       await client.query('ROLLBACK');
       console.log('🔄 Rolled back due to order creation error');
@@ -1842,6 +1760,9 @@ exports.activate = async (req, res) => {
           billing_mode: intake.billing_mode,
           invoice_reference: intake.invoice_reference,
           payment_status: intake.payment_status,
+          scheduling_mode: intake.scheduling_mode || 'auto',
+          scheduled_date: intake.scheduled_date,
+          scheduled_time: intake.scheduled_time,
         },
       });
       console.log('✅ Event added');
@@ -1857,15 +1778,22 @@ exports.activate = async (req, res) => {
     await client.query('COMMIT');
     console.log('✅ Transaction committed successfully!');
 
+    const schedulingMessage =
+      intake.scheduling_mode === 'manual'
+        ? 'La orden se creó sin programación automática. Deberá programarse manualmente.'
+        : intake.scheduled_date
+          ? `La orden se creó con fecha programada: ${intake.scheduled_date} ${intake.scheduled_time || ''}`
+          : 'La orden se creó. La programación automática se intentará al aprobar.';
+
     return res.status(201).json({
       success: true,
-      message:
-        plannedTeam.length > 0
-          ? `Orden ${codigoOs} creada con equipo técnico planificado. Al aprobarla se enviará al técnico responsable.`
-          : `Orden ${codigoOs} creada. Falta definir el equipo técnico.`,
+      message: `Orden ${codigoOs} creada. ${schedulingMessage}`,
       data: {
         ...orderResult.rows[0],
         planned_team: plannedTeam,
+        scheduling_mode: intake.scheduling_mode || 'auto',
+        scheduled_date: intake.scheduled_date,
+        scheduled_time: intake.scheduled_time,
       },
     });
   } catch (error) {
@@ -1900,6 +1828,7 @@ exports.activate = async (req, res) => {
     client.release();
   }
 };
+
 exports.cancel = async (req, res) => {
   const client = await pool.connect();
 
@@ -1966,7 +1895,9 @@ exports.cancel = async (req, res) => {
       message: 'Solicitud cancelada',
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) { }
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
     console.error('Error cancelling service intake:', error);
 
