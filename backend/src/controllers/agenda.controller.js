@@ -169,9 +169,11 @@ exports.getEventos = async (req, res) => {
           ON c.id = so.client_id
         JOIN usuarios u
           ON u.id = b.technician_id
-        WHERE b.status = 'active'
+        WHERE b.status IN (
+            'active',
+            'completed'
+          )
           AND so.estado::text NOT IN (
-            'cerrada',
             'cancelado',
             'rechazado'
           )

@@ -31,6 +31,30 @@ const serviceScheduleController =
 const technicalStatsController =
   require('../controllers/technical-stats.controller');
 
+const serviceClosureController =
+  require('../controllers/service-closure.controller');
+
+const serviceDeliveryController =
+  require('../controllers/service-delivery.controller');
+
+const serviceQualityController =
+  require('../controllers/service-quality.controller');
+
+const serviceNotificationOutboxController =
+  require('../controllers/service-notification-outbox.controller');
+
+const serviceNotificationTemplateController =
+  require('../controllers/service-notification-template.controller');
+
+const serviceDocumentController =
+  require('../controllers/service-document.controller');
+
+const serviceFinancialController =
+  require('../controllers/service-financial.controller');
+
+const worldOfficeFinancialController =
+  require('../controllers/worldoffice-financial.controller');
+
 const {
   blockResumeWhileClientAuthorization,
 } = require('../middlewares/service-authorization-guard.middleware');
@@ -96,7 +120,7 @@ router.post(
 
 router.get(
   '/service-orders/stats/technical',
-  allowRoles('admin'),
+  allowRoles('admin', 'tecnico'),
   technicalStatsController.getTechnicalStatistics
 );
 
@@ -104,6 +128,298 @@ router.post(
   '/service-orders/:id/auto-schedule',
   allowRoles('admin'),
   serviceScheduleController.autoSchedule
+);
+
+// ============================================================
+// V18 · WORLDOFFICE FINANCIERO 100% SOLO LECTURA
+// ============================================================
+
+router.get(
+  '/service-orders/financial/worldoffice/status',
+  allowRoles('admin'),
+  worldOfficeFinancialController.getStatus
+);
+
+router.post(
+  '/service-orders/financial/worldoffice/probe',
+  allowRoles('admin'),
+  worldOfficeFinancialController.probe
+);
+
+router.post(
+  '/service-orders/financial/worldoffice/discover',
+  allowRoles('admin'),
+  worldOfficeFinancialController.discover
+);
+
+router.get(
+  '/service-orders/financial/worldoffice/discovery/latest',
+  allowRoles('admin'),
+  worldOfficeFinancialController.getLatestDiscovery
+);
+
+router.post(
+  '/service-orders/financial/worldoffice/preview',
+  allowRoles('admin'),
+  worldOfficeFinancialController.preview
+);
+
+router.get(
+  '/service-orders/financial/worldoffice/mappings',
+  allowRoles('admin'),
+  worldOfficeFinancialController.getMapping
+);
+
+router.put(
+  '/service-orders/financial/worldoffice/mapping',
+  allowRoles('admin'),
+  worldOfficeFinancialController.saveMapping
+);
+
+router.post(
+  '/service-orders/:id/financial/worldoffice-live-check',
+  allowRoles('admin'),
+  worldOfficeFinancialController.liveCheck
+);
+
+router.post(
+  '/service-orders/:id/financial/worldoffice-register-zero-balance',
+  allowRoles('admin'),
+  worldOfficeFinancialController.registerZeroBalance
+);
+
+// ============================================================
+// V17 · CONTROL FINANCIERO / CORRELACIÓN WORLDOFFICE
+// ============================================================
+
+router.get(
+  '/service-orders/financial/overview',
+  allowRoles('admin', 'tecnico'),
+  serviceFinancialController.getFinancialOverview
+);
+
+router.get(
+  '/service-orders/:id/financial',
+  allowRoles('admin', 'tecnico'),
+  serviceFinancialController.getFinancialControl
+);
+
+router.put(
+  '/service-orders/:id/financial',
+  allowRoles('admin'),
+  serviceFinancialController.updateFinancialControl
+);
+
+router.post(
+  '/service-orders/:id/financial/verifications',
+  allowRoles('admin'),
+  serviceFinancialController.addFinancialVerification
+);
+
+router.get(
+  '/service-orders/:id/financial/worldoffice-correlation',
+  allowRoles('admin'),
+  serviceFinancialController.getWorldOfficeCorrelation
+);
+
+// ============================================================
+// V16 · DOCUMENTOS FORMALES PDF
+// ============================================================
+
+router.get(
+  '/service-orders/:id/documents',
+  allowRoles('admin', 'tecnico'),
+  serviceDocumentController.listDocuments
+);
+
+router.post(
+  '/service-orders/:id/documents/:documentType/generate',
+  allowRoles('admin', 'tecnico'),
+  serviceDocumentController.generateDocument
+);
+
+router.get(
+  '/service-orders/:id/documents/:documentId/file',
+  allowRoles('admin', 'tecnico'),
+  serviceDocumentController.getDocumentFile
+);
+
+// ============================================================
+// V15 · WORKER AISLADO / PLANTILLAS / HISTORIAL SLA
+// ============================================================
+
+router.get(
+  '/service-orders/quality/sla-history',
+  allowRoles('admin', 'tecnico'),
+  serviceQualityController.getSlaHistory
+);
+
+router.get(
+  '/service-orders/integrations/templates',
+  allowRoles('admin'),
+  serviceNotificationTemplateController.listTemplates
+);
+
+router.put(
+  '/service-orders/integrations/templates/:templateId',
+  allowRoles('admin'),
+  serviceNotificationTemplateController.updateTemplate
+);
+
+router.get(
+  '/service-orders/integrations/worker-status',
+  allowRoles('admin'),
+  serviceNotificationOutboxController.getWorkerStatus
+);
+
+router.post(
+  '/service-orders/integrations/outbox/:outboxId/retry',
+  allowRoles('admin'),
+  serviceNotificationOutboxController.retryOutboxItem
+);
+
+// ============================================================
+// V14 · CALIDAD / SLA / AUDITORÍA / OUTBOX
+// ============================================================
+
+router.get(
+  '/service-orders/quality/dashboard',
+  allowRoles('admin', 'tecnico'),
+  serviceQualityController.getQualityDashboard
+);
+
+router.put(
+  '/service-orders/quality/sla-policies',
+  allowRoles('admin'),
+  serviceQualityController.updateSlaPolicies
+);
+
+router.get(
+  '/service-orders/:id/audit-timeline',
+  allowRoles('admin', 'tecnico'),
+  serviceQualityController.getAuditTimeline
+);
+
+router.get(
+  '/service-orders/integrations/outbox',
+  allowRoles('admin'),
+  serviceNotificationOutboxController.listOutbox
+);
+
+router.post(
+  '/service-orders/integrations/outbox/process',
+  allowRoles('admin'),
+  serviceNotificationOutboxController.processOutbox
+);
+
+// ============================================================
+// V13 · NOTIFICACIÓN / ENTREGA FINAL / FIRMA / SATISFACCIÓN
+// ============================================================
+
+router.get(
+  '/service-orders/:id/delivery',
+  allowRoles('admin', 'tecnico'),
+  serviceDeliveryController.getDelivery
+);
+
+router.post(
+  '/service-orders/:id/delivery/notifications',
+  allowRoles('admin'),
+  serviceDeliveryController.recordNotification
+);
+
+router.put(
+  '/service-orders/:id/delivery',
+  allowRoles('admin'),
+  serviceDeliveryController.saveDraft
+);
+
+router.post(
+  '/service-orders/:id/delivery/evidences',
+  allowRoles('admin'),
+  serviceDeliveryController.uploadEvidence
+);
+
+router.get(
+  '/service-orders/:id/delivery/evidences/:evidenceId/file',
+  allowRoles('admin', 'tecnico'),
+  serviceDeliveryController.getEvidenceFile
+);
+
+router.post(
+  '/service-orders/:id/delivery/signature',
+  allowRoles('admin'),
+  serviceDeliveryController.saveSignature
+);
+
+router.get(
+  '/service-orders/:id/delivery/signature',
+  allowRoles('admin', 'tecnico'),
+  serviceDeliveryController.getSignature
+);
+
+router.post(
+  '/service-orders/:id/delivery/confirm',
+  allowRoles('admin'),
+  serviceDeliveryController.confirmDelivery
+);
+
+router.put(
+  '/service-orders/:id/delivery/satisfaction',
+  allowRoles('admin'),
+  serviceDeliveryController.saveSatisfaction
+);
+
+// ============================================================
+// V12 · CIERRE TÉCNICO / DIRECCIÓN TÉCNICA
+// ============================================================
+
+router.get(
+  '/service-orders/:id/closure',
+  allowRoles('admin', 'tecnico'),
+  serviceClosureController.getClosure
+);
+
+router.put(
+  '/service-orders/:id/closure/checklist',
+  allowRoles('tecnico'),
+  serviceClosureController.saveChecklist
+);
+
+router.post(
+  '/service-orders/:id/closure/evidences',
+  allowRoles('tecnico'),
+  serviceClosureController.uploadEvidence
+);
+
+router.get(
+  '/service-orders/:id/closure/evidences/:evidenceId/file',
+  allowRoles('admin', 'tecnico'),
+  serviceClosureController.getEvidenceFile
+);
+
+router.post(
+  '/service-orders/:id/closure/technical-close',
+  allowRoles('tecnico'),
+  serviceClosureController.technicalClose
+);
+
+router.post(
+  '/service-orders/:id/closure/hand-to-direction',
+  allowRoles('tecnico'),
+  serviceClosureController.handToDirection
+);
+
+router.post(
+  '/service-orders/:id/closure/direction-receive',
+  allowRoles('admin'),
+  serviceClosureController.receiveAtDirection
+);
+
+router.post(
+  '/service-orders/:id/closure/direction-validate',
+  allowRoles('admin'),
+  serviceClosureController.validateDirection
 );
 
 // ============================================================

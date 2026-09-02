@@ -30,12 +30,19 @@ import {
   UserRoundCog,
   UsersRound,
   NotebookPen,
+  PackageCheck,
+  BarChart3,
   Wrench,
   X,
 } from 'lucide-react';
 
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import TechnicalStatisticsPanel from './reportes/TechnicalStatisticsPanel';
+import QualityDashboardPanel from './reportes/QualityDashboardPanel';
+import FinalDeliveryModal from './servicios/components/FinalDeliveryModal';
+import AuditTimelineModal from './servicios/components/AuditTimelineModal';
+import ServiceDocumentsModal from './servicios/components/ServiceDocumentsModal';
 
 const STATUS_LABELS = {
   pendiente: 'Pendiente',
@@ -282,6 +289,10 @@ const ServiceCard = ({
   onDiagnosis,
   onAuthorization,
   onTeamWork,
+  onClosure,
+  onFinalDelivery,
+  onAudit,
+  onDocuments,
   busyId,
   gps,
 }) => {
@@ -423,6 +434,22 @@ const ServiceCard = ({
           <button type="button" onClick={() => onTeamWork(service)} className="min-h-11 rounded-xl border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-semibold px-4 flex items-center justify-center gap-2">
             <UsersRound className="w-4 h-4" /> Equipo / bitácora
           </button>
+
+          <button type="button" onClick={() => onClosure(service)} className="min-h-11 rounded-xl border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold px-4 flex items-center justify-center gap-2">
+            <PackageCheck className="w-4 h-4" /> Cierre / Dirección Técnica
+          </button>
+
+          <button type="button" onClick={() => onFinalDelivery(service)} className="min-h-11 rounded-xl border border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 font-semibold px-4 flex items-center justify-center gap-2">
+            <PackageCheck className="w-4 h-4" /> Entrega final
+          </button>
+
+          <button type="button" onClick={() => onAudit(service)} className="min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold px-4 flex items-center justify-center gap-2">
+            <FileText className="w-4 h-4" /> Auditoría
+          </button>
+
+          <button type="button" onClick={() => onDocuments(service)} className="min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-4 flex items-center justify-center gap-2">
+            <FileText className="w-4 h-4" /> Documentos PDF
+          </button>
           <button type="button" onClick={() => onConfigureGeofence(service)} className="min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-4 flex items-center justify-center gap-2">
             <MapPin className="w-4 h-4" /> Punto del servicio
           </button>
@@ -485,14 +512,52 @@ const ServiceCard = ({
 
       {!isAdmin && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4">
-          <button
-            type="button"
-            onClick={() => onTeamWork(service)}
-            className="w-full min-h-11 rounded-xl border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-semibold px-4 flex items-center justify-center gap-2"
-          >
-            <NotebookPen className="w-4 h-4" />
-            Equipo y bitácora técnica
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+            <button
+              type="button"
+              onClick={() => onTeamWork(service)}
+              className="w-full min-h-11 rounded-xl border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-semibold px-4 flex items-center justify-center gap-2"
+            >
+              <NotebookPen className="w-4 h-4" />
+              Equipo y bitácora
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onClosure(service)}
+              className="w-full min-h-11 rounded-xl border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold px-4 flex items-center justify-center gap-2"
+            >
+              <PackageCheck className="w-4 h-4" />
+              Cierre técnico
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onFinalDelivery(service)}
+              className="w-full min-h-11 rounded-xl border border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 font-semibold px-4 flex items-center justify-center gap-2"
+            >
+              <PackageCheck className="w-4 h-4" />
+              Entrega final
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onAudit(service)}
+              className="w-full min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold px-4 flex items-center justify-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Auditoría
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onDocuments(service)}
+              className="w-full min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-4 flex items-center justify-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Documentos PDF
+            </button>
+          </div>
         </div>
       )}
 
@@ -1752,6 +1817,730 @@ const DiagnosisModal = ({ service, isAdmin, onClose, onEvidence, onRefresh }) =>
 
 
 
+
+const ClosureStatus = ({ status }) => {
+  const labels = {
+    draft: 'Borrador',
+    technical_closed: 'Cierre técnico confirmado',
+    handed_to_direction: 'Entregado a Dirección Técnica',
+    direction_received: 'Recibido por Dirección Técnica',
+    validated: 'Validado por Dirección Técnica',
+    rework_required: 'Reproceso requerido',
+  };
+
+  return (
+    <span className="rounded-full px-3 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800">
+      {labels[status] || status}
+    </span>
+  );
+};
+
+const TechnicalClosureModal = ({
+  service,
+  isAdmin,
+  currentUserId,
+  onClose,
+  onRefresh,
+}) => {
+  const [data, setData] = useState(null);
+  const [checklist, setChecklist] = useState({
+    tests_completed: false,
+    functional_verified: false,
+    accessories_checked: false,
+    cleaning_done: false,
+    protective_packaging: false,
+    safety_checked: false,
+  });
+  const [finalResult, setFinalResult] = useState('');
+  const [finalNotes, setFinalNotes] = useState('');
+  const [decisionNote, setDecisionNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadClosure = useCallback(async () => {
+    if (!service?.id) return;
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await api.get(
+        `/api/service-orders/${service.id}/closure`
+      );
+
+      const payload = response.data?.data || null;
+      setData(payload);
+
+      const closure = payload?.closure || {};
+
+      setChecklist((previous) => ({
+        ...previous,
+        ...(closure.checklist || {}),
+      }));
+
+      setFinalResult(
+        closure.final_result || ''
+      );
+
+      setFinalNotes(
+        closure.final_notes || ''
+      );
+
+      setDecisionNote(
+        closure.rework_reason ||
+        closure.direction_validation_note ||
+        ''
+      );
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible cargar el cierre técnico'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [service?.id]);
+
+  useEffect(() => {
+    if (!service) return undefined;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    loadClosure();
+
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', onKey);
+
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [service, onClose, loadClosure]);
+
+  if (!service) return null;
+
+  const closure =
+    data?.closure || {
+      status: 'draft',
+    };
+
+  const isPrimary =
+    data?.primary_technician_id ===
+      currentUserId;
+
+  const editable =
+    !isAdmin &&
+    isPrimary &&
+    service.estado === 'en_ejecucion' &&
+    ['draft', 'rework_required'].includes(
+      closure.status
+    );
+
+  const saveChecklist = async () => {
+    try {
+      setSaving(true);
+      setError('');
+
+      await api.put(
+        `/api/service-orders/${service.id}/closure/checklist`,
+        {
+          checklist,
+          final_result: finalResult,
+          final_notes: finalNotes,
+        }
+      );
+
+      await loadClosure();
+      await onRefresh?.();
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible guardar el checklist'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const upload = async (file) => {
+    if (!file) return;
+
+    try {
+      setSaving(true);
+      setError('');
+
+      await api.post(
+        `/api/service-orders/${service.id}/closure/evidences`,
+        file,
+        {
+          params: {
+            name: file.name,
+            note:
+              'Evidencia final de cierre técnico',
+          },
+          headers: {
+            'Content-Type':
+              file.type ||
+              'application/octet-stream',
+          },
+        }
+      );
+
+      await loadClosure();
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible cargar la evidencia'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEvidence = async (
+    evidence
+  ) => {
+    try {
+      const response = await api.get(
+        `/api/service-orders/${service.id}/closure/evidences/${evidence.id}/file`,
+        {
+          responseType: 'blob',
+        }
+      );
+
+      const url =
+        URL.createObjectURL(
+          response.data
+        );
+
+      window.open(
+        url,
+        '_blank',
+        'noopener,noreferrer'
+      );
+
+      window.setTimeout(
+        () => URL.revokeObjectURL(url),
+        60_000
+      );
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible abrir la evidencia'
+      );
+    }
+  };
+
+  const run = async (
+    endpoint,
+    body = {}
+  ) => {
+    try {
+      setSaving(true);
+      setError('');
+
+      await api.post(
+        `/api/service-orders/${service.id}/closure/${endpoint}`,
+        body
+      );
+
+      await loadClosure();
+      await onRefresh?.();
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.message ||
+          'No fue posible completar la acción'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const required = [
+    ['tests_completed', 'Pruebas finales realizadas'],
+    ['functional_verified', 'Funcionamiento final verificado'],
+    ['accessories_checked', 'Accesorios / piezas verificados'],
+    ['cleaning_done', 'Limpieza realizada'],
+  ];
+
+  const optional = [
+    ['protective_packaging', 'Equipo protegido / empacado'],
+    ['safety_checked', 'Validación de seguridad realizada'],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[125] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+      <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
+        <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide font-semibold text-emerald-600 dark:text-emerald-300">
+              {service.codigo_os}
+            </p>
+            <h3 className="text-lg sm:text-xl font-bold">
+              Cierre técnico y Dirección Técnica
+            </h3>
+            <div className="mt-2">
+              <ClosureStatus
+                status={closure.status}
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-10 h-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5 space-y-5"
+          style={{
+            WebkitOverflowScrolling:
+              'touch',
+          }}
+        >
+          {error && (
+            <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 p-3 text-sm text-rose-700 dark:text-rose-300">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="py-12 text-center text-slate-500">
+              Cargando...
+            </div>
+          ) : (
+            <>
+              {closure.status ===
+                'rework_required' && (
+                <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-4">
+                  <p className="font-bold text-amber-800 dark:text-amber-300">
+                    Dirección Técnica solicitó reproceso
+                  </p>
+                  <p className="mt-1 text-sm whitespace-pre-wrap">
+                    {closure.rework_reason ||
+                      'Sin observación registrada'}
+                  </p>
+                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                    Reanuda la OS, realiza la corrección, guarda nuevamente el checklist y carga una nueva evidencia final.
+                  </p>
+                </div>
+              )}
+
+              <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+                <h4 className="font-bold">
+                  Checklist de cierre
+                </h4>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[...required, ...optional].map(
+                    ([key, label]) => (
+                      <label
+                        key={key}
+                        className="min-h-12 rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-start gap-3"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(
+                            checklist[key]
+                          )}
+                          disabled={!editable}
+                          onChange={(event) =>
+                            setChecklist(
+                              (previous) => ({
+                                ...previous,
+                                [key]:
+                                  event.target
+                                    .checked,
+                              })
+                            )
+                          }
+                          className="mt-0.5 w-5 h-5 shrink-0"
+                        />
+
+                        <span className="text-sm">
+                          {label}
+                          {required.some(
+                            ([requiredKey]) =>
+                              requiredKey === key
+                          ) && (
+                            <span className="text-rose-500">
+                              {' '}*
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    )
+                  )}
+                </div>
+
+                <label className="mt-4 block">
+                  <span className="text-sm font-semibold">
+                    Resultado final *
+                  </span>
+                  <textarea
+                    rows={4}
+                    value={finalResult}
+                    disabled={!editable}
+                    onChange={(event) =>
+                      setFinalResult(
+                        event.target.value
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 disabled:opacity-70"
+                    placeholder="Estado final, pruebas realizadas, funcionamiento..."
+                  />
+                </label>
+
+                <label className="mt-3 block">
+                  <span className="text-sm font-semibold">
+                    Observaciones finales
+                  </span>
+                  <textarea
+                    rows={3}
+                    value={finalNotes}
+                    disabled={!editable}
+                    onChange={(event) =>
+                      setFinalNotes(
+                        event.target.value
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 disabled:opacity-70"
+                  />
+                </label>
+
+                {editable && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={saveChecklist}
+                    className="mt-3 w-full sm:w-auto min-h-11 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 font-semibold"
+                  >
+                    Guardar checklist
+                  </button>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold">
+                      Evidencias finales
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      JPG, PNG, WEBP o PDF.
+                    </p>
+                  </div>
+
+                  {editable && (
+                    <label className="min-h-11 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold px-3 flex items-center justify-center gap-2 cursor-pointer">
+                      <Camera className="w-4 h-4" />
+                      Adjuntar evidencia
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        disabled={saving}
+                        onChange={(event) => {
+                          const file =
+                            event.target.files?.[0];
+
+                          if (file) {
+                            upload(file);
+                          }
+
+                          event.target.value = '';
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(data?.evidences || []).map(
+                    (evidence) => (
+                      <button
+                        key={evidence.id}
+                        type="button"
+                        onClick={() =>
+                          openEvidence(
+                            evidence
+                          )
+                        }
+                        className="min-h-12 rounded-xl border border-slate-200 dark:border-slate-800 p-3 text-left"
+                      >
+                        <span className="font-semibold text-sm block truncate">
+                          {evidence.original_name ||
+                            'Evidencia final'}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {formatDateTime(
+                            evidence.created_at
+                          )}
+                        </span>
+                      </button>
+                    )
+                  )}
+
+                  {(data?.evidences || []).length ===
+                    0 && (
+                    <div className="sm:col-span-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-center text-sm text-slate-500">
+                      No hay evidencias finales.
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                <h4 className="font-bold">
+                  Flujo de entrega interna
+                </h4>
+
+                {!isAdmin &&
+                  isPrimary &&
+                  closure.status ===
+                    'draft' &&
+                  service.estado ===
+                    'en_ejecucion' && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        run(
+                          'technical-close'
+                        )
+                      }
+                      className="w-full min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold"
+                    >
+                      Confirmar cierre técnico
+                    </button>
+                  )}
+
+                {!isAdmin &&
+                  isPrimary &&
+                  closure.status ===
+                    'rework_required' &&
+                  service.estado ===
+                    'en_ejecucion' && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        run(
+                          'technical-close'
+                        )
+                      }
+                      className="w-full min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold"
+                    >
+                      Confirmar cierre después del reproceso
+                    </button>
+                  )}
+
+                {!isAdmin &&
+                  isPrimary &&
+                  closure.status ===
+                    'technical_closed' && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        run(
+                          'hand-to-direction'
+                        )
+                      }
+                      className="w-full min-h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold"
+                    >
+                      Entregar a Dirección Técnica
+                    </button>
+                  )}
+
+                {isAdmin &&
+                  closure.status ===
+                    'handed_to_direction' && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        run(
+                          'direction-receive'
+                        )
+                      }
+                      className="w-full min-h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold"
+                    >
+                      Recibir equipo en Dirección Técnica
+                    </button>
+                  )}
+
+                {isAdmin &&
+                  closure.status ===
+                    'direction_received' && (
+                    <>
+                      <textarea
+                        rows={3}
+                        value={decisionNote}
+                        onChange={(event) =>
+                          setDecisionNote(
+                            event.target.value
+                          )
+                        }
+                        placeholder="Observación de validación o motivo de reproceso..."
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2"
+                      />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => {
+                            if (
+                              !decisionNote.trim()
+                            ) {
+                              setError(
+                                'Indica el motivo del reproceso.'
+                              );
+                              return;
+                            }
+
+                            run(
+                              'direction-validate',
+                              {
+                                decision:
+                                  'rejected',
+                                note:
+                                  decisionNote,
+                              }
+                            );
+                          }}
+                          className="min-h-12 rounded-xl border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-semibold"
+                        >
+                          Devolver a reproceso
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            run(
+                              'direction-validate',
+                              {
+                                decision:
+                                  'approved',
+                                note:
+                                  decisionNote,
+                              }
+                            )
+                          }
+                          className="min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold"
+                        >
+                          Validar cierre
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                {closure.status ===
+                  'validated' && (
+                  <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-4 text-sm text-emerald-800 dark:text-emerald-300">
+                    Dirección Técnica validó el cierre. La orden está lista para avanzar a la entrega final al cliente.
+                  </div>
+                )}
+
+                {closure.status ===
+                  'handed_to_direction' &&
+                  !isAdmin && (
+                  <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-800 dark:text-amber-300">
+                    Pendiente de recepción formal por Dirección Técnica.
+                  </div>
+                )}
+
+                {closure.status ===
+                  'direction_received' &&
+                  !isAdmin && (
+                  <div className="rounded-xl bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-800 dark:text-blue-300">
+                    Dirección Técnica tiene la custodia y está validando el cierre.
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+        </div>
+
+        <footer className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 bg-white dark:bg-slate-900">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto min-h-11 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold px-5"
+          >
+            Cerrar
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+};
+
+const TechnicalStatsModal = ({
+  onClose,
+}) => {
+  useEffect(() => {
+    const previous =
+      document.body.style.overflow;
+    document.body.style.overflow =
+      'hidden';
+
+    return () => {
+      document.body.style.overflow =
+        previous;
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[130] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+      <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-6xl bg-slate-50 dark:bg-slate-950 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
+        <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide font-semibold text-blue-600">
+              Indicadores
+            </p>
+            <h3 className="text-lg sm:text-xl font-bold">
+              Mis estadísticas
+            </h3>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-10 h-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5"
+          style={{
+            WebkitOverflowScrolling:
+              'touch',
+          }}
+        >
+          <div className="space-y-6">
+            <TechnicalStatisticsPanel />
+            <QualityDashboardPanel />
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 const TeamWorkModal = ({
   service,
   isAdmin,
@@ -2853,6 +3642,11 @@ export default function MisServicios() {
   const [diagnosisService, setDiagnosisService] = useState(null);
   const [authorizationService, setAuthorizationService] = useState(null);
   const [teamWorkService, setTeamWorkService] = useState(null);
+  const [closureService, setClosureService] = useState(null);
+  const [finalDeliveryService, setFinalDeliveryService] = useState(null);
+  const [auditService, setAuditService] = useState(null);
+  const [documentsService, setDocumentsService] = useState(null);
+  const [showTechnicalStats, setShowTechnicalStats] = useState(false);
   const [impedimentService, setImpedimentService] = useState(null);
   const [impedimentReason, setImpedimentReason] = useState('');
 
@@ -3149,10 +3943,23 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
           </p>
         </div>
 
-        <button type="button" onClick={() => load()} className="w-full sm:w-auto min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 px-4 font-semibold flex items-center justify-center gap-2">
-          <RefreshCw className="w-4 h-4" />
-          Actualizar
-        </button>
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+          {isTechnician && (
+            <button
+              type="button"
+              onClick={() => setShowTechnicalStats(true)}
+              className="w-full sm:w-auto min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 px-4 font-semibold flex items-center justify-center gap-2"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Mis estadísticas
+            </button>
+          )}
+
+          <button type="button" onClick={() => load()} className="w-full sm:w-auto min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 px-4 font-semibold flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Actualizar
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -3283,6 +4090,10 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
               onDiagnosis={setDiagnosisService}
               onAuthorization={setAuthorizationService}
               onTeamWork={setTeamWorkService}
+              onClosure={setClosureService}
+              onFinalDelivery={setFinalDeliveryService}
+              onAudit={setAuditService}
+              onDocuments={setDocumentsService}
               busyId={busyId}
               gps={gps}
             />
@@ -3318,6 +4129,33 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
         onRefresh={() => load(true)}
       />
 
+      <AuditTimelineModal
+        service={auditService}
+        onClose={() => setAuditService(null)}
+      />
+
+      <ServiceDocumentsModal
+        service={documentsService}
+        isAdmin={isAdmin}
+        onClose={() => setDocumentsService(null)}
+      />
+
+      <FinalDeliveryModal
+        service={finalDeliveryService}
+        isAdmin={isAdmin}
+        currentUserId={user?.id}
+        onClose={() => setFinalDeliveryService(null)}
+        onRefresh={() => load(true)}
+      />
+
+      <TechnicalClosureModal
+        service={closureService}
+        isAdmin={isAdmin}
+        currentUserId={user?.id}
+        onClose={() => setClosureService(null)}
+        onRefresh={() => load(true)}
+      />
+
       <TeamWorkModal
         service={teamWorkService}
         isAdmin={isAdmin}
@@ -3331,6 +4169,12 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
         onClose={() => setAuthorizationService(null)}
         onRefresh={() => load(true)}
       />
+
+      {showTechnicalStats && (
+        <TechnicalStatsModal
+          onClose={() => setShowTechnicalStats(false)}
+        />
+      )}
     </div>
   );
 }

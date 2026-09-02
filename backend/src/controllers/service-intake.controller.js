@@ -156,7 +156,7 @@ async function resolveClientForIntake(
   const origin =
     cleanText(
       body?.client_origin ||
-        body?.client_snapshot?.origen,
+      body?.client_snapshot?.origen,
       30
     ) || 'local';
 
@@ -187,16 +187,16 @@ async function resolveClientForIntake(
     body?.client_snapshot?.id_externo ??
     (
       origin === 'melissa' &&
-      requestedId &&
-      /^\d+$/.test(requestedId)
+        requestedId &&
+        /^\d+$/.test(requestedId)
         ? requestedId
         : null
     );
 
   const externalId =
     externalCandidate !== null &&
-    externalCandidate !== undefined &&
-    /^\d+$/.test(String(externalCandidate))
+      externalCandidate !== undefined &&
+      /^\d+$/.test(String(externalCandidate))
       ? String(externalCandidate)
       : null;
 
@@ -290,20 +290,20 @@ async function resolveClientForIntake(
 
   const snapshot =
     body?.client_snapshot &&
-    typeof body.client_snapshot === 'object'
+      typeof body.client_snapshot === 'object'
       ? body.client_snapshot
       : {};
 
   const inferredType =
     snapshot.tipo_persona === 'natural' ||
-    snapshot.tipo_persona === 'juridica'
+      snapshot.tipo_persona === 'juridica'
       ? snapshot.tipo_persona
       : (
-          syncClient.razon_social &&
+        syncClient.razon_social &&
           !syncClient.primer_apellido
-            ? 'juridica'
-            : 'natural'
-        );
+          ? 'juridica'
+          : 'natural'
+      );
 
   const localId = randomUUID();
 
@@ -337,28 +337,28 @@ async function resolveClientForIntake(
       localId,
       inferredType,
       syncClient.primer_nombre ||
-        snapshot.primer_nombre ||
-        null,
+      snapshot.primer_nombre ||
+      null,
       syncClient.segundo_nombre ||
-        snapshot.segundo_nombre ||
-        null,
+      snapshot.segundo_nombre ||
+      null,
       syncClient.primer_apellido ||
-        snapshot.primer_apellido ||
-        null,
+      snapshot.primer_apellido ||
+      null,
       syncClient.segundo_apellido ||
-        snapshot.segundo_apellido ||
-        null,
+      snapshot.segundo_apellido ||
+      null,
       inferredType === 'juridica'
         ? (
-            syncClient.razon_social ||
-            snapshot.razon_social ||
-            syncClient.primer_nombre ||
-            `Cliente WO ${externalId}`
-          )
+          syncClient.razon_social ||
+          snapshot.razon_social ||
+          syncClient.primer_nombre ||
+          `Cliente WO ${externalId}`
+        )
         : null,
       syncClient.documento ||
-        snapshot.documento ||
-        `WO-${externalId}`,
+      snapshot.documento ||
+      `WO-${externalId}`,
       snapshot.telefono || null,
       snapshot.email || null,
       snapshot.direccion || null,
@@ -623,34 +623,38 @@ async function getIntakeTeam(
   client,
   intakeId
 ) {
-  const result = await client.query(
-    `
-      SELECT
-        itm.id,
-        itm.technician_id,
-        itm.member_role,
-        u.nombre1,
-        u.nombre2,
-        u.apellidos,
-        u.usuario,
-        u.cedula,
-        u.celular,
-        u.email,
-        u.activo
-      FROM service_order_intake_team_members itm
-      JOIN usuarios u ON u.id = itm.technician_id
-      WHERE itm.intake_id = $1
-      ORDER BY
-        CASE itm.member_role
-          WHEN 'primary' THEN 0
-          ELSE 1
-        END,
-        u.nombre1 ASC NULLS LAST
-    `,
-    [intakeId]
-  );
-
-  return result.rows;
+  try {
+    const result = await client.query(
+      `
+        SELECT
+          itm.id,
+          itm.technician_id,
+          itm.member_role,
+          u.nombre1,
+          u.nombre2,
+          u.apellidos,
+          u.usuario,
+          u.cedula,
+          u.celular,
+          u.email,
+          u.activo
+        FROM service_order_intake_team_members itm
+        JOIN usuarios u ON u.id = itm.technician_id
+        WHERE itm.intake_id = $1
+        ORDER BY
+          CASE itm.member_role
+            WHEN 'primary' THEN 0
+            ELSE 1
+          END,
+          u.nombre1 ASC NULLS LAST
+      `,
+      [intakeId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error in getIntakeTeam:', error);
+    throw error;
+  }
 }
 
 exports.list = async (req, res) => {
@@ -876,6 +880,8 @@ exports.create = async (req, res) => {
       v.clientAcceptanceChannel &&
       !VALID_CHANNELS.has(v.clientAcceptanceChannel)
     ) {
+      await client.query('ROLLBACK');
+
       return res.status(400).json({
         success: false,
         message: 'Canal de aceptación no válido',
@@ -883,6 +889,8 @@ exports.create = async (req, res) => {
     }
 
     if (v.billingMode === 'postpaid' && !isAdmin(req)) {
+      await client.query('ROLLBACK');
+
       return res.status(403).json({
         success: false,
         message:
@@ -932,8 +940,12 @@ exports.create = async (req, res) => {
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
           $16,$17,$18,$19,$20,
           CASE WHEN $16::boolean THEN NOW() ELSE NULL END,
-          $21,$22,
-          CASE WHEN $21 = 'postpaid' THEN 'not_required' ELSE 'pending' END,
+          $21::varchar(20),$22,
+          CASE
+            WHEN $21::varchar(20) = 'postpaid'::varchar(20)
+            THEN 'not_required'::varchar(20)
+            ELSE 'pending'::varchar(20)
+          END,
           $23,$24,$25,$26,$27,
           'draft',NOW(),NOW()
         )
@@ -1015,7 +1027,7 @@ exports.create = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
+    try { await client.query('ROLLBACK'); } catch (_) { }
 
     console.error('Error creating service intake:', error);
 
@@ -1202,7 +1214,7 @@ exports.update = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
+    try { await client.query('ROLLBACK'); } catch (_) { }
 
     console.error('Error updating service intake:', error);
 
@@ -1293,12 +1305,12 @@ exports.updateTeam = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
+    try { await client.query('ROLLBACK'); } catch (_) { }
 
     console.error('Error updating intake team:', error);
 
     if (
-      ['TEAM_TOO_LARGE','PRIMARY_REQUIRED','INVALID_TECHNICIAN']
+      ['TEAM_TOO_LARGE', 'PRIMARY_REQUIRED', 'INVALID_TECHNICIAN']
         .includes(error?.code)
     ) {
       return res.status(409).json({
@@ -1423,7 +1435,7 @@ exports.verifyPayment = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
+    try { await client.query('ROLLBACK'); } catch (_) { }
 
     console.error('Error verifying service payment:', error);
 
@@ -1454,20 +1466,27 @@ exports.activate = async (req, res) => {
       });
     }
 
+    // START TRANSACTION
     await client.query('BEGIN');
+    console.log('🔄 Transaction started for intake:', req.params.intakeId);
 
+    // 1. Get intake with lock
+    console.log('📥 Getting intake with lock...');
     const intake = await getIntake(client, req.params.intakeId, true);
 
     if (!intake) {
       await client.query('ROLLBACK');
+      console.log('❌ Intake not found, rolled back');
       return res.status(404).json({
         success: false,
         message: 'Solicitud no encontrada',
       });
     }
+    console.log('✅ Intake found:', intake.id);
 
     if (intake.status === 'activated') {
       await client.query('ROLLBACK');
+      console.log('❌ Intake already activated, rolled back');
       return res.status(409).json({
         success: false,
         code: 'INTAKE_ALREADY_ACTIVATED',
@@ -1478,16 +1497,20 @@ exports.activate = async (req, res) => {
 
     if (intake.status === 'cancelled') {
       await client.query('ROLLBACK');
+      console.log('❌ Intake cancelled, rolled back');
       return res.status(409).json({
         success: false,
         message: 'Una solicitud cancelada no puede activarse',
       });
     }
 
+    // 2. Evaluate readiness
+    console.log('📊 Evaluating readiness...');
     const readiness = evaluateReadiness(intake);
 
     if (!readiness.ready) {
       await client.query('ROLLBACK');
+      console.log('❌ Intake not ready, rolled back. Missing:', readiness.missing);
       return res.status(409).json({
         success: false,
         code: 'INTAKE_NOT_READY',
@@ -1495,123 +1518,131 @@ exports.activate = async (req, res) => {
         missing: readiness.missing,
       });
     }
+    console.log('✅ Intake is ready');
 
+    // 3. Get next OS number
+    console.log('🔢 Getting next OS number...');
     const year = new Date().getFullYear();
-
-    const counterResult = await client.query(
-      `
-        INSERT INTO service_order_number_counters (
-          year,
-          last_number,
-          updated_at
-        )
-        VALUES ($1, 1, NOW())
-        ON CONFLICT (year)
-        DO UPDATE
-        SET last_number =
-              service_order_number_counters.last_number + 1,
-            updated_at = NOW()
-        RETURNING last_number
-      `,
-      [year]
-    );
+    let counterResult;
+    
+    try {
+      counterResult = await client.query(
+        `
+          INSERT INTO service_order_number_counters (
+            year,
+            last_number,
+            updated_at
+          )
+          VALUES ($1, 1, NOW())
+          ON CONFLICT (year)
+          DO UPDATE
+          SET last_number =
+                service_order_number_counters.last_number + 1,
+              updated_at = NOW()
+          RETURNING last_number
+        `,
+        [year]
+      );
+      console.log('✅ Counter query executed successfully');
+    } catch (counterError) {
+      console.error('❌ Error in counter query:', counterError);
+      await client.query('ROLLBACK');
+      console.log('🔄 Rolled back due to counter error');
+      throw counterError;
+    }
 
     const nextNumber = Number(counterResult.rows[0].last_number);
-    const codigoOs =
-      `OS-${year}-${String(nextNumber).padStart(4, '0')}`;
+    const codigoOs = `OS-${year}-${String(nextNumber).padStart(4, '0')}`;
+    console.log('✅ OS Code generated:', codigoOs);
 
+    // 4. Create service order
+    console.log('📝 Creating service order...');
     const serviceOrderId = randomUUID();
 
-    const orderResult = await client.query(
-      `
-        INSERT INTO service_orders (
-          id,
-          codigo_os,
-          client_id,
-          origen_tipo,
-          origen_id,
-          descripcion_inicial,
-          prioridad,
-          tecnico_id,
-          fecha_agendada,
-          hora_inicio_agendada,
-          duracion_estimada,
-          observaciones,
-          notas_internas,
-          estado,
-          "createdAt",
-          "updatedAt"
-        )
-        VALUES (
-          $1,$2,$3,'otro',$4,$5,$6,NULL,$7,$8,$9,$10,$11,
-          'pendiente',NOW(),NOW()
-        )
-        RETURNING *
-      `,
-      [
-        serviceOrderId,
-        codigoOs,
-        intake.client_id,
-        intake.id,
-        intake.request_description,
-        intake.priority || 'normal',
-        intake.scheduled_date,
-        intake.scheduled_time,
-        intake.estimated_duration || intake.estimated_minutes || 60,
-        intake.scope_text,
-        [
-          `Clasificación: ${intake.classification || ''}`,
-          `Tipo: ${intake.service_type_name || ''}`,
-          `Condiciones informadas: ${intake.conditions_text || ''}`,
-          `Costos adicionales informados: ${intake.additional_costs_notice || ''}`,
-          `Modalidad: ${intake.billing_mode}`,
-          `Factura: ${intake.invoice_reference || 'N/A'}`,
-        ].join('\n'),
-      ]
-    );
+    const activationObservations = [
+      `Solicitud origen (intake): ${intake.id}`,
+      intake.scope_text ? `Alcance: ${intake.scope_text}` : null,
+      `Prioridad: ${intake.priority || 'normal'}`,
+      `Clasificación: ${intake.classification || ''}`,
+      `Tipo: ${intake.service_type_name || ''}`,
+      `Condiciones informadas: ${intake.conditions_text || ''}`,
+      `Costos adicionales informados: ${intake.additional_costs_notice || ''}`,
+      `Modalidad: ${intake.billing_mode}`,
+      `Factura: ${intake.invoice_reference || 'N/A'}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
 
+    let orderResult;
     try {
-      await client.query(
+      orderResult = await client.query(
         `
-          INSERT INTO service_order_services (
-            service_order_id,
-            tipo_servicio_id,
-            tipo_servicio_nombre,
-            descripcion_problema,
+          INSERT INTO service_orders (
+            id,
+            codigo_os,
+            client_id,
+            origen_tipo,
+            origen_id,
+            descripcion_inicial,
+            tecnico_id,
+            fecha_agendada,
+            hora_inicio_agendada,
+            duracion_estimada,
             observaciones,
-            precio_estimado,
-            equipo_relacionado,
-            requiere_diagnostico,
-            requiere_repuestos,
-            repuestos_necesarios,
+            estado,
+            creado_por,
             "createdAt",
             "updatedAt"
           )
           VALUES (
-            $1,$2,$3,$4,$5,$6,NULL,$7,FALSE,NULL,NOW(),NOW()
+            $1,$2,$3,'otro',NULL,$4,NULL,$5,$6,$7,$8,
+            'pendiente',$9,NOW(),NOW()
           )
+          RETURNING *
         `,
         [
           serviceOrderId,
-          intake.service_type_id || null,
-          intake.service_type_name,
+          codigoOs,
+          intake.client_id,
           intake.request_description,
-          intake.scope_text,
-          intake.base_value,
-          intake.classification === 'diagnostic',
+          intake.scheduled_date,
+          intake.scheduled_time,
+          intake.estimated_duration || intake.estimated_minutes || 60,
+          activationObservations,
+          req.user.id,
         ]
       );
-    } catch (serviceItemError) {
-      if (serviceItemError?.code !== '42P01') {
-        throw serviceItemError;
-      }
+      console.log('✅ Service order created:', serviceOrderId);
+    } catch (orderError) {
+      console.error('❌ Error creating service order:', {
+        message: orderError.message,
+        code: orderError.code,
+        detail: orderError.detail
+      });
+      await client.query('ROLLBACK');
+      console.log('🔄 Rolled back due to order creation error');
+      throw orderError;
     }
 
-    const plannedTeam = await getIntakeTeam(
-      client,
-      intake.id
-    );
+    // 5. Insert service details - TEMPORALMENTE DESHABILITADO
+    console.log('⏭️ Service details insert skipped (will be enabled later)');
 
+    // 6. Get planned team
+    console.log('👥 Getting planned team...');
+    let plannedTeam = [];
+    try {
+      plannedTeam = await getIntakeTeam(client, intake.id);
+      console.log(`✅ Planned team retrieved: ${plannedTeam.length} members`);
+    } catch (teamError) {
+      console.error('❌ Error getting intake team:', teamError);
+      console.log('🔄 Rolling back due to team error...');
+      await client.query('ROLLBACK');
+      console.log('✅ Rollback completed');
+      throw teamError;
+    }
+
+    // 7. Insert team members
+    console.log('👥 Inserting team members...');
     for (const member of plannedTeam) {
       await client.query(
         `
@@ -1639,7 +1670,10 @@ exports.activate = async (req, res) => {
         ]
       );
     }
+    console.log(`✅ ${plannedTeam.length} team members inserted`);
 
+    // 8. Update intake status
+    console.log('📝 Updating intake status...');
     await client.query(
       `
         UPDATE service_order_intakes
@@ -1650,21 +1684,178 @@ exports.activate = async (req, res) => {
       `,
       [serviceOrderId, intake.id]
     );
+    console.log('✅ Intake updated to activated');
 
-    await addEvent(client, {
-      serviceOrderId,
-      intakeId: intake.id,
-      eventType: 'service_order_created',
-      actorUserId: req.user.id,
-      metadata: {
-        codigo_os: codigoOs,
-        billing_mode: intake.billing_mode,
-        invoice_reference: intake.invoice_reference,
-        payment_status: intake.payment_status,
-      },
-    });
+    // 9. Financial controls
+    console.log('💰 Setting up financial controls...');
+    const initialFinancialStatus =
+      intake.billing_mode === 'prepaid' && intake.payment_status === 'verified'
+        ? 'cleared'
+        : intake.payment_status === 'not_required'
+          ? 'not_required'
+          : 'pending';
 
+    try {
+      await client.query(
+        `
+          INSERT INTO service_order_financial_controls (
+            service_order_id,
+            intake_id,
+            billing_mode,
+            verification_required,
+            clearance_status,
+            invoice_reference,
+            payment_reference,
+            expected_amount,
+            last_verified_at,
+            last_verified_by,
+            note,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            $1,$2,$3,TRUE,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW()
+          )
+          ON CONFLICT (service_order_id)
+          DO NOTHING
+        `,
+        [
+          serviceOrderId,
+          intake.id,
+          intake.billing_mode,
+          initialFinancialStatus,
+          intake.invoice_reference,
+          intake.payment_reference,
+          intake.base_value,
+          intake.payment_verified_at,
+          intake.payment_verified_by,
+          intake.billing_mode === 'postpaid'
+            ? 'Postpago: requiere control financiero antes de entrega.'
+            : 'Control inicializado desde solicitud de servicio.',
+        ]
+      );
+      console.log('✅ Financial controls set up');
+    } catch (financialError) {
+      console.error('❌ Error setting up financial controls:', financialError);
+      await client.query('ROLLBACK');
+      console.log('🔄 Rolled back due to financial controls error');
+      throw financialError;
+    }
+
+    if (
+      intake.billing_mode === 'prepaid' &&
+      intake.payment_status === 'verified' &&
+      intake.payment_verified_by
+    ) {
+      console.log('💰 Creating financial verification record...');
+      try {
+        const verificationId = randomUUID();
+        await client.query(
+          `
+            INSERT INTO service_order_financial_verifications (
+              id,
+              service_order_id,
+              verification_source,
+              verification_kind,
+              result_status,
+              invoice_reference,
+              payment_reference,
+              balance_amount,
+              paid_amount,
+              evidence_note,
+              source_snapshot,
+              verified_by,
+              verified_at,
+              created_at
+            )
+            VALUES (
+              $1,$2,'intake','payment_confirmed','cleared',
+              $3,$4,0,$5,$6,$7::jsonb,$8,
+              COALESCE($9,NOW()),NOW()
+            )
+          `,
+          [
+            verificationId,
+            serviceOrderId,
+            intake.invoice_reference,
+            intake.payment_reference,
+            intake.base_value,
+            'Verificación heredada de la solicitud de servicio.',
+            JSON.stringify({
+              intake_id: intake.id,
+              billing_mode: intake.billing_mode,
+              payment_status: intake.payment_status,
+              payment_method: intake.payment_method,
+              payment_reference: intake.payment_reference,
+              invoice_reference: intake.invoice_reference,
+            }),
+            intake.payment_verified_by,
+            intake.payment_verified_at,
+          ]
+        );
+
+        await client.query(
+          `
+            INSERT INTO service_order_financial_events (
+              id,
+              service_order_id,
+              event_type,
+              actor_user_id,
+              metadata,
+              created_at
+            )
+            VALUES (
+              $1,$2,'financial_verification_inherited',$3,$4::jsonb,NOW()
+            )
+          `,
+          [
+            randomUUID(),
+            serviceOrderId,
+            intake.payment_verified_by,
+            JSON.stringify({
+              verification_id: verificationId,
+              intake_id: intake.id,
+              billing_mode: intake.billing_mode,
+              invoice_reference: intake.invoice_reference,
+            }),
+          ]
+        );
+        console.log('✅ Financial verification created');
+      } catch (verificationError) {
+        console.error('❌ Error creating financial verification:', verificationError);
+        await client.query('ROLLBACK');
+        console.log('🔄 Rolled back due to verification error');
+        throw verificationError;
+      }
+    }
+
+    // 10. Add event
+    console.log('📝 Adding event...');
+    try {
+      await addEvent(client, {
+        serviceOrderId,
+        intakeId: intake.id,
+        eventType: 'service_order_created',
+        actorUserId: req.user.id,
+        metadata: {
+          codigo_os: codigoOs,
+          billing_mode: intake.billing_mode,
+          invoice_reference: intake.invoice_reference,
+          payment_status: intake.payment_status,
+        },
+      });
+      console.log('✅ Event added');
+    } catch (eventError) {
+      console.error('❌ Error adding event:', eventError);
+      await client.query('ROLLBACK');
+      console.log('🔄 Rolled back due to event error');
+      throw eventError;
+    }
+
+    // 11. Commit transaction
+    console.log('✅ Committing transaction...');
     await client.query('COMMIT');
+    console.log('✅ Transaction committed successfully!');
 
     return res.status(201).json({
       success: true,
@@ -1678,19 +1869,37 @@ exports.activate = async (req, res) => {
       },
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
+    try {
+      console.log('🔄 Rolling back transaction...');
+      await client.query('ROLLBACK');
+      console.log('✅ Rollback completed');
+    } catch (rollbackError) {
+      console.error('❌ Error during rollback:', rollbackError);
+    }
 
-    console.error('Error activating intake as service order:', error);
+    console.error('❌ Error activating intake as service order:', error);
 
-    return res.status(500).json({
+    if (error.code === '25P02') {
+      console.error('❌ Transaction aborted. This usually means a previous query failed.');
+      console.error('❌ Check the database logs for the root cause.');
+    }
+
+    const errorResponse = {
       success: false,
       message: 'Error al crear la orden de servicio desde la solicitud',
-    });
+    };
+
+    if (process.env.NODE_ENV === 'development') {
+      errorResponse.error = error.message;
+      errorResponse.code = error.code;
+      if (error.detail) errorResponse.detail = error.detail;
+    }
+
+    return res.status(500).json(errorResponse);
   } finally {
     client.release();
   }
 };
-
 exports.cancel = async (req, res) => {
   const client = await pool.connect();
 
@@ -1757,7 +1966,7 @@ exports.cancel = async (req, res) => {
       message: 'Solicitud cancelada',
     });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
+    try { await client.query('ROLLBACK'); } catch (_) { }
 
     console.error('Error cancelling service intake:', error);
 

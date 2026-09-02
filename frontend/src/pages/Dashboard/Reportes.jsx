@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import TechnicalStatisticsPanel from './reportes/TechnicalStatisticsPanel';
+import QualityDashboardPanel from './reportes/QualityDashboardPanel';
 import { exportToExcel, exportToPDF, formatCurrency, formatDate } from '../../services/exportService';
 import {
   FileText,
@@ -30,8 +31,16 @@ const Reportes = () => {
   const [reporteData, setReporteData] = useState(null);
   const [error, setError] = useState('');
 
-  const userRole = user?.rol || 'usuario';
-  const isAdmin = userRole === 'admin';
+  const userRole =
+    user?.role?.name ||
+    user?.rol ||
+    'usuario';
+
+  const isAdmin =
+    userRole === 'admin';
+
+  const isTechnician =
+    userRole === 'tecnico';
 
   const reportesConfig = {
     // Ventas
@@ -363,11 +372,18 @@ const Reportes = () => {
         </div>
       </div>
 
-      {isAdmin && (
-        <TechnicalStatisticsPanel
-          fechaInicio={fechaInicio}
-          fechaFin={fechaFin}
-        />
+      {(isAdmin || isTechnician) && (
+        <>
+          <TechnicalStatisticsPanel
+            fechaInicio={fechaInicio}
+            fechaFin={fechaFin}
+          />
+
+          <QualityDashboardPanel
+            fechaInicio={fechaInicio}
+            fechaFin={fechaFin}
+          />
+        </>
       )}
 
       {/* Grid de reportes */}
