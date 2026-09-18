@@ -12,19 +12,19 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'natural'
     },
     primer_nombre: {
-      type: DataTypes.STRING(60),
+      type: DataTypes.STRING(180),
       allowNull: true
     },
     segundo_nombre: {
-      type: DataTypes.STRING(60),
+      type: DataTypes.STRING(180),
       allowNull: true
     },
     primer_apellido: {
-      type: DataTypes.STRING(60),
+      type: DataTypes.STRING(180),
       allowNull: true
     },
     segundo_apellido: {
-      type: DataTypes.STRING(60),
+      type: DataTypes.STRING(180),
       allowNull: true
     },
     razon_social: {

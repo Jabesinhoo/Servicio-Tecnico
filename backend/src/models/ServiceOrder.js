@@ -50,13 +50,11 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   ServiceOrder.associate = (models) => {
-    // Solo relaciones con modelos que existen
     ServiceOrder.belongsTo(models.Client, { foreignKey: "client_id" });
     ServiceOrder.belongsTo(models.Usuario, { foreignKey: "tecnico_id" });
 
-    // Comentar las relaciones que causan error
-    // ServiceOrder.hasMany(models.ServiceTime, { foreignKey: "service_order_id" });
-    // ServiceOrder.hasMany(models.Invoice, { foreignKey: "service_order_id" });
+    ServiceOrder.hasMany(models.ServiceTime, { foreignKey: "service_order_id" });
+    ServiceOrder.hasMany(models.Invoice, { foreignKey: "service_order_id" });
   };
 
   return ServiceOrder;

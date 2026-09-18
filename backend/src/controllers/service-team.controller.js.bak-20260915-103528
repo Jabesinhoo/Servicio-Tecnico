@@ -772,71 +772,16 @@ exports.approveAndAssign = async (req, res) => {
     }
 
     let schedule = null;
-    let scheduleWarning = null;
 
     if (primary) {
-      /*
-       * La asignación del técnico NO debe depender de que exista
-       * disponibilidad automática.
-       *
-       * El SAVEPOINT permite revertir únicamente los cambios que
-       * pudiera hacer el motor de agenda, conservando:
-       * - aprobación
-       * - técnico principal
-       * - equipo asignado
-       * - service_order_assignments
-       */
-      await client.query(
-        'SAVEPOINT service_auto_schedule'
-      );
-
-      try {
-        schedule = await scheduleOrderAutomatically(
-          client,
-          {
-            orderId: id,
-            actorUserId: req.user.id,
-            replaceExisting: true,
-          }
-        );
-
-        await client.query(
-          'RELEASE SAVEPOINT service_auto_schedule'
-        );
-      } catch (scheduleError) {
-        if (
-          [
-            'NO_COMMON_SLOT',
-            'TEAM_REQUIRED_FOR_SCHEDULE',
-          ].includes(scheduleError?.code)
-        ) {
-          await client.query(
-            'ROLLBACK TO SAVEPOINT service_auto_schedule'
-          );
-
-          await client.query(
-            'RELEASE SAVEPOINT service_auto_schedule'
-          );
-
-          scheduleWarning = {
-            code: scheduleError.code,
-            message: scheduleError.message,
-          };
-
-          console.warn(
-            '⚠️ Orden aprobada/asignada sin agenda automática:',
-            scheduleWarning
-          );
-        } else {
-          try {
-            await client.query(
-              'ROLLBACK TO SAVEPOINT service_auto_schedule'
-            );
-          } catch (_) {}
-
-          throw scheduleError;
+      schedule = await scheduleOrderAutomatically(
+        client,
+        {
+          orderId: id,
+          actorUserId: req.user.id,
+          replaceExisting: true,
         }
-      }
+      );
     }
 
     await addEvent(client, {
@@ -860,11 +805,6 @@ exports.approveAndAssign = async (req, res) => {
       team_auto_assigned: Boolean(primary),
       team_size: team.length,
       schedule,
-      schedule_warning: scheduleWarning,
-      scheduling_pending: Boolean(
-        primary &&
-        !schedule
-      ),
     });
   } catch (error) {
     await rollback(client);

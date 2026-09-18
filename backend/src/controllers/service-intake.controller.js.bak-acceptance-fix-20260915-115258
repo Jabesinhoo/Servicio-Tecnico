@@ -173,91 +173,6 @@ async function resolveClientForIntake(client, body) {
     }
   }
 
-  /*
-   * Antes de asumir que un identificador num?rico
-   * pertenece exclusivamente a sync_clientes,
-   * intentamos correlacionarlo con un cliente local.
-   *
-   * El buscador puede devolver:
-   * - UUID local
-   * - codigo_worldoffice
-   * - documento
-   * - id_externo de WorldOffice
-   *
-   * Un cliente local NO necesita existir obligatoriamente
-   * en sync_clientes.
-   */
-  const localReferenceCandidates =
-    [
-      requestedId,
-      body?.client_external_id,
-      body?.client_snapshot?.id_externo,
-      body?.client_snapshot?.documento,
-    ]
-      .map((value) =>
-        cleanText(value, 120)
-      )
-      .filter(Boolean);
-
-  if (
-    localReferenceCandidates.length
-  ) {
-    const uniqueReferences =
-      [
-        ...new Set(
-          localReferenceCandidates
-        ),
-      ];
-
-    const localByReference =
-      await client.query(
-        `
-          SELECT
-            id,
-            documento,
-            codigo_worldoffice
-          FROM clients
-          WHERE activo = TRUE
-            AND (
-              documento =
-                ANY($1::text[])
-              OR
-              codigo_worldoffice =
-                ANY($1::text[])
-            )
-          ORDER BY
-            CASE
-              WHEN codigo_worldoffice =
-                ANY($1::text[])
-              THEN 0
-              ELSE 1
-            END
-          LIMIT 1
-        `,
-        [uniqueReferences]
-      );
-
-    if (
-      localByReference.rows[0]
-    ) {
-      return {
-        client_id:
-          localByReference
-            .rows[0]
-            .id,
-
-        origin:
-          'local',
-
-        source_reference:
-          cleanText(
-            body?.source_reference,
-            180
-          ),
-      };
-    }
-  }
-
   const externalCandidate =
     body?.client_external_id ??
     body?.client_snapshot?.id_externo ??
@@ -426,112 +341,14 @@ async function resolveClientForIntake(client, body) {
 
 async function resolveAcceptanceClientSnapshot(
   client,
-  body,
+  acceptanceClientId,
   fallbackClientId
 ) {
-  const requestedId =
-    cleanText(
-      body?.client_acceptance_client_id,
-      120
-    );
+  const targetId =
+    acceptanceClientId ||
+    fallbackClientId;
 
-  let localClientId = null;
-
-  // 1. Ya es un cliente local.
-  if (
-    requestedId &&
-    isUuid(requestedId)
-  ) {
-    const local =
-      await client.query(
-        `
-          SELECT id
-          FROM clients
-          WHERE id = $1
-            AND activo = TRUE
-          LIMIT 1
-        `,
-        [requestedId]
-      );
-
-    if (local.rows[0]) {
-      localClientId =
-        local.rows[0].id;
-    }
-  }
-
-  // 2. Cliente proveniente de WorldOffice/sync.
-  if (!localClientId) {
-    const snapshot =
-      body?.client_acceptance_snapshot &&
-      typeof body.client_acceptance_snapshot === 'object'
-        ? body.client_acceptance_snapshot
-        : {};
-
-    const externalCandidate =
-      body?.client_acceptance_external_id ??
-      snapshot?.id_externo ??
-      (
-        requestedId &&
-        /^\d+$/.test(requestedId)
-          ? requestedId
-          : null
-      );
-
-    if (
-      externalCandidate !== null &&
-      externalCandidate !== undefined &&
-      /^\d+$/.test(
-        String(externalCandidate)
-      )
-    ) {
-      const externalId =
-        String(externalCandidate);
-
-      const resolved =
-        await resolveClientForIntake(
-          client,
-          {
-            client_id:
-              requestedId ||
-              externalId,
-
-            client_origin:
-              body?.client_acceptance_origin ||
-              snapshot?.origen ||
-              'melissa',
-
-            client_external_id:
-              externalId,
-
-            client_snapshot:
-              snapshot,
-
-            source_reference:
-              `acceptance:${externalId}`,
-          }
-        );
-
-      localClientId =
-        resolved.client_id;
-    }
-  }
-
-  // 3. Si no se escogió otra persona,
-  //    el aceptante es el mismo cliente de la solicitud.
-  if (
-    !localClientId &&
-    fallbackClientId &&
-    isUuid(fallbackClientId)
-  ) {
-    localClientId =
-      fallbackClientId;
-  }
-
-  if (
-    !localClientId ||
-    !isUuid(localClientId)
-  ) {
+  if (!targetId || !isUuid(targetId)) {
     const error =
       new Error(
         'Selecciona un cliente válido como persona que acepta las condiciones'
@@ -543,38 +360,37 @@ async function resolveAcceptanceClientSnapshot(
     throw error;
   }
 
-  const result =
-    await client.query(
-      `
-        SELECT
-          id,
-          documento,
-          CASE
-            WHEN tipo_persona = 'juridica'
-            THEN NULLIF(
-              TRIM(razon_social),
-              ''
-            )
-            ELSE NULLIF(
-              TRIM(
-                CONCAT_WS(
-                  ' ',
-                  NULLIF(primer_nombre, ''),
-                  NULLIF(segundo_nombre, ''),
-                  NULLIF(primer_apellido, ''),
-                  NULLIF(segundo_apellido, '')
-                )
-              ),
-              ''
-            )
-          END AS acceptance_name
-        FROM clients
-        WHERE id = $1
-          AND activo = TRUE
-        LIMIT 1
-      `,
-      [localClientId]
-    );
+  const result = await client.query(
+    `
+      SELECT
+        id,
+        documento,
+        CASE
+          WHEN tipo_persona = 'juridica'
+          THEN NULLIF(
+            TRIM(razon_social),
+            ''
+          )
+          ELSE NULLIF(
+            TRIM(
+              CONCAT_WS(
+                ' ',
+                NULLIF(primer_nombre, ''),
+                NULLIF(segundo_nombre, ''),
+                NULLIF(primer_apellido, ''),
+                NULLIF(segundo_apellido, '')
+              )
+            ),
+            ''
+          )
+        END AS acceptance_name
+      FROM clients
+      WHERE id = $1
+        AND activo = TRUE
+      LIMIT 1
+    `,
+    [targetId]
+  );
 
   const row =
     result.rows[0];
@@ -608,8 +424,7 @@ async function resolveAcceptanceClientSnapshot(
   }
 
   return {
-    client_id:
-      row.id,
+    client_id: row.id,
 
     name:
       row.acceptance_name ||
@@ -621,6 +436,7 @@ async function resolveAcceptanceClientSnapshot(
       ).trim(),
   };
 }
+
 function validateCorePayload(body, { partial = false } = {}) {
   const errors = [];
 
@@ -658,17 +474,8 @@ function validateCorePayload(body, { partial = false } = {}) {
     errors.push('Prioridad no válida');
   }
 
-  if (!['auto', 'manual'].includes(schedulingMode)) {
-    errors.push('Modo de programacion no valido');
-  }
-
-  if (schedulingMode === 'manual') {
-    if (!scheduledDate) {
-      errors.push('Para programacion manual, la fecha es requerida');
-    }
-    if (!scheduledTime) {
-      errors.push('Para programacion manual, la hora es requerida');
-    }
+  if (schedulingMode === 'auto' && !scheduledDate) {
+    errors.push('Para programación automática, la fecha es requerida');
   }
 
   const baseValue = parseMoney(body?.base_value);
@@ -1116,7 +923,7 @@ exports.create = async (req, res) => {
       const acceptance =
         await resolveAcceptanceClientSnapshot(
           client,
-          req.body || {},
+          v.clientAcceptanceClientId,
           resolvedClient.client_id
         );
 
@@ -1363,7 +1170,7 @@ exports.update = async (req, res) => {
       const acceptance =
         await resolveAcceptanceClientSnapshot(
           client,
-          req.body || {},
+          v.clientAcceptanceClientId,
           intake.client_id
         );
 

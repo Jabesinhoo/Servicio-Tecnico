@@ -173,91 +173,6 @@ async function resolveClientForIntake(client, body) {
     }
   }
 
-  /*
-   * Antes de asumir que un identificador num?rico
-   * pertenece exclusivamente a sync_clientes,
-   * intentamos correlacionarlo con un cliente local.
-   *
-   * El buscador puede devolver:
-   * - UUID local
-   * - codigo_worldoffice
-   * - documento
-   * - id_externo de WorldOffice
-   *
-   * Un cliente local NO necesita existir obligatoriamente
-   * en sync_clientes.
-   */
-  const localReferenceCandidates =
-    [
-      requestedId,
-      body?.client_external_id,
-      body?.client_snapshot?.id_externo,
-      body?.client_snapshot?.documento,
-    ]
-      .map((value) =>
-        cleanText(value, 120)
-      )
-      .filter(Boolean);
-
-  if (
-    localReferenceCandidates.length
-  ) {
-    const uniqueReferences =
-      [
-        ...new Set(
-          localReferenceCandidates
-        ),
-      ];
-
-    const localByReference =
-      await client.query(
-        `
-          SELECT
-            id,
-            documento,
-            codigo_worldoffice
-          FROM clients
-          WHERE activo = TRUE
-            AND (
-              documento =
-                ANY($1::text[])
-              OR
-              codigo_worldoffice =
-                ANY($1::text[])
-            )
-          ORDER BY
-            CASE
-              WHEN codigo_worldoffice =
-                ANY($1::text[])
-              THEN 0
-              ELSE 1
-            END
-          LIMIT 1
-        `,
-        [uniqueReferences]
-      );
-
-    if (
-      localByReference.rows[0]
-    ) {
-      return {
-        client_id:
-          localByReference
-            .rows[0]
-            .id,
-
-        origin:
-          'local',
-
-        source_reference:
-          cleanText(
-            body?.source_reference,
-            180
-          ),
-      };
-    }
-  }
-
   const externalCandidate =
     body?.client_external_id ??
     body?.client_snapshot?.id_externo ??
@@ -424,203 +339,6 @@ async function resolveClientForIntake(client, body) {
   };
 }
 
-async function resolveAcceptanceClientSnapshot(
-  client,
-  body,
-  fallbackClientId
-) {
-  const requestedId =
-    cleanText(
-      body?.client_acceptance_client_id,
-      120
-    );
-
-  let localClientId = null;
-
-  // 1. Ya es un cliente local.
-  if (
-    requestedId &&
-    isUuid(requestedId)
-  ) {
-    const local =
-      await client.query(
-        `
-          SELECT id
-          FROM clients
-          WHERE id = $1
-            AND activo = TRUE
-          LIMIT 1
-        `,
-        [requestedId]
-      );
-
-    if (local.rows[0]) {
-      localClientId =
-        local.rows[0].id;
-    }
-  }
-
-  // 2. Cliente proveniente de WorldOffice/sync.
-  if (!localClientId) {
-    const snapshot =
-      body?.client_acceptance_snapshot &&
-      typeof body.client_acceptance_snapshot === 'object'
-        ? body.client_acceptance_snapshot
-        : {};
-
-    const externalCandidate =
-      body?.client_acceptance_external_id ??
-      snapshot?.id_externo ??
-      (
-        requestedId &&
-        /^\d+$/.test(requestedId)
-          ? requestedId
-          : null
-      );
-
-    if (
-      externalCandidate !== null &&
-      externalCandidate !== undefined &&
-      /^\d+$/.test(
-        String(externalCandidate)
-      )
-    ) {
-      const externalId =
-        String(externalCandidate);
-
-      const resolved =
-        await resolveClientForIntake(
-          client,
-          {
-            client_id:
-              requestedId ||
-              externalId,
-
-            client_origin:
-              body?.client_acceptance_origin ||
-              snapshot?.origen ||
-              'melissa',
-
-            client_external_id:
-              externalId,
-
-            client_snapshot:
-              snapshot,
-
-            source_reference:
-              `acceptance:${externalId}`,
-          }
-        );
-
-      localClientId =
-        resolved.client_id;
-    }
-  }
-
-  // 3. Si no se escogió otra persona,
-  //    el aceptante es el mismo cliente de la solicitud.
-  if (
-    !localClientId &&
-    fallbackClientId &&
-    isUuid(fallbackClientId)
-  ) {
-    localClientId =
-      fallbackClientId;
-  }
-
-  if (
-    !localClientId ||
-    !isUuid(localClientId)
-  ) {
-    const error =
-      new Error(
-        'Selecciona un cliente válido como persona que acepta las condiciones'
-      );
-
-    error.code =
-      'ACCEPTANCE_CLIENT_INVALID';
-
-    throw error;
-  }
-
-  const result =
-    await client.query(
-      `
-        SELECT
-          id,
-          documento,
-          CASE
-            WHEN tipo_persona = 'juridica'
-            THEN NULLIF(
-              TRIM(razon_social),
-              ''
-            )
-            ELSE NULLIF(
-              TRIM(
-                CONCAT_WS(
-                  ' ',
-                  NULLIF(primer_nombre, ''),
-                  NULLIF(segundo_nombre, ''),
-                  NULLIF(primer_apellido, ''),
-                  NULLIF(segundo_apellido, '')
-                )
-              ),
-              ''
-            )
-          END AS acceptance_name
-        FROM clients
-        WHERE id = $1
-          AND activo = TRUE
-        LIMIT 1
-      `,
-      [localClientId]
-    );
-
-  const row =
-    result.rows[0];
-
-  if (!row) {
-    const error =
-      new Error(
-        'El cliente seleccionado como aceptante no existe o está inactivo'
-      );
-
-    error.code =
-      'ACCEPTANCE_CLIENT_NOT_FOUND';
-
-    throw error;
-  }
-
-  if (
-    !String(
-      row.documento || ''
-    ).trim()
-  ) {
-    const error =
-      new Error(
-        'El cliente seleccionado como aceptante no tiene documento registrado'
-      );
-
-    error.code =
-      'ACCEPTANCE_CLIENT_DOCUMENT_REQUIRED';
-
-    throw error;
-  }
-
-  return {
-    client_id:
-      row.id,
-
-    name:
-      row.acceptance_name ||
-      row.documento,
-
-    document:
-      String(
-        row.documento
-      ).trim(),
-  };
-}
 function validateCorePayload(body, { partial = false } = {}) {
   const errors = [];
 
@@ -658,17 +376,8 @@ function validateCorePayload(body, { partial = false } = {}) {
     errors.push('Prioridad no válida');
   }
 
-  if (!['auto', 'manual'].includes(schedulingMode)) {
-    errors.push('Modo de programacion no valido');
-  }
-
-  if (schedulingMode === 'manual') {
-    if (!scheduledDate) {
-      errors.push('Para programacion manual, la fecha es requerida');
-    }
-    if (!scheduledTime) {
-      errors.push('Para programacion manual, la hora es requerida');
-    }
+  if (schedulingMode === 'auto' && !scheduledDate) {
+    errors.push('Para programación automática, la fecha es requerida');
   }
 
   const baseValue = parseMoney(body?.base_value);
@@ -698,8 +407,6 @@ function validateCorePayload(body, { partial = false } = {}) {
       conditionsText: cleanText(body?.conditions_text, 8000),
       additionalCostsNotice: cleanText(body?.additional_costs_notice, 4000),
       clientAcceptance: Boolean(body?.client_acceptance),
-      clientAcceptanceClientId:
-        cleanText(body?.client_acceptance_client_id, 100),
       clientAcceptanceName: cleanText(body?.client_acceptance_name, 180),
       clientAcceptanceDocument: cleanText(body?.client_acceptance_document, 80),
       clientAcceptanceChannel: cleanText(body?.client_acceptance_channel, 40),
@@ -730,7 +437,6 @@ function evaluateReadiness(intake) {
     missing.push('aceptacion_cliente');
   } else {
     if (!String(intake.client_acceptance_name || '').trim()) missing.push('nombre_aceptante');
-    if (!String(intake.client_acceptance_document || '').trim()) missing.push('documento_aceptante');
     if (!String(intake.client_acceptance_channel || '').trim()) missing.push('canal_aceptacion');
   }
 
@@ -1112,24 +818,6 @@ exports.create = async (req, res) => {
 
     const team = await validateIntakeTeam(client, req, req.body?.team || []);
 
-    if (v.clientAcceptance) {
-      const acceptance =
-        await resolveAcceptanceClientSnapshot(
-          client,
-          req.body || {},
-          resolvedClient.client_id
-        );
-
-      v.clientAcceptanceClientId =
-        acceptance.client_id;
-
-      v.clientAcceptanceName =
-        acceptance.name;
-
-      v.clientAcceptanceDocument =
-        acceptance.document;
-    }
-
     if (v.clientAcceptanceChannel && !VALID_CHANNELS.has(v.clientAcceptanceChannel)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -1232,27 +920,6 @@ exports.create = async (req, res) => {
       ]
     );
 
-    if (
-      v.clientAcceptance &&
-      v.clientAcceptanceClientId
-    ) {
-      await client.query(
-        `
-          UPDATE service_order_intakes
-          SET client_acceptance_client_id = $1
-          WHERE id = $2
-        `,
-        [
-          v.clientAcceptanceClientId,
-          id,
-        ]
-      );
-
-      result.rows[0]
-        .client_acceptance_client_id =
-          v.clientAcceptanceClientId;
-    }
-
     await saveIntakeTeam(client, id, team, req.user.id);
 
     await addEvent(client, {
@@ -1298,13 +965,7 @@ exports.create = async (req, res) => {
     console.error('Error creating service intake:', error);
 
     if (
-      [
-        'CLIENT_REFERENCE_INVALID',
-        'SYNC_CLIENT_NOT_FOUND',
-        'ACCEPTANCE_CLIENT_INVALID',
-        'ACCEPTANCE_CLIENT_NOT_FOUND',
-        'ACCEPTANCE_CLIENT_DOCUMENT_REQUIRED',
-      ].includes(error?.code)
+      ['CLIENT_REFERENCE_INVALID', 'SYNC_CLIENT_NOT_FOUND'].includes(error?.code)
     ) {
       return res.status(400).json({
         success: false,
@@ -1354,28 +1015,6 @@ exports.update = async (req, res) => {
     }
 
     const v = validation.values;
-
-    const acceptanceClientChanged =
-      req.body?.client_acceptance === true ||
-      req.body?.client_acceptance_client_id !== undefined;
-
-    if (acceptanceClientChanged) {
-      const acceptance =
-        await resolveAcceptanceClientSnapshot(
-          client,
-          req.body || {},
-          intake.client_id
-        );
-
-      v.clientAcceptanceClientId =
-        acceptance.client_id;
-
-      v.clientAcceptanceName =
-        acceptance.name;
-
-      v.clientAcceptanceDocument =
-        acceptance.document;
-    }
 
     const mergedBillingMode =
       req.body?.billing_mode !== undefined ? v.billingMode : intake.billing_mode;
@@ -1465,16 +1104,8 @@ exports.update = async (req, res) => {
         req.body?.conditions_text !== undefined ? v.conditionsText : null,
         req.body?.additional_costs_notice !== undefined ? v.additionalCostsNotice : null,
         req.body?.client_acceptance === true,
-        acceptanceClientChanged
-          ? v.clientAcceptanceName
-          : req.body?.client_acceptance_name !== undefined
-            ? v.clientAcceptanceName
-            : null,
-        acceptanceClientChanged
-          ? v.clientAcceptanceDocument
-          : req.body?.client_acceptance_document !== undefined
-            ? v.clientAcceptanceDocument
-            : null,
+        req.body?.client_acceptance_name !== undefined ? v.clientAcceptanceName : null,
+        req.body?.client_acceptance_document !== undefined ? v.clientAcceptanceDocument : null,
         req.body?.client_acceptance_channel !== undefined ? v.clientAcceptanceChannel : null,
         req.body?.client_acceptance_reference !== undefined ? v.clientAcceptanceReference : null,
         req.body?.billing_mode !== undefined ? v.billingMode : null,
@@ -1488,27 +1119,6 @@ exports.update = async (req, res) => {
         intake.id,
       ]
     );
-
-    if (
-      acceptanceClientChanged &&
-      v.clientAcceptanceClientId
-    ) {
-      await client.query(
-        `
-          UPDATE service_order_intakes
-          SET client_acceptance_client_id = $1
-          WHERE id = $2
-        `,
-        [
-          v.clientAcceptanceClientId,
-          intake.id,
-        ]
-      );
-
-      result.rows[0]
-        .client_acceptance_client_id =
-          v.clientAcceptanceClientId;
-    }
 
     await addEvent(client, {
       intakeId: intake.id,
@@ -1537,20 +1147,6 @@ exports.update = async (req, res) => {
     } catch (_) {}
 
     console.error('Error updating service intake:', error);
-
-    if (
-      [
-        'ACCEPTANCE_CLIENT_INVALID',
-        'ACCEPTANCE_CLIENT_NOT_FOUND',
-        'ACCEPTANCE_CLIENT_DOCUMENT_REQUIRED',
-      ].includes(error?.code)
-    ) {
-      return res.status(400).json({
-        success: false,
-        code: error.code,
-        message: error.message,
-      });
-    }
 
     return res.status(500).json({
       success: false,

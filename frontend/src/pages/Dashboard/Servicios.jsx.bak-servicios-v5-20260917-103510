@@ -3,10 +3,10 @@ import { ClipboardList, LayoutGrid, Plus, RefreshCw, Table2 } from 'lucide-react
 import { useAuth } from '../../hooks/useAuth';
 import ServicioCreateWizard from './servicios/ServicioCreateWizard';
 import ServicioDetail from './servicios/ServicioDetail';
+import ServicioEditModal from './servicios/ServicioEditModal';
 import ServicioFilters from './servicios/ServicioFilters';
 import ServicioTable from './servicios/ServicioTable';
 import AssignTechModal from './servicios/AssignTechModal';
-import DeleteServiceModal from './servicios/DeleteServiceModal';
 import ServiceCard from './servicios/components/ServiceCard';
 import ServiceIntakeBoard from './servicios/components/ServiceIntakeBoard';
 import { DEFAULT_FILTERS, useServicios } from './servicios/hooks/useServicios';
@@ -29,17 +29,23 @@ export default function Servicios() {
   const [detailId, setDetailId] = useState(null);
   const [editService, setEditService] = useState(null);
   const [assignId, setAssignId] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [busyDelete, setBusyDelete] = useState(false);
 
-  const handleDelete = (service) => {
+  const handleDelete = async (service) => {
     if (!service?.id) return;
-    setDeleteTarget(service);
-  };
-
-  const confirmDelete = async (service) => {
-    const result = await deleteServicio(service.id);
-    await fetchServicios();
-    return result;
+    const accepted = window.confirm(
+      `¿Eliminar/cancelar ${service.codigo_os}?\n\nLa orden conservará su historial, pero quedará cancelada y liberará la agenda.`
+    );
+    if (!accepted) return;
+    try {
+      setBusyDelete(true);
+      const result = await deleteServicio(service.id);
+      window.alert(result?.message || 'Orden cancelada correctamente');
+    } catch (requestError) {
+      window.alert(requestError.response?.data?.message || 'No fue posible cancelar la orden');
+    } finally {
+      setBusyDelete(false);
+    }
   };
 
   return (
@@ -103,24 +109,10 @@ export default function Servicios() {
       <ServiceIntakeBoard isOpen={showIntakes} onClose={() => setShowIntakes(false)} onActivated={fetchServicios} />
 
       {detailId && <ServicioDetail isOpen servicioId={detailId} onClose={() => setDetailId(null)} onRefresh={fetchServicios} />}
-      {editService && (
-        <ServicioCreateWizard
-          isOpen
-          mode="edit"
-          serviceId={editService.id}
-          service={editService}
-          onClose={() => setEditService(null)}
-          onSaved={fetchServicios}
-          userRole={userRole}
-        />
-      )}
+      {editService && <ServicioEditModal service={editService} onClose={() => setEditService(null)} onSaved={fetchServicios} />}
       <AssignTechModal isOpen={Boolean(assignId)} servicioId={assignId} onClose={() => setAssignId(null)} onSubmit={assignTech} />
 
-      <DeleteServiceModal
-        service={deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
-      />
+      {busyDelete && <div className="fixed bottom-4 right-4 z-[200] rounded-lg bg-gray-900 text-white px-4 py-2 text-sm shadow-xl">Cancelando orden...</div>}
     </div>
   );
 }

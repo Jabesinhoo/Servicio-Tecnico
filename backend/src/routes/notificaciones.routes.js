@@ -38,7 +38,7 @@ router.get('/notificaciones', async (req, res) => {
                 leido,
                 link,
                 solicitud_id,
-                "createdAt" AS created_at
+                created_at
             FROM notificaciones
             WHERE (
                 usuario_id = $1
@@ -53,7 +53,7 @@ router.get('/notificaciones', async (req, res) => {
         }
 
         query += `
-            ORDER BY "createdAt" DESC
+            ORDER BY created_at DESC
             LIMIT 50
         `;
 
@@ -97,7 +97,7 @@ router.get('/notificaciones', async (req, res) => {
 });
 
 // ============================================================
-// MARCAR UNA NOTIFICACIÓN COMO LEÍDA
+// MARCAR UNA NOTIFICACIÃ“N COMO LEÃDA
 // ============================================================
 
 router.patch(
@@ -125,25 +125,25 @@ router.patch(
                 return res.status(404).json({
                     success: false,
                     message:
-                        'Notificación no encontrada',
+                        'NotificaciÃ³n no encontrada',
                 });
             }
 
             return res.status(200).json({
                 success: true,
                 message:
-                    'Notificación marcada como leída',
+                    'NotificaciÃ³n marcada como leÃ­da',
             });
         } catch (error) {
             console.error(
-                'Error al marcar notificación:',
+                'Error al marcar notificaciÃ³n:',
                 error
             );
 
             return res.status(500).json({
                 success: false,
                 message:
-                    'Error al marcar notificación',
+                    'Error al marcar notificaciÃ³n',
                 error: error.message,
             });
         }
@@ -151,7 +151,7 @@ router.patch(
 );
 
 // ============================================================
-// MARCAR TODAS COMO LEÍDAS
+// MARCAR TODAS COMO LEÃDAS
 // ============================================================
 
 router.patch(
@@ -176,7 +176,7 @@ router.patch(
             return res.status(200).json({
                 success: true,
                 message:
-                    'Todas las notificaciones fueron marcadas como leídas',
+                    'Todas las notificaciones fueron marcadas como leÃ­das',
                 actualizadas: result.rowCount,
             });
         } catch (error) {
@@ -196,7 +196,7 @@ router.patch(
 );
 
 // ============================================================
-// ELIMINAR NOTIFICACIÓN
+// ELIMINAR NOTIFICACIÃ“N
 // ============================================================
 
 router.delete(
@@ -223,25 +223,25 @@ router.delete(
                 return res.status(404).json({
                     success: false,
                     message:
-                        'Notificación no encontrada',
+                        'NotificaciÃ³n no encontrada',
                 });
             }
 
             return res.status(200).json({
                 success: true,
                 message:
-                    'Notificación eliminada',
+                    'NotificaciÃ³n eliminada',
             });
         } catch (error) {
             console.error(
-                'Error al eliminar notificación:',
+                'Error al eliminar notificaciÃ³n:',
                 error
             );
 
             return res.status(500).json({
                 success: false,
                 message:
-                    'Error al eliminar notificación',
+                    'Error al eliminar notificaciÃ³n',
                 error: error.message,
             });
         }

@@ -8,11 +8,6 @@ const fsp = require('fs/promises');
 const path = require('path');
 
 const {
-  scheduleOrderAutomatically,
-  rescheduleOrderAt,
-} = require('../services/service-scheduling.service');
-
-const {
   SERVICE_ORDER_STATES,
   canTransition,
   isValidState,
@@ -461,12 +456,6 @@ exports.list = async (req, res) => {
             ''
           )
         END AS cliente_nombre,
-        c.tipo_persona AS cliente_tipo_persona,
-        c.razon_social AS cliente_razon_social,
-        c.primer_nombre AS cliente_primer_nombre,
-        c.segundo_nombre AS cliente_segundo_nombre,
-        c.primer_apellido AS cliente_primer_apellido,
-        c.segundo_apellido AS cliente_segundo_apellido,
         c.documento AS cliente_documento,
         c.telefono AS cliente_telefono,
         c.email AS cliente_email,
@@ -595,12 +584,6 @@ exports.getById = async (req, res) => {
             c.primer_apellido, c.segundo_apellido
           )), '')
         END AS cliente_nombre,
-        c.tipo_persona AS cliente_tipo_persona,
-        c.razon_social AS cliente_razon_social,
-        c.primer_nombre AS cliente_primer_nombre,
-        c.segundo_nombre AS cliente_segundo_nombre,
-        c.primer_apellido AS cliente_primer_apellido,
-        c.segundo_apellido AS cliente_segundo_apellido,
         c.documento AS cliente_documento,
         c.telefono AS cliente_telefono,
         c.email AS cliente_email,
@@ -730,77 +713,6 @@ exports.getById = async (req, res) => {
     return res.status(500).json({ message: 'Error al obtener la orden de servicio' });
   }
 };
-
-// ============================================================
-// RECHAZAR ORDEN
-// ============================================================
-
-exports.rechazar = async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    const { id } = req.params;
-    const { motivo } = req.body || {};
-    const userId = req.user?.id;
-
-    if (!isUuid(id)) {
-      return res.status(400).json({ message: 'ID de orden no válido' });
-    }
-
-    const cleanMotivo = typeof motivo === 'string' ? motivo.trim() : '';
-    if (!cleanMotivo) {
-      return res.status(400).json({ message: 'Debe especificar el motivo del rechazo' });
-    }
-
-    await client.query('BEGIN');
-
-    const currentResult = await client.query(
-      `SELECT id, codigo_os, estado
-       FROM service_orders
-       WHERE id = $1
-       FOR UPDATE`,
-      [id]
-    );
-
-    if (!currentResult.rows[0]) {
-      await safeRollback(client);
-      return res.status(404).json({ message: 'Orden no encontrada' });
-    }
-
-    const order = currentResult.rows[0];
-
-    if (!canTransition(order.estado, SERVICE_ORDER_STATES.RECHAZADO)) {
-      await safeRollback(client);
-      return res.status(409).json({
-        message: `No se puede rechazar una orden que está en estado "${order.estado}"`,
-        estado_actual: order.estado,
-      });
-    }
-
-    const result = await client.query(
-      `UPDATE service_orders
-       SET estado = $1,
-           rechazado_por = $2,
-           fecha_rechazo = NOW(),
-           motivo_rechazo = $3,
-           "updatedAt" = NOW()
-       WHERE id = $4
-       RETURNING *`,
-      [SERVICE_ORDER_STATES.RECHAZADO, userId || null, cleanMotivo, id]
-    );
-
-    await client.query('COMMIT');
-    return res.json(result.rows[0]);
-  } catch (error) {
-    await safeRollback(client);
-    console.error('Error rechazando servicio:', error);
-    return res.status(500).json({ message: 'Error al rechazar el servicio' });
-  } finally {
-    client.release();
-  }
-};
-
-exports.reject = exports.rechazar;
 
 // ============================================================
 // CREAR ORDEN
@@ -3215,7 +3127,6 @@ exports.update = async (req, res) => {
     const body = req.body || {};
     const userRole = getUserRole(req);
     const userId = req.user?.id;
-    const isAdmin = isAdminRole(req);
 
     if (!isUuid(id)) {
       return res.status(400).json({ message: 'ID de orden no válido' });
@@ -3224,15 +3135,14 @@ exports.update = async (req, res) => {
     await client.query('BEGIN');
 
     const currentResult = await client.query(
-      `SELECT id, codigo_os, estado, tecnico_id, client_id,
-              fecha_agendada, hora_inicio_agendada, duracion_estimada
+      `SELECT id, estado, tecnico_id
        FROM service_orders
        WHERE id = $1
        FOR UPDATE`,
       [id]
     );
 
-    if (!currentResult.rows[0]) {
+    if (currentResult.rows.length === 0) {
       await safeRollback(client);
       return res.status(404).json({ message: 'Orden de servicio no encontrada' });
     }
@@ -3263,13 +3173,13 @@ exports.update = async (req, res) => {
       }
     }
 
-    const changedFields = [];
+    const isAdmin = isAdminRole(req);
     const orderUpdates = [];
     const orderParams = [];
-    const pushOrder = (column, value, logicalName = column) => {
+
+    const pushOrder = (column, value) => {
       orderParams.push(value);
       orderUpdates.push(`${column} = $${orderParams.length}`);
-      changedFields.push(logicalName);
     };
 
     if (Object.prototype.hasOwnProperty.call(body, 'diagnostico_final')) {
@@ -3290,47 +3200,22 @@ exports.update = async (req, res) => {
       );
     }
 
-    if (isAdmin) {
-      const requestDescription =
-        body.request_description !== undefined
-          ? body.request_description
-          : body.descripcion_inicial;
+    if (isAdmin && Object.prototype.hasOwnProperty.call(body, 'descripcion_inicial')) {
+      pushOrder(
+        'descripcion_inicial',
+        typeof body.descripcion_inicial === 'string'
+          ? body.descripcion_inicial.trim() || null
+          : null
+      );
+    }
 
-      if (requestDescription !== undefined) {
-        const cleanDescription =
-          typeof requestDescription === 'string'
-            ? requestDescription.trim().slice(0, 6000) || null
-            : null;
-        pushOrder('descripcion_inicial', cleanDescription, 'request_description');
+    if (isAdmin && Object.prototype.hasOwnProperty.call(body, 'duracion_estimada')) {
+      const duration = Number(body.duracion_estimada);
+      if (!Number.isFinite(duration) || duration < 1 || duration > 1440) {
+        await safeRollback(client);
+        return res.status(400).json({ message: 'Duración estimada no válida' });
       }
-
-      if (body.client_id !== undefined) {
-        if (!isUuid(body.client_id)) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Cliente no válido' });
-        }
-
-        const clientCheck = await client.query(
-          `SELECT id FROM clients WHERE id = $1 AND activo = TRUE LIMIT 1`,
-          [body.client_id]
-        );
-
-        if (!clientCheck.rows[0]) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Cliente no encontrado o inactivo' });
-        }
-
-        pushOrder('client_id', body.client_id, 'client_id');
-      }
-
-      if (Object.prototype.hasOwnProperty.call(body, 'duracion_estimada')) {
-        const duration = Number(body.duracion_estimada);
-        if (!Number.isFinite(duration) || duration < 1 || duration > 1440) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Duración estimada no válida' });
-        }
-        pushOrder('duracion_estimada', Math.round(duration), 'estimated_duration');
-      }
+      pushOrder('duracion_estimada', Math.round(duration));
     }
 
     if (orderUpdates.length) {
@@ -3344,400 +3229,59 @@ exports.update = async (req, res) => {
       );
     }
 
-    let intake = null;
-    const intakeResult = await client.query(
-      `SELECT *
-       FROM service_order_intakes
-       WHERE service_order_id = $1
-       LIMIT 1
-       FOR UPDATE`,
-      [id]
-    );
-    intake = intakeResult.rows[0] || null;
-
-    if (isAdmin && intake) {
+    if (isAdmin) {
+      const priority = body.priority ?? body.prioridad;
       const intakeUpdates = [];
       const intakeParams = [];
-      const pushIntake = (column, value, logicalName = column, cast = '') => {
+      const pushIntake = (column, value) => {
         intakeParams.push(value);
-        intakeUpdates.push(`${column} = $${intakeParams.length}${cast}`);
-        changedFields.push(logicalName);
+        intakeUpdates.push(`${column} = $${intakeParams.length}`);
       };
 
-      if (body.client_id !== undefined) {
-        pushIntake('client_id', body.client_id, 'client_id');
-      }
-
-      const requestDescription =
-        body.request_description !== undefined
-          ? body.request_description
-          : body.descripcion_inicial;
-      if (requestDescription !== undefined) {
-        pushIntake(
-          'request_description',
-          typeof requestDescription === 'string'
-            ? requestDescription.trim().slice(0, 6000) || null
-            : null,
-          'request_description'
-        );
-      }
-
-      const priority = body.priority ?? body.prioridad;
       if (priority !== undefined) {
-        const value = String(priority);
-        if (!['baja', 'normal', 'alta', 'urgente'].includes(value)) {
+        if (!['baja', 'normal', 'alta', 'urgente'].includes(String(priority))) {
           await safeRollback(client);
           return res.status(400).json({ message: 'Prioridad no válida' });
         }
-        pushIntake('priority', value, 'priority');
+        pushIntake('priority', String(priority));
       }
 
       if (body.classification !== undefined) {
-        const value = String(body.classification);
-        if (!['diagnostic', 'specific'].includes(value)) {
+        if (!['diagnostic', 'specific'].includes(String(body.classification))) {
           await safeRollback(client);
           return res.status(400).json({ message: 'Clasificación no válida' });
         }
-        pushIntake('classification', value, 'classification');
+        pushIntake('classification', String(body.classification));
       }
 
-      const textFields = [
+      const editableTextFields = [
         ['service_type_id', 120],
         ['service_type_name', 180],
         ['service_type_category', 120],
         ['scope_text', 5000],
         ['conditions_text', 8000],
         ['additional_costs_notice', 4000],
-        ['client_acceptance_name', 180],
-        ['client_acceptance_document', 80],
-        ['client_acceptance_channel', 40],
-        ['client_acceptance_reference', 1000],
-        ['invoice_reference', 180],
-        ['postpaid_reason', 3000],
       ];
 
-      for (const [field, max] of textFields) {
+      for (const [field, max] of editableTextFields) {
         if (Object.prototype.hasOwnProperty.call(body, field)) {
-          const value =
-            typeof body[field] === 'string'
-              ? body[field].trim().slice(0, max) || null
-              : null;
-          pushIntake(field, value, field);
+          const value = typeof body[field] === 'string'
+            ? body[field].trim().slice(0, max) || null
+            : null;
+          pushIntake(field, value);
         }
-      }
-
-      const numericFields = [
-        ['base_value', 0, 999999999999],
-        ['estimated_minutes', 1, 1440],
-        ['estimated_duration', 1, 1440],
-      ];
-
-      for (const [field, min, max] of numericFields) {
-        if (Object.prototype.hasOwnProperty.call(body, field)) {
-          if (body[field] === '' || body[field] === null) {
-            pushIntake(field, null, field);
-            continue;
-          }
-          const value = Number(body[field]);
-          if (!Number.isFinite(value) || value < min || value > max) {
-            await safeRollback(client);
-            return res.status(400).json({ message: `${field} no válido` });
-          }
-          pushIntake(field, value, field);
-        }
-      }
-
-      if (body.client_acceptance !== undefined) {
-        const accepted = body.client_acceptance === true;
-        pushIntake('client_acceptance', accepted, 'client_acceptance');
-        intakeParams.push(accepted);
-        intakeUpdates.push(
-          `client_accepted_at = CASE WHEN $${intakeParams.length}::boolean THEN COALESCE(client_accepted_at, NOW()) ELSE NULL END`
-        );
-      }
-
-      if (body.client_acceptance_client_id !== undefined) {
-        const acceptanceId = body.client_acceptance_client_id || null;
-        if (acceptanceId && !isUuid(acceptanceId)) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Cliente aceptante no válido' });
-        }
-        pushIntake('client_acceptance_client_id', acceptanceId, 'client_acceptance_client_id');
-      }
-
-      if (body.billing_mode !== undefined) {
-        const billingMode = String(body.billing_mode);
-        if (!['prepaid', 'postpaid'].includes(billingMode)) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Modalidad de facturación no válida' });
-        }
-        pushIntake('billing_mode', billingMode, 'billing_mode');
-        intakeParams.push(billingMode);
-        intakeUpdates.push(
-          `payment_status = CASE
-             WHEN $${intakeParams.length}::varchar = 'postpaid' THEN 'not_required'
-             WHEN payment_status = 'not_required' THEN 'pending'
-             ELSE payment_status
-           END`
-        );
-      }
-
-      if (body.scheduling_mode !== undefined) {
-        const mode = String(body.scheduling_mode);
-        if (!['auto', 'manual'].includes(mode)) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Modo de programación no válido' });
-        }
-        pushIntake('scheduling_mode', mode, 'scheduling_mode');
-      }
-
-      if (Object.prototype.hasOwnProperty.call(body, 'scheduled_date')) {
-        const value = body.scheduled_date || null;
-        if (value && !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Fecha programada no válida' });
-        }
-        pushIntake('scheduled_date', value, 'scheduled_date', '::date');
-      }
-
-      if (Object.prototype.hasOwnProperty.call(body, 'scheduled_time')) {
-        const value = body.scheduled_time || null;
-        if (value && !/^\d{2}:\d{2}(?::\d{2})?$/.test(String(value))) {
-          await safeRollback(client);
-          return res.status(400).json({ message: 'Hora programada no válida' });
-        }
-        pushIntake('scheduled_time', value, 'scheduled_time', '::time');
       }
 
       if (intakeUpdates.length) {
-        intakeParams.push(intake.id);
+        intakeParams.push(id);
         await client.query(
           `UPDATE service_order_intakes
            SET ${intakeUpdates.join(', ')},
                updated_at = NOW()
-           WHERE id = $${intakeParams.length}`,
+           WHERE service_order_id = $${intakeParams.length}`,
           intakeParams
         );
       }
-    }
-
-    let teamChanged = false;
-    let primaryTechnicianId = current.tecnico_id;
-
-    if (isAdmin && Array.isArray(body.team)) {
-      const normalized = [];
-      const seen = new Set();
-
-      for (const raw of body.team) {
-        const technicianId = raw?.technician_id;
-        const memberRole = raw?.member_role === 'primary' ? 'primary' : 'support';
-        if (!isUuid(technicianId) || seen.has(technicianId)) continue;
-        seen.add(technicianId);
-        normalized.push({ technician_id: technicianId, member_role: memberRole });
-      }
-
-      const primaries = normalized.filter((item) => item.member_role === 'primary');
-      if (primaries.length !== 1) {
-        await safeRollback(client);
-        return res.status(400).json({ message: 'Debe existir exactamente un técnico principal' });
-      }
-
-      const technicianIds = normalized.map((item) => item.technician_id);
-      const techCheck = await client.query(
-        `SELECT id
-         FROM usuarios
-         WHERE id = ANY($1::uuid[])
-           AND activo = TRUE`,
-        [technicianIds]
-      );
-
-      if (techCheck.rows.length !== technicianIds.length) {
-        await safeRollback(client);
-        return res.status(400).json({ message: 'Uno o más técnicos no existen o están inactivos' });
-      }
-
-      await client.query(
-        `UPDATE service_order_team_members
-         SET member_status = 'removed',
-             removed_at = NOW(),
-             removal_note = 'Equipo actualizado desde edición de servicio',
-             updated_at = NOW()
-         WHERE service_order_id = $1
-           AND member_status <> 'removed'
-           AND NOT (technician_id = ANY($2::uuid[]))`,
-        [id, technicianIds]
-      );
-
-      for (const member of normalized) {
-        const existing = await client.query(
-          `SELECT id
-           FROM service_order_team_members
-           WHERE service_order_id = $1
-             AND technician_id = $2
-           ORDER BY added_at DESC
-           LIMIT 1`,
-          [id, member.technician_id]
-        );
-
-        if (existing.rows[0]) {
-          await client.query(
-            `UPDATE service_order_team_members
-             SET member_role = $1,
-                 member_status = 'assigned',
-                 assigned_at = COALESCE(assigned_at, NOW()),
-                 removed_at = NULL,
-                 removal_note = NULL,
-                 updated_at = NOW()
-             WHERE id = $2`,
-            [member.member_role, existing.rows[0].id]
-          );
-        } else {
-          await client.query(
-            `INSERT INTO service_order_team_members (
-               id, service_order_id, technician_id,
-               member_role, member_status,
-               added_by, added_at, assigned_at, updated_at
-             )
-             VALUES ($1,$2,$3,$4,'assigned',$5,NOW(),NOW(),NOW())`,
-            [
-              randomUUID(),
-              id,
-              member.technician_id,
-              member.member_role,
-              userId || null,
-            ]
-          );
-        }
-      }
-
-      primaryTechnicianId = primaries[0].technician_id;
-      teamChanged = primaryTechnicianId !== current.tecnico_id || true;
-
-      await client.query(
-        `UPDATE service_orders
-         SET tecnico_id = $1,
-             fecha_asignacion = CASE
-               WHEN tecnico_id IS DISTINCT FROM $1::uuid THEN NOW()
-               ELSE fecha_asignacion
-             END,
-             "updatedAt" = NOW()
-         WHERE id = $2`,
-        [primaryTechnicianId, id]
-      );
-
-      if (primaryTechnicianId !== current.tecnico_id) {
-        await client.query(
-          `UPDATE service_order_assignments
-           SET status = 'revocada', updated_at = NOW()
-           WHERE service_order_id = $1 AND status = 'pendiente'`,
-          [id]
-        );
-
-        await client.query(
-          `INSERT INTO service_order_assignments (
-             id, service_order_id, tecnico_id,
-             assigned_by, status, assigned_at,
-             created_at, updated_at
-           )
-           VALUES ($1,$2,$3,$4,'pendiente',NOW(),NOW(),NOW())`,
-          [randomUUID(), id, primaryTechnicianId, userId || null]
-        );
-      }
-
-      changedFields.push('team');
-    }
-
-    let schedule = null;
-    let scheduleWarning = null;
-
-    if (isAdmin && body.reschedule === true) {
-      const mode = String(body.scheduling_mode || intake?.scheduling_mode || 'auto');
-      const duration = Number(body.estimated_duration || body.duracion_estimada || current.duracion_estimada || 60);
-
-      await client.query('SAVEPOINT service_edit_schedule');
-
-      try {
-        if (mode === 'manual') {
-          if (!body.scheduled_date || !body.scheduled_time) {
-            const error = new Error('Para programación manual indica fecha y hora');
-            error.code = 'INVALID_SCHEDULE';
-            throw error;
-          }
-
-          schedule = await rescheduleOrderAt(client, {
-            orderId: id,
-            dateText: String(body.scheduled_date),
-            timeText: String(body.scheduled_time),
-            durationMinutes: duration,
-            actorUserId: userId || null,
-          });
-        } else {
-          schedule = await scheduleOrderAutomatically(client, {
-            orderId: id,
-            actorUserId: userId || null,
-            replaceExisting: true,
-          });
-        }
-
-        await client.query('RELEASE SAVEPOINT service_edit_schedule');
-        changedFields.push('schedule');
-      } catch (scheduleError) {
-        await client.query('ROLLBACK TO SAVEPOINT service_edit_schedule');
-        await client.query('RELEASE SAVEPOINT service_edit_schedule');
-
-        if (
-          ['NO_COMMON_SLOT', 'SCHEDULE_CONFLICT', 'PAST_SCHEDULE', 'INVALID_SCHEDULE'].includes(
-            scheduleError?.code
-          )
-        ) {
-          if (mode === 'manual') throw scheduleError;
-          scheduleWarning = scheduleError.message;
-        } else {
-          throw scheduleError;
-        }
-      }
-    }
-
-    if (intake) {
-      const refreshedIntake = await client.query(
-        `SELECT billing_mode, invoice_reference, base_value, payment_status
-         FROM service_order_intakes
-         WHERE id = $1`,
-        [intake.id]
-      );
-      const i = refreshedIntake.rows[0];
-
-      if (i) {
-        await client.query(
-          `UPDATE service_order_financial_controls
-           SET billing_mode = $1,
-               invoice_reference = $2,
-               expected_amount = $3,
-               updated_at = NOW()
-           WHERE service_order_id = $4`,
-          [i.billing_mode, i.invoice_reference, i.base_value, id]
-        );
-      }
-    }
-
-    if (changedFields.length || teamChanged || schedule) {
-      await client.query(
-        `INSERT INTO service_order_events (
-           id, service_order_id, event_type,
-           actor_user_id, metadata, created_at
-         )
-         VALUES ($1,$2,'service_order_updated',$3,$4::jsonb,NOW())`,
-        [
-          randomUUID(),
-          id,
-          userId || null,
-          JSON.stringify({
-            fields: [...new Set(changedFields)].sort(),
-            scheduling_mode: body.scheduling_mode || intake?.scheduling_mode || null,
-            schedule_warning: scheduleWarning,
-          }),
-        ]
-      );
     }
 
     await client.query('COMMIT');
@@ -3751,37 +3295,17 @@ exports.update = async (req, res) => {
               i.service_type_category,
               i.scope_text,
               i.conditions_text,
-              i.additional_costs_notice,
-              i.billing_mode,
-              i.invoice_reference,
-              i.payment_status,
-              i.scheduling_mode
+              i.additional_costs_notice
        FROM service_orders so
        LEFT JOIN service_order_intakes i ON i.service_order_id = so.id
        WHERE so.id = $1`,
       [id]
     );
 
-    return res.json({
-      ...refreshed.rows[0],
-      schedule,
-      schedule_warning: scheduleWarning,
-    });
+    return res.json(refreshed.rows[0]);
   } catch (error) {
     await safeRollback(client);
     console.error('Error updating service order:', error);
-
-    if (
-      ['SCHEDULE_CONFLICT', 'PAST_SCHEDULE', 'INVALID_SCHEDULE', 'TEAM_REQUIRED_FOR_SCHEDULE'].includes(
-        error?.code
-      )
-    ) {
-      return res.status(409).json({
-        message: error.message,
-        code: error.code,
-      });
-    }
-
     return res.status(500).json({ message: 'Error al actualizar la orden' });
   } finally {
     client.release();

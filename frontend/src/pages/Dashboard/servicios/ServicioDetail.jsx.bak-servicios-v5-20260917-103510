@@ -23,109 +23,6 @@ const Section = ({ title, icon: Icon, children }) => (
   </section>
 );
 
-
-const EVENT_LABELS = {
-  service_order_created: 'Orden de servicio creada',
-  service_approved: 'Servicio aprobado',
-  service_approved_and_team_assigned: 'Servicio aprobado y equipo técnico asignado',
-  service_cancelled: 'Servicio cancelado',
-  service_order_updated: 'Información del servicio actualizada',
-  service_updated: 'Información del servicio actualizada',
-  service_rescheduled: 'Servicio reprogramado',
-  service_auto_scheduled: 'Servicio programado automáticamente',
-  service_manual_scheduled: 'Servicio programado manualmente',
-  technician_assigned: 'Técnico asignado',
-  assignment_accepted: 'Asignación aceptada por el técnico',
-  assignment_impediment: 'Técnico reportó un impedimento',
-  technician_en_route: 'Técnico en camino',
-  technician_arrived: 'Técnico llegó al servicio',
-  reception_checklist_confirmed: 'Checklist de recepción confirmado',
-  reception_act_signed: 'Acta de recepción firmada',
-  service_diagnosis_confirmed: 'Diagnóstico técnico confirmado',
-  service_closed: 'Servicio cerrado',
-  final_delivery_completed: 'Entrega final registrada',
-  financial_verification_inherited: 'Verificación financiera heredada de la solicitud',
-};
-
-const FIELD_LABELS = {
-  codigo_os: 'Orden',
-  billing_mode: 'Modalidad de facturación',
-  invoice_reference: 'Factura',
-  payment_status: 'Estado de pago',
-  scheduling_mode: 'Programación',
-  scheduled_date: 'Fecha programada',
-  scheduled_time: 'Hora programada',
-  team_size: 'Técnicos asignados',
-  previous_state: 'Estado anterior',
-  reason: 'Motivo',
-  status: 'Estado',
-  duration_minutes: 'Duración',
-  activity_type: 'Actividad',
-};
-
-function humanizeToken(value) {
-  const text = String(value ?? '').trim();
-  if (!text) return '—';
-  return text
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function eventTitle(type) {
-  return EVENT_LABELS[type] || humanizeToken(type);
-}
-
-function technicianLabel(id, team) {
-  if (!id) return null;
-  const member = team.find((item) => String(item.technician_id) === String(id));
-  return member ? technicianName(member) : 'Técnico asignado';
-}
-
-function eventDetails(event, team) {
-  const metadata = event?.metadata && typeof event.metadata === 'object'
-    ? event.metadata
-    : {};
-
-  const rows = [];
-
-  Object.entries(metadata).forEach(([key, value]) => {
-    if (value === null || value === undefined || value === '') return;
-    if (['source', 'intake_id', 'service_order_id'].includes(key)) return;
-
-    if (key === 'primary_technician_id' || key === 'technician_id') {
-      rows.push(['Técnico', technicianLabel(value, team)]);
-      return;
-    }
-
-    if (key === 'fields' && Array.isArray(value)) {
-      rows.push(['Campos modificados', value.map(humanizeToken).join(', ')]);
-      return;
-    }
-
-    if (key === 'team' && Array.isArray(value)) {
-      const names = value
-        .map((item) => technicianLabel(item?.technician_id, team))
-        .filter(Boolean);
-      rows.push(['Equipo técnico', names.length ? names.join(', ') : `${value.length} técnico(s)`]);
-      return;
-    }
-
-    if (Array.isArray(value) || typeof value === 'object') return;
-
-    let display = value;
-    if (key === 'scheduled_date') display = formatDateOnly(value);
-    if (key === 'scheduled_time') display = formatTime(value);
-    if (key === 'billing_mode') display = value === 'prepaid' ? 'Prepago' : value === 'postpaid' ? 'Pospago' : humanizeToken(value);
-    if (key === 'scheduling_mode') display = value === 'auto' ? 'Automática' : value === 'manual' ? 'Manual' : humanizeToken(value);
-    if (key === 'payment_status') display = humanizeToken(value);
-    if (key === 'duration_minutes') display = `${value} min`;
-
-    rows.push([FIELD_LABELS[key] || humanizeToken(key), String(display)]);
-  });
-
-  return rows;
-}
-
 export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh }) {
   const [servicio, setServicio] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -331,45 +228,14 @@ export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh 
           )}
 
           {!loading && servicio && tab === 'historial' && (
-            <div className="space-y-3">
-              {events.length === 0 ? (
-                <p className="text-sm text-gray-500">No hay eventos registrados.</p>
-              ) : (
-                events.map((event) => {
-                  const details = eventDetails(event, team);
-                  return (
-                    <article
-                      key={event.id}
-                      className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950/30 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-4 flex-wrap">
-                        <div>
-                          <h4 className="font-bold text-sm text-gray-900 dark:text-white">
-                            {eventTitle(event.event_type)}
-                          </h4>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Realizado por {event.actor_name || 'Sistema'}
-                          </p>
-                        </div>
-                        <time className="text-xs text-gray-500">
-                          {formatDateTime(event.created_at)}
-                        </time>
-                      </div>
-
-                      {details.length > 0 && (
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                          {details.map(([label, value]) => (
-                            <div key={`${event.id}-${label}`} className="text-sm">
-                              <span className="text-gray-500">{label}: </span>
-                              <span className="font-medium text-gray-900 dark:text-gray-100">{value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </article>
-                  );
-                })
-              )}
+            <div className="space-y-2">
+              {events.length === 0 ? <p className="text-sm text-gray-500">No hay eventos registrados.</p> : events.map((event) => (
+                <div key={event.id} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+                  <div className="flex justify-between gap-3 flex-wrap"><strong className="text-sm">{event.event_type}</strong><span className="text-xs text-gray-500">{formatDateTime(event.created_at)}</span></div>
+                  <p className="text-xs text-gray-500 mt-1">Actor: {event.actor_name || event.actor_user_id || 'Sistema'}</p>
+                  {event.metadata && <pre className="mt-2 overflow-x-auto rounded bg-gray-50 dark:bg-gray-950 p-2 text-[11px] whitespace-pre-wrap">{JSON.stringify(event.metadata, null, 2)}</pre>}
+                </div>
+              ))}
             </div>
           )}
 

@@ -31,16 +31,16 @@ const loadUserPermissions = async (usuarioId) => {
     const rows = await sequelize.query(
         `
             SELECT DISTINCT
-                p.nombre
+                p.name
             FROM usuarios_roles ur
             INNER JOIN roles r
                 ON r.id = ur.rol_id
-                AND r.activo = true
-            INNER JOIN roles_permisos rp
-                ON rp.rol_id = r.id
-            INNER JOIN permisos p
-                ON p.id = rp.permiso_id
-                AND p.activo = true
+                AND r.active = true
+            INNER JOIN role_permissions rp
+                ON rp.role_id = r.id
+            INNER JOIN permissions p
+                ON p.id = rp.permission_id
+                AND p.active = true
             WHERE ur.usuario_id = :usuarioId
         `,
         {
@@ -52,7 +52,7 @@ const loadUserPermissions = async (usuarioId) => {
     );
 
     const permissions = new Set(
-        rows.map((row) => row.nombre)
+        rows.map((row) => row.name)
     );
 
     permissionsCache.set(usuarioId, {

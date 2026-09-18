@@ -679,18 +679,38 @@ const getCotizacionesPendientes = async () => {
   try {
     const result = await pgPool.query(`
       SELECT
-        id,
-        numero_solicitud,
-        cliente_nombre,
-        fecha_creacion,
-        estado
+        s.id,
+        s.numero_solicitud,
 
-      FROM solicitudes_alquiler
+        COALESCE(
+          NULLIF(BTRIM(c.razon_social), ''),
+          NULLIF(
+            BTRIM(
+              CONCAT_WS(
+                ' ',
+                c.primer_nombre,
+                c.segundo_nombre,
+                c.primer_apellido,
+                c.segundo_apellido
+              )
+            ),
+            ''
+          ),
+          c.documento
+        ) AS cliente_nombre,
 
-      WHERE estado = 'pendiente'
+        s.created_at AS fecha_creacion,
+        s.estado
+
+      FROM solicitudes_alquiler s
+
+      LEFT JOIN sync_clientes c
+        ON c.id_externo = s.cliente_id
+
+      WHERE s.estado = 'pendiente'
 
       ORDER BY
-        fecha_creacion ASC
+        s.created_at ASC
 
       LIMIT 20
     `);
@@ -743,19 +763,56 @@ const getGarantiasPendientes = async () => {
   try {
     const result = await pgPool.query(`
       SELECT
-        id,
-        numero_solicitud,
-        cliente_nombre,
-        fecha_creacion,
-        estado
+        i.id,
 
-      FROM solicitudes_alquiler
+        COALESCE(
+          so.codigo_os,
+          i.id::text
+        ) AS numero_solicitud,
 
-      WHERE estado = 'pendiente'
-        AND tipo = 'garantia'
+        COALESCE(
+          NULLIF(BTRIM(c.razon_social), ''),
+          NULLIF(
+            BTRIM(
+              CONCAT_WS(
+                ' ',
+                c.primer_nombre,
+                c.segundo_nombre,
+                c.primer_apellido,
+                c.segundo_apellido
+              )
+            ),
+            ''
+          ),
+          c.documento
+        ) AS cliente_nombre,
+
+        i.created_at AS fecha_creacion,
+        i.status AS estado,
+
+        i.service_type_name,
+        i.service_order_id
+
+      FROM service_order_intakes i
+
+      JOIN clients c
+        ON c.id = i.client_id
+
+      LEFT JOIN service_orders so
+        ON so.id = i.service_order_id
+
+      WHERE i.status IN (
+        'draft',
+        'ready'
+      )
+
+        AND COALESCE(
+          i.service_type_name,
+          ''
+        ) ILIKE '%garant%'
 
       ORDER BY
-        fecha_creacion ASC
+        i.created_at ASC
 
       LIMIT 20
     `);

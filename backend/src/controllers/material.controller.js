@@ -1,4 +1,4 @@
-// backend/src/controllers/material.controller.js
+﻿// backend/src/controllers/material.controller.js
 const pool = require('../db/pool');
 
 // Obtener materiales de un servicio
@@ -8,13 +8,13 @@ exports.getMaterialesByServicio = async (req, res) => {
     const result = await pool.query(`
       SELECT 
         sm.*,
-        p.codigo, p.nombre as producto_nombre, p.unidad_medida, p.tipo,
+        p.codigo, p.nombre as producto_nombre, p.tipo,
         u.nombre1 as tecnico_nombre, u.apellidos as tecnico_apellidos
       FROM servicio_materiales sm
       JOIN products p ON sm.product_id = p.id
       JOIN usuarios u ON sm.tecnico_id = u.id
       WHERE sm.service_order_id = $1
-      ORDER BY sm.createdAt DESC
+      ORDER BY sm."createdAt" DESC
     `, [service_order_id]);
     res.json(result.rows);
   } catch (error) {
@@ -93,7 +93,7 @@ exports.entregarMateriales = async (req, res) => {
   }
 };
 
-// Reportar uso de materiales (técnico)
+// Reportar uso de materiales (tÃ©cnico)
 exports.reportarUso = async (req, res) => {
   try {
     const { id } = req.params;
@@ -113,7 +113,7 @@ exports.reportarUso = async (req, res) => {
     `, [cantidad_usada, cantidad_devuelta, cantidad_desperdiciada, 
         observaciones, id, tecnico_id]);
     
-    // Devolver al inventario lo que no se usó
+    // Devolver al inventario lo que no se usÃ³
     if (result.rows[0] && cantidad_devuelta > 0) {
       await pool.query(`
         UPDATE products 
@@ -121,14 +121,14 @@ exports.reportarUso = async (req, res) => {
         WHERE id = $2
       `, [cantidad_devuelta, result.rows[0].product_id]);
       
-      // Registrar movimiento de devolución
+      // Registrar movimiento de devoluciÃ³n
       await pool.query(`
         INSERT INTO inventory_movements (
           product_id, tipo_movimiento, origen_tipo, origen_id,
           cantidad, usuario_id, observaciones, fecha
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
       `, [result.rows[0].product_id, 'entrada', 'servicio_devolucion', result.rows[0].service_order_id,
-          cantidad_devuelta, tecnico_id, `Devolución de materiales no usados`]);
+          cantidad_devuelta, tecnico_id, `DevoluciÃ³n de materiales no usados`]);
     }
     
     res.json(result.rows[0]);
@@ -138,7 +138,7 @@ exports.reportarUso = async (req, res) => {
   }
 };
 
-// Obtener resumen de consumo por técnico
+// Obtener resumen de consumo por tÃ©cnico
 exports.getConsumoTecnico = async (req, res) => {
   try {
     const { tecnico_id, fechaInicio, fechaFin } = req.query;

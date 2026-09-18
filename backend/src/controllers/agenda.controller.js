@@ -430,6 +430,10 @@ exports.agendarServicio = async (req, res) => {
         'NO_COMMON_WORK_WINDOW',
         'TEAM_REQUIRED_FOR_SCHEDULE',
         'INVALID_SCHEDULE_TIME',
+        'INVALID_SCHEDULE_DATE',
+        'INVALID_SCHEDULE_DURATION',
+        'SCHEDULE_IN_PAST',
+        'SCHEDULE_CROSSES_DAY',
       ].includes(error?.code)
     ) {
       return res.status(409).json({

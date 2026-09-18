@@ -173,91 +173,6 @@ async function resolveClientForIntake(client, body) {
     }
   }
 
-  /*
-   * Antes de asumir que un identificador num?rico
-   * pertenece exclusivamente a sync_clientes,
-   * intentamos correlacionarlo con un cliente local.
-   *
-   * El buscador puede devolver:
-   * - UUID local
-   * - codigo_worldoffice
-   * - documento
-   * - id_externo de WorldOffice
-   *
-   * Un cliente local NO necesita existir obligatoriamente
-   * en sync_clientes.
-   */
-  const localReferenceCandidates =
-    [
-      requestedId,
-      body?.client_external_id,
-      body?.client_snapshot?.id_externo,
-      body?.client_snapshot?.documento,
-    ]
-      .map((value) =>
-        cleanText(value, 120)
-      )
-      .filter(Boolean);
-
-  if (
-    localReferenceCandidates.length
-  ) {
-    const uniqueReferences =
-      [
-        ...new Set(
-          localReferenceCandidates
-        ),
-      ];
-
-    const localByReference =
-      await client.query(
-        `
-          SELECT
-            id,
-            documento,
-            codigo_worldoffice
-          FROM clients
-          WHERE activo = TRUE
-            AND (
-              documento =
-                ANY($1::text[])
-              OR
-              codigo_worldoffice =
-                ANY($1::text[])
-            )
-          ORDER BY
-            CASE
-              WHEN codigo_worldoffice =
-                ANY($1::text[])
-              THEN 0
-              ELSE 1
-            END
-          LIMIT 1
-        `,
-        [uniqueReferences]
-      );
-
-    if (
-      localByReference.rows[0]
-    ) {
-      return {
-        client_id:
-          localByReference
-            .rows[0]
-            .id,
-
-        origin:
-          'local',
-
-        source_reference:
-          cleanText(
-            body?.source_reference,
-            180
-          ),
-      };
-    }
-  }
-
   const externalCandidate =
     body?.client_external_id ??
     body?.client_snapshot?.id_externo ??
@@ -658,17 +573,8 @@ function validateCorePayload(body, { partial = false } = {}) {
     errors.push('Prioridad no válida');
   }
 
-  if (!['auto', 'manual'].includes(schedulingMode)) {
-    errors.push('Modo de programacion no valido');
-  }
-
-  if (schedulingMode === 'manual') {
-    if (!scheduledDate) {
-      errors.push('Para programacion manual, la fecha es requerida');
-    }
-    if (!scheduledTime) {
-      errors.push('Para programacion manual, la hora es requerida');
-    }
+  if (schedulingMode === 'auto' && !scheduledDate) {
+    errors.push('Para programación automática, la fecha es requerida');
   }
 
   const baseValue = parseMoney(body?.base_value);
