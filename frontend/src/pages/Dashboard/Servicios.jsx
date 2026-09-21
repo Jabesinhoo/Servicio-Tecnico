@@ -36,8 +36,8 @@ export default function Servicios() {
     setDeleteTarget(service);
   };
 
-  const confirmDelete = async (service) => {
-    const result = await deleteServicio(service.id);
+  const confirmDelete = async (service, reason) => {
+    const result = await deleteServicio(service.id, reason);
     await fetchServicios();
     return result;
   };

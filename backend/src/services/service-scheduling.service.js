@@ -2,376 +2,341 @@
 
 const { randomUUID } = require('crypto');
 
-const TIME_ZONE = 'America/Bogota';
-const SLOT_MINUTES = Math.max(
-  5,
-  Number(process.env.AUTO_SCHEDULE_SLOT_MINUTES || 15)
-);
-const SEARCH_DAYS = Math.min(
-  90,
-  Math.max(
-    1,
-    Number(process.env.AUTO_SCHEDULE_SEARCH_DAYS || 45)
-  )
-);
+const TZ = 'America/Bogota';
+const SEARCH_DAYS = 45;
+const SLOT_MINUTES = 15;
 
-function cleanTechnicianIds(ids) {
-  return [...new Set(
-    (Array.isArray(ids) ? ids : [])
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-  )];
+function normalizeDuration(value, fallback = 60) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(Math.round(n), 1440);
 }
 
-function timeToMinutes(value) {
-  if (!value) return null;
-  const parts = String(value).slice(0, 5).split(':').map(Number);
-  if (parts.length !== 2) return null;
-  const [h, m] = parts;
-  if (
-    !Number.isInteger(h) ||
-    !Number.isInteger(m) ||
-    h < 0 || h > 23 ||
-    m < 0 || m > 59
-  ) {
-    return null;
+function validDate(value) {
+  const s = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const e = new Error('Fecha programada no válida');
+    e.code = 'INVALID_SCHEDULE';
+    throw e;
   }
-  return h * 60 + m;
+  return s;
 }
 
-function minutesToTime(total) {
-  const normalized = Math.max(0, Math.min(1439, Number(total) || 0));
-  const h = Math.floor(normalized / 60);
-  const m = normalized % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+function validTime(value) {
+  const s = String(value || '').trim();
+  if (!/^\d{2}:\d{2}(?::\d{2})?$/.test(s)) {
+    const e = new Error('Hora programada no válida');
+    e.code = 'INVALID_SCHEDULE';
+    throw e;
+  }
+  return s.length === 5 ? `${s}:00` : s;
 }
 
-function roundUp(value, step) {
-  return Math.ceil(value / step) * step;
-}
-
-function addDays(dateText, days) {
-  const date = new Date(`${dateText}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + Number(days || 0));
-  return date.toISOString().slice(0, 10);
-}
-
-function toBogotaIsoFromMinutes(dateText, totalMinutes) {
-  const dayOffset = Math.floor(totalMinutes / 1440);
-  const minuteOfDay = ((totalMinutes % 1440) + 1440) % 1440;
-  const targetDate = addDays(dateText, dayOffset);
-  return `${targetDate}T${minutesToTime(minuteOfDay)}-05:00`;
-}
-
-async function getBogotaNow(client) {
-  const result = await client.query(`
-    SELECT
-      TO_CHAR(
-        CURRENT_TIMESTAMP AT TIME ZONE '${TIME_ZONE}',
-        'YYYY-MM-DD'
-      ) AS local_date,
-      TO_CHAR(
-        CURRENT_TIMESTAMP AT TIME ZONE '${TIME_ZONE}',
-        'HH24:MI:SS'
-      ) AS local_time
-  `);
-
-  return result.rows[0];
-}
-
-async function getTeamForOrder(client, orderId) {
-  const result = await client.query(
-    `
-      SELECT
-        tm.technician_id,
-        tm.member_role
-      FROM service_order_team_members tm
-      WHERE tm.service_order_id = $1
-        AND tm.member_status <> 'removed'
-      ORDER BY
-        CASE tm.member_role
-          WHEN 'primary' THEN 0
-          ELSE 1
-        END,
-        tm.added_at ASC
-    `,
+async function getOrderAndTeam(client, orderId) {
+  const orderResult = await client.query(
+    `SELECT id, codigo_os, estado, tecnico_id,
+            duracion_estimada, fecha_agendada, hora_inicio_agendada
+     FROM service_orders
+     WHERE id = $1
+     FOR UPDATE`,
     [orderId]
   );
 
-  if (result.rows.length > 0) {
-    return result.rows;
+  if (!orderResult.rows[0]) {
+    const e = new Error('Orden de servicio no encontrada');
+    e.code = 'ORDER_NOT_FOUND';
+    throw e;
   }
 
-  const fallback = await client.query(
-    `
-      SELECT
-        tecnico_id AS technician_id,
-        'primary'::varchar AS member_role
-      FROM service_orders
-      WHERE id = $1
-        AND tecnico_id IS NOT NULL
-      LIMIT 1
-    `,
+  const order = orderResult.rows[0];
+
+  const teamResult = await client.query(
+    `SELECT technician_id, member_role
+     FROM service_order_team_members
+     WHERE service_order_id = $1
+       AND member_status <> 'removed'
+     ORDER BY CASE member_role WHEN 'primary' THEN 0 ELSE 1 END, added_at ASC`,
     [orderId]
   );
 
-  return fallback.rows;
+  let team = teamResult.rows;
+
+  if (!team.length && order.tecnico_id) {
+    team = [{ technician_id: order.tecnico_id, member_role: 'primary' }];
+  }
+
+  if (!team.length) {
+    const e = new Error('La orden no tiene técnicos asignados.');
+    e.code = 'TEAM_REQUIRED_FOR_SCHEDULE';
+    throw e;
+  }
+
+  return { order, team };
 }
 
-async function lockTechnicians(client, technicianIds) {
-  const ids = cleanTechnicianIds(technicianIds);
-  if (!ids.length) return;
+async function bogotaTimestamp(client, dateText, timeText) {
+  const date = validDate(dateText);
+  const time = validTime(timeText);
 
-  await client.query(
-    `
-      SELECT id
-      FROM usuarios
-      WHERE id = ANY($1::uuid[])
-      ORDER BY id
-      FOR UPDATE
-    `,
-    [ids]
+  const r = await client.query(
+    `SELECT make_timestamptz(
+       split_part($1, '-', 1)::int,
+       split_part($1, '-', 2)::int,
+       split_part($1, '-', 3)::int,
+       split_part($2, ':', 1)::int,
+       split_part($2, ':', 2)::int,
+       split_part($2, ':', 3)::int,
+       $3
+     ) AS start_at`,
+    [date, time, TZ]
   );
+
+  return r.rows[0].start_at;
 }
 
-async function hasConflict(
+async function ensureFuture(client, startAt) {
+  const r = await client.query(
+    `SELECT $1::timestamptz > NOW() AS ok`,
+    [startAt]
+  );
+  if (!r.rows[0]?.ok) {
+    const e = new Error(
+      'No se puede programar un servicio en una fecha u hora pasada.'
+    );
+    e.code = 'PAST_SCHEDULE';
+    throw e;
+  }
+}
+
+async function conflicts(client, technicianIds, startAt, endAt, orderId) {
+  const r = await client.query(
+    `SELECT technician_id, start_at, end_at, service_order_id
+     FROM service_order_schedule_blocks
+     WHERE technician_id = ANY($1::uuid[])
+       AND status = 'active'
+       AND start_at < $2::timestamptz
+       AND end_at > $3::timestamptz
+       AND service_order_id <> $4
+     ORDER BY start_at`,
+    [technicianIds, endAt, startAt, orderId]
+  );
+  return r.rows;
+}
+
+async function findCommonSlot(
   client,
   technicianIds,
-  startIso,
-  endIso,
-  excludeOrderId = null
+  initialStart,
+  durationMinutes,
+  orderId
 ) {
-  const ids = cleanTechnicianIds(technicianIds);
+  let cursor = new Date(initialStart);
+  const limit = Date.now() + SEARCH_DAYS * 86400000;
 
-  const result = await client.query(
-    `
-      SELECT 1
-      FROM service_order_schedule_blocks b
-      JOIN service_orders so
-        ON so.id = b.service_order_id
-      WHERE b.technician_id = ANY($1::uuid[])
-        AND b.status = 'active'
-        AND so.estado::text NOT IN ('cancelado', 'rechazado', 'cerrada')
-        AND ($4::uuid IS NULL OR b.service_order_id <> $4)
-        AND b.start_at < $3::timestamptz
-        AND b.end_at > $2::timestamptz
-      LIMIT 1
-    `,
-    [ids, startIso, endIso, excludeOrderId]
+  while (cursor.getTime() < limit) {
+    const end = new Date(
+      cursor.getTime() + durationMinutes * 60000
+    );
+
+    const busy = await conflicts(
+      client,
+      technicianIds,
+      cursor.toISOString(),
+      end.toISOString(),
+      orderId
+    );
+
+    if (!busy.length) {
+      return {
+        startAt: cursor.toISOString(),
+        endAt: end.toISOString(),
+      };
+    }
+
+    const latestEnd = Math.max(
+      ...busy.map((row) => new Date(row.end_at).getTime())
+    );
+
+    cursor = new Date(
+      Math.ceil(latestEnd / (SLOT_MINUTES * 60000)) *
+        SLOT_MINUTES *
+        60000
+    );
+  }
+
+  const e = new Error(
+    `No encontré un espacio común disponible para los ${technicianIds.length} técnico(s) en los próximos ${SEARCH_DAYS} días.`
   );
-
-  return Boolean(result.rows[0]);
+  e.code = 'NO_COMMON_SLOT';
+  throw e;
 }
 
-async function replaceBlocks(
+async function persistSchedule(
   client,
   {
     orderId,
     team,
-    startIso,
-    endIso,
+    startAt,
+    endAt,
+    durationMinutes,
     actorUserId,
     source,
   }
 ) {
+  const technicianIds = team.map((m) => m.technician_id);
+
   await client.query(
-    `
-      UPDATE service_order_schedule_blocks
-      SET status = 'cancelled',
-          updated_at = NOW()
-      WHERE service_order_id = $1
-        AND status = 'active'
-    `,
+    `UPDATE service_order_schedule_blocks
+     SET status = 'cancelled',
+         updated_at = NOW()
+     WHERE service_order_id = $1
+       AND status = 'active'`,
     [orderId]
   );
 
+  const busy = await conflicts(
+    client,
+    technicianIds,
+    startAt,
+    endAt,
+    orderId
+  );
+
+  if (busy.length) {
+    const e = new Error(
+      'Uno o más técnicos ya están ocupados en ese intervalo.'
+    );
+    e.code = 'SCHEDULE_CONFLICT';
+    throw e;
+  }
+
   for (const member of team) {
     await client.query(
-      `
-        INSERT INTO service_order_schedule_blocks (
-          id,
-          service_order_id,
-          technician_id,
-          block_role,
-          start_at,
-          end_at,
-          status,
-          source,
-          created_by,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          $1,$2,$3,$4,$5,$6,
-          'active',$7,$8,NOW(),NOW()
-        )
-      `,
+      `INSERT INTO service_order_schedule_blocks (
+         id, service_order_id, technician_id,
+         block_role, start_at, end_at,
+         status, source, created_at, updated_at
+       )
+       VALUES ($1,$2,$3,$4,$5::timestamptz,$6::timestamptz,
+               'active',$7,NOW(),NOW())`,
       [
         randomUUID(),
         orderId,
         member.technician_id,
-        member.member_role || 'support',
-        startIso,
-        endIso,
-        source || 'auto',
-        actorUserId || null,
+        member.member_role === 'primary' ? 'primary' : 'support',
+        startAt,
+        endAt,
+        source,
       ]
     );
   }
-}
 
-function normalizedDuration(value) {
-  const duration = Number(value || 60);
-  if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) {
-    const error = new Error('Duración de servicio no válida');
-    error.code = 'INVALID_SCHEDULE_DURATION';
-    throw error;
-  }
-  return Math.max(SLOT_MINUTES, Math.ceil(duration));
+  const local = await client.query(
+    `SELECT
+       ($1::timestamptz AT TIME ZONE $3)::date AS date_local,
+       ($1::timestamptz AT TIME ZONE $3)::time AS time_local`,
+    [startAt, endAt, TZ]
+  );
+
+  await client.query(
+    `UPDATE service_orders
+     SET fecha_agendada = $1::date,
+         hora_inicio_agendada = $2::time,
+         duracion_estimada = $3,
+         "updatedAt" = NOW()
+     WHERE id = $4`,
+    [
+      local.rows[0].date_local,
+      local.rows[0].time_local,
+      durationMinutes,
+      orderId,
+    ]
+  );
+
+  return {
+    order_id: orderId,
+    technician_ids: technicianIds,
+    start_at: startAt,
+    end_at: endAt,
+    duration_minutes: durationMinutes,
+    source,
+    actor_user_id: actorUserId || null,
+  };
 }
 
 async function scheduleOrderAutomatically(
   client,
-  {
-    orderId,
-    actorUserId = null,
-    replaceExisting = false,
-  }
+  { orderId, actorUserId = null, replaceExisting = true }
 ) {
-  const orderResult = await client.query(
-    `
-      SELECT
-        id,
-        codigo_os,
-        duracion_estimada,
-        fecha_agendada,
-        hora_inicio_agendada
-      FROM service_orders
-      WHERE id = $1
-      FOR UPDATE
-    `,
-    [orderId]
-  );
+  const { order, team } = await getOrderAndTeam(client, orderId);
+  const duration = normalizeDuration(order.duracion_estimada, 60);
+  const technicianIds = team.map((m) => m.technician_id);
 
-  const order = orderResult.rows[0];
-
-  if (!order) {
-    const error = new Error('Orden de servicio no encontrada');
-    error.code = 'ORDER_NOT_FOUND';
-    throw error;
+  if (replaceExisting) {
+    await client.query(
+      `UPDATE service_order_schedule_blocks
+       SET status = 'cancelled',
+           updated_at = NOW()
+       WHERE service_order_id = $1
+         AND status = 'active'`,
+      [orderId]
+    );
   }
 
-  const existing = await client.query(
-    `
-      SELECT
-        MIN(start_at) AS start_at,
-        MAX(end_at) AS end_at,
-        COUNT(*)::int AS total
-      FROM service_order_schedule_blocks
-      WHERE service_order_id = $1
-        AND status = 'active'
-    `,
-    [orderId]
-  );
+  let initialMs = Date.now();
 
-  if (
-    Number(existing.rows[0]?.total || 0) > 0 &&
-    !replaceExisting
-  ) {
-    return {
-      scheduled: true,
-      reused: true,
-      start_at: existing.rows[0].start_at,
-      end_at: existing.rows[0].end_at,
-    };
-  }
+  if (order.fecha_agendada) {
+    const dateText = String(order.fecha_agendada).slice(0, 10);
+    const today = await client.query(
+      `SELECT (NOW() AT TIME ZONE $1)::date::text AS today`,
+      [TZ]
+    );
+    const todayText = today.rows[0].today;
 
-  const team = await getTeamForOrder(client, orderId);
-
-  if (!team.length) {
-    const error = new Error('La orden no tiene técnicos seleccionados');
-    error.code = 'TEAM_REQUIRED_FOR_SCHEDULE';
-    throw error;
-  }
-
-  const technicianIds = cleanTechnicianIds(
-    team.map((member) => member.technician_id)
-  );
-
-  await lockTechnicians(client, technicianIds);
-
-  const duration = normalizedDuration(order.duracion_estimada);
-  const now = await getBogotaNow(client);
-  const nowMinutes = timeToMinutes(now.local_time);
-
-  for (let offset = 0; offset < SEARCH_DAYS; offset += 1) {
-    const dateText = addDays(now.local_date, offset);
-
-    const firstMinute =
-      offset === 0
-        ? roundUp(nowMinutes + 1, SLOT_MINUTES)
-        : 0;
-
-    for (
-      let minute = firstMinute;
-      minute + duration <= 1440;
-      minute += SLOT_MINUTES
-    ) {
-      const startTime = minutesToTime(minute);
-      const startIso = toBogotaIsoFromMinutes(dateText, minute);
-      const endIso = toBogotaIsoFromMinutes(dateText, minute + duration);
-
-      if (
-        await hasConflict(
-          client,
-          technicianIds,
-          startIso,
-          endIso,
-          orderId
-        )
-      ) {
-        continue;
-      }
-
-      await replaceBlocks(client, {
-        orderId,
-        team,
-        startIso,
-        endIso,
-        actorUserId,
-        source: 'auto',
-      });
-
-      await client.query(
-        `
-          UPDATE service_orders
-          SET fecha_agendada = $1::date,
-              hora_inicio_agendada = $2::time,
-              duracion_estimada = $3,
-              "updatedAt" = NOW()
-          WHERE id = $4
-        `,
-        [dateText, startTime, duration, orderId]
-      );
-
-      return {
-        scheduled: true,
-        reused: false,
-        date: dateText,
-        time: startTime,
-        duration_minutes: duration,
-        start_at: startIso,
-        end_at: endIso,
-        technician_ids: technicianIds,
-      };
+    if (dateText > todayText) {
+      const ts = await bogotaTimestamp(client, dateText, '08:00:00');
+      initialMs = Math.max(initialMs, new Date(ts).getTime());
     }
   }
 
-  const error = new Error(
-    `No encontré un espacio común libre para los ${technicianIds.length} técnico(s) en los próximos ${SEARCH_DAYS} días.`
+  initialMs =
+    Math.ceil(initialMs / (SLOT_MINUTES * 60000)) *
+    SLOT_MINUTES *
+    60000;
+
+  const slot = await findCommonSlot(
+    client,
+    technicianIds,
+    new Date(initialMs).toISOString(),
+    duration,
+    orderId
   );
-  error.code = 'NO_COMMON_SLOT';
-  throw error;
+
+  const result = await persistSchedule(client, {
+    orderId,
+    team,
+    startAt: slot.startAt,
+    endAt: slot.endAt,
+    durationMinutes: duration,
+    actorUserId,
+    source: 'automatic',
+  });
+
+  await client.query(
+    `INSERT INTO service_order_events (
+       id, service_order_id, event_type,
+       actor_user_id, metadata, created_at
+     )
+     VALUES ($1,$2,'service_auto_scheduled',$3,$4::jsonb,NOW())`,
+    [
+      randomUUID(),
+      orderId,
+      actorUserId || null,
+      JSON.stringify(result),
+    ]
+  );
+
+  return result;
 }
 
 async function rescheduleOrderAt(
@@ -384,109 +349,46 @@ async function rescheduleOrderAt(
     actorUserId = null,
   }
 ) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateText || ''))) {
-    const error = new Error('Fecha no válida');
-    error.code = 'INVALID_SCHEDULE_DATE';
-    throw error;
-  }
+  const { team } = await getOrderAndTeam(client, orderId);
+  const duration = normalizeDuration(durationMinutes, 60);
+  const startAt = await bogotaTimestamp(client, dateText, timeText);
 
-  const team = await getTeamForOrder(client, orderId);
+  await ensureFuture(client, startAt);
 
-  if (!team.length) {
-    const error = new Error('La orden no tiene equipo técnico');
-    error.code = 'TEAM_REQUIRED_FOR_SCHEDULE';
-    throw error;
-  }
-
-  const technicianIds = cleanTechnicianIds(
-    team.map((member) => member.technician_id)
+  const end = await client.query(
+    `SELECT $1::timestamptz +
+            ($2::int * INTERVAL '1 minute') AS end_at`,
+    [startAt, duration]
   );
 
-  await lockTechnicians(client, technicianIds);
-
-  const duration = normalizedDuration(durationMinutes);
-  const startMinute = timeToMinutes(timeText);
-
-  if (!Number.isFinite(startMinute)) {
-    const error = new Error('Hora no válida');
-    error.code = 'INVALID_SCHEDULE_TIME';
-    throw error;
-  }
-
-  if (startMinute + duration > 1440) {
-    const error = new Error(
-      'La programación manual debe terminar el mismo día.'
-    );
-    error.code = 'SCHEDULE_CROSSES_DAY';
-    throw error;
-  }
-
-  const now = await getBogotaNow(client);
-  const nowMinutes = timeToMinutes(now.local_time);
-
-  if (
-    dateText < now.local_date ||
-    (dateText === now.local_date && startMinute <= nowMinutes)
-  ) {
-    const error = new Error('No se puede programar un servicio en el pasado');
-    error.code = 'SCHEDULE_IN_PAST';
-    throw error;
-  }
-
-  const startTime = minutesToTime(startMinute);
-  const startIso = toBogotaIsoFromMinutes(dateText, startMinute);
-  const endIso = toBogotaIsoFromMinutes(dateText, startMinute + duration);
-
-  if (
-    await hasConflict(
-      client,
-      technicianIds,
-      startIso,
-      endIso,
-      orderId
-    )
-  ) {
-    const error = new Error(
-      'Uno o más técnicos ya tienen otro servicio en ese horario'
-    );
-    error.code = 'SCHEDULE_CONFLICT';
-    throw error;
-  }
-
-  await replaceBlocks(client, {
+  const result = await persistSchedule(client, {
     orderId,
     team,
-    startIso,
-    endIso,
+    startAt: new Date(startAt).toISOString(),
+    endAt: new Date(end.rows[0].end_at).toISOString(),
+    durationMinutes: duration,
     actorUserId,
     source: 'manual',
   });
 
   await client.query(
-    `
-      UPDATE service_orders
-      SET fecha_agendada = $1::date,
-          hora_inicio_agendada = $2::time,
-          duracion_estimada = $3,
-          "updatedAt" = NOW()
-      WHERE id = $4
-    `,
-    [dateText, startTime, duration, orderId]
+    `INSERT INTO service_order_events (
+       id, service_order_id, event_type,
+       actor_user_id, metadata, created_at
+     )
+     VALUES ($1,$2,'service_manual_scheduled',$3,$4::jsonb,NOW())`,
+    [
+      randomUUID(),
+      orderId,
+      actorUserId || null,
+      JSON.stringify(result),
+    ]
   );
 
-  return {
-    scheduled: true,
-    date: dateText,
-    time: startTime,
-    duration_minutes: duration,
-    start_at: startIso,
-    end_at: endIso,
-    technician_ids: technicianIds,
-  };
+  return result;
 }
 
 module.exports = {
-  getTeamForOrder,
   scheduleOrderAutomatically,
   rescheduleOrderAt,
 };

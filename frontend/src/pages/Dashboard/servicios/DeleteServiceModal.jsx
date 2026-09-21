@@ -5,12 +5,14 @@ export default function DeleteServiceModal({ service, onClose, onConfirm }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [resultMessage, setResultMessage] = useState('');
+  const [reason, setReason] = useState('');
 
   useEffect(() => {
     if (!service) return undefined;
 
     setError('');
     setResultMessage('');
+    setReason('');
     setSaving(false);
 
     const previous = document.body.style.overflow;
@@ -26,15 +28,22 @@ export default function DeleteServiceModal({ service, onClose, onConfirm }) {
       document.body.style.overflow = previous;
       window.removeEventListener('keydown', onKey);
     };
-  }, [service, onClose, saving]);
+  }, [service, onClose]);
 
   if (!service) return null;
 
   const remove = async () => {
+    const cleanReason = reason.trim();
+
+    if (cleanReason.length < 5) {
+      setError('Indica el motivo de cancelación (mínimo 5 caracteres).');
+      return;
+    }
+
     try {
       setSaving(true);
       setError('');
-      const response = await onConfirm?.(service);
+      const response = await onConfirm?.(service, cleanReason);
       setResultMessage(
         response?.message ||
           'La orden fue cancelada correctamente y su historial se conservó.'
@@ -43,7 +52,7 @@ export default function DeleteServiceModal({ service, onClose, onConfirm }) {
       setError(
         requestError?.response?.data?.message ||
           requestError?.message ||
-          'No fue posible eliminar/cancelar la orden.'
+          'No fue posible cancelar la orden.'
       );
     } finally {
       setSaving(false);
@@ -83,15 +92,32 @@ export default function DeleteServiceModal({ service, onClose, onConfirm }) {
           {!resultMessage && (
             <>
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                ¿Seguro que deseas eliminar este servicio de la operación activa?
+                La orden dejará de estar activa, pero no se borrará su trazabilidad.
               </p>
 
               <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-800 dark:text-red-300 space-y-1">
                 <p className="font-semibold">Esta acción cancelará la orden.</p>
                 <p>• Se liberarán sus bloques activos de agenda.</p>
                 <p>• Las asignaciones pendientes serán revocadas.</p>
-                <p>• El historial y la trazabilidad se conservarán.</p>
+                <p>• El historial, documentos y movimientos se conservarán.</p>
               </div>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  Motivo de cancelación *
+                </span>
+                <textarea
+                  rows={4}
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  disabled={saving}
+                  placeholder="Ej: El cliente canceló la solicitud antes de iniciar el trabajo."
+                  className="mt-2 w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500/30"
+                />
+                <span className="mt-1 block text-xs text-gray-500">
+                  Este motivo quedará registrado en el historial de la OS.
+                </span>
+              </label>
             </>
           )}
 
@@ -130,7 +156,7 @@ export default function DeleteServiceModal({ service, onClose, onConfirm }) {
               <button
                 type="button"
                 onClick={remove}
-                disabled={saving}
+                disabled={saving || reason.trim().length < 5}
                 className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
               >
                 <Trash2 className="w-4 h-4" />

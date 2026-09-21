@@ -98,8 +98,10 @@ export const useServicios = () => {
     return response.data;
   }, [fetchServicios]);
 
-  const deleteServicio = useCallback(async (id) => {
-    const response = await api.delete(`/api/service-orders/${id}`);
+  const deleteServicio = useCallback(async (id, reason) => {
+    const response = await api.delete(`/api/service-orders/${id}`, {
+      data: { reason },
+    });
     await fetchServicios();
     return response.data;
   }, [fetchServicios]);

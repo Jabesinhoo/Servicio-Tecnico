@@ -1946,11 +1946,50 @@ exports.activate = async (req, res) => {
       throw orderError;
     }
 
-    // 5. Insert service details - TEMPORALMENTE DESHABILITADO
-    console.log('⏭️ Service details insert skipped (will be enabled later)');
+// 6. Get planned team
+        // 5. V6.1 · Guardar detalle del servicio seleccionado
+    console.log('🧾 Guardando detalle del servicio de la OS...');
 
-    // 6. Get planned team
-    console.log('👥 Getting planned team...');
+    await client.query(
+      `
+        INSERT INTO service_order_services (
+          service_order_id,
+          tipo_servicio_id,
+          tipo_servicio_nombre,
+          descripcion_problema,
+          observaciones,
+          precio_estimado,
+          equipo_relacionado,
+          requiere_diagnostico,
+          requiere_repuestos,
+          repuestos_necesarios,
+          "createdAt",
+          "updatedAt"
+        )
+        SELECT
+          $1,$2,$3,$4,$5,$6,NULL,$7,FALSE,NULL,NOW(),NOW()
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM service_order_services
+          WHERE service_order_id = $1
+        )
+      `,
+      [
+        serviceOrderId,
+        intake.service_type_id && isUuid(intake.service_type_id)
+          ? intake.service_type_id
+          : null,
+        intake.service_type_name || null,
+        intake.request_description || null,
+        intake.scope_text || null,
+        intake.base_value ?? null,
+        intake.classification === 'diagnostic',
+      ]
+    );
+
+    console.log('✅ Detalle del servicio guardado en service_order_services');
+
+console.log('👥 Getting planned team...');
     let plannedTeam = [];
     try {
       plannedTeam = await getIntakeTeam(client, intake.id);

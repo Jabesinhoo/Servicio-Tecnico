@@ -45,6 +45,12 @@ const EVENT_LABELS = {
   service_closed: 'Servicio cerrado',
   final_delivery_completed: 'Entrega final registrada',
   financial_verification_inherited: 'Verificación financiera heredada de la solicitud',
+  material_requested: 'Material solicitado',
+  material_approved: 'Material aprobado',
+  material_rejected: 'Solicitud de material rechazada',
+  material_delivered: 'Material entregado por inventario',
+  material_consumed: 'Consumo de material registrado',
+  material_returned: 'Material devuelto al inventario',
 };
 
 const FIELD_LABELS = {
@@ -61,6 +67,12 @@ const FIELD_LABELS = {
   status: 'Estado',
   duration_minutes: 'Duración',
   activity_type: 'Actividad',
+  product_code: 'Código de producto',
+  product_name: 'Producto',
+  quantity: 'Cantidad',
+  delivered_total: 'Total entregado',
+  used_total: 'Total usado',
+  returned_total: 'Total devuelto',
 };
 
 function humanizeToken(value) {

@@ -3797,13 +3797,25 @@ exports.delete = async (req, res) => {
 
   try {
     const { id } = req.params;
+    const reason =
+      typeof req.body?.reason === 'string'
+        ? req.body.reason.trim()
+        : '';
 
     if (!isUuid(id)) {
       return res.status(400).json({ message: 'ID de orden no válido' });
     }
 
     if (!isAdminRole(req)) {
-      return res.status(403).json({ message: 'Solo administración puede eliminar/cancelar una orden' });
+      return res.status(403).json({
+        message: 'Solo administración puede eliminar/cancelar una orden',
+      });
+    }
+
+    if (reason.length < 5) {
+      return res.status(400).json({
+        message: 'Indica un motivo de cancelación de al menos 5 caracteres',
+      });
     }
 
     await client.query('BEGIN');
@@ -3816,22 +3828,35 @@ exports.delete = async (req, res) => {
       [id]
     );
 
-    if (currentResult.rows.length === 0) {
+    if (!currentResult.rows[0]) {
       await safeRollback(client);
-      return res.status(404).json({ message: 'Orden de servicio no encontrada' });
+      return res.status(404).json({
+        message: 'Orden de servicio no encontrada',
+      });
     }
 
     const order = currentResult.rows[0];
 
     if (order.estado === SERVICE_ORDER_STATES.CANCELADO) {
       await safeRollback(client);
-      return res.json({ message: 'La orden ya se encuentra cancelada' });
+      return res.json({
+        success: true,
+        message: 'La orden ya se encuentra cancelada',
+      });
     }
 
-    if (!canTransition(order.estado, SERVICE_ORDER_STATES.CANCELADO)) {
+    /*
+     * V7: cancelar desde cualquier estado NO terminal.
+     * No destruimos datos: solo liberamos recursos operativos y conservamos
+     * toda la trazabilidad.
+     */
+    if (
+      isTerminalState(order.estado) &&
+      order.estado !== SERVICE_ORDER_STATES.CANCELADO
+    ) {
       await safeRollback(client);
       return res.status(409).json({
-        message: `No se puede cancelar una orden en estado "${order.estado}"`,
+        message: `No se puede cancelar una orden en estado terminal "${order.estado}"`,
         estado_actual: order.estado,
       });
     }
@@ -3844,6 +3869,7 @@ exports.delete = async (req, res) => {
       [SERVICE_ORDER_STATES.CANCELADO, id]
     );
 
+    // Liberar agenda sin borrar historial.
     await client.query(
       `UPDATE service_order_schedule_blocks
        SET status = 'cancelled',
@@ -3853,12 +3879,13 @@ exports.delete = async (req, res) => {
       [id]
     );
 
+    // Revocar cualquier asignación todavía vigente.
     await client.query(
       `UPDATE service_order_assignments
        SET status = 'revocada',
            updated_at = NOW()
        WHERE service_order_id = $1
-         AND status = 'pendiente'`,
+         AND status <> 'revocada'`,
       [id]
     );
 
@@ -3875,7 +3902,8 @@ exports.delete = async (req, res) => {
         JSON.stringify({
           codigo_os: order.codigo_os,
           previous_state: order.estado,
-          source: 'services_ui_delete',
+          reason,
+          source: 'services_ui_delete_modal_v7',
         }),
       ]
     );
@@ -3883,13 +3911,17 @@ exports.delete = async (req, res) => {
     await client.query('COMMIT');
 
     return res.json({
+      success: true,
       message:
-        'Orden cancelada correctamente. Se liberó la agenda y se conserva el historial.',
+        'Orden cancelada correctamente. La agenda y las asignaciones fueron liberadas y el historial se conserva.',
     });
   } catch (error) {
     await safeRollback(client);
     console.error('Error cancelling service order:', error);
-    return res.status(500).json({ message: 'Error al cancelar la orden' });
+    return res.status(500).json({
+      message: 'Error al cancelar la orden',
+      code: error?.code || null,
+    });
   } finally {
     client.release();
   }
