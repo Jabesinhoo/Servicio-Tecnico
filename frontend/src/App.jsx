@@ -31,7 +31,7 @@ import Alquileres from './pages/Dashboard/Alquileres';
 import Reportes from './pages/Dashboard/Reportes';
 
 // Ventas
-import Ventas from './pages/Ventas/ventas';
+import Ventas from './pages/Ventas/Ventas';
 
 // Roles y permisos
 import RolesManagement from './pages/RolesManagement';

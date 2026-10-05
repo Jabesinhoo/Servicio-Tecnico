@@ -232,11 +232,11 @@ async function persistSchedule(
   }
 
   const local = await client.query(
-  `SELECT
-     ($1::timestamptz AT TIME ZONE $2::text)::date AS date_local,
-     ($1::timestamptz AT TIME ZONE $2::text)::time AS time_local`,
-  [startAt, TZ]
-);
+    `SELECT
+       ($1::timestamptz AT TIME ZONE $2::text)::date AS date_local,
+       ($1::timestamptz AT TIME ZONE $2::text)::time AS time_local`,
+    [startAt, TZ]
+  );
 
   await client.query(
     `UPDATE service_orders

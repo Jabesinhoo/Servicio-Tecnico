@@ -18,9 +18,9 @@ const {
   enqueueNotification,
 } = require('../services/service-notification-outbox.service');
 
-const {
-  randomUUID,
-} = crypto;
+const { randomUUID } = crypto;
+const { loadReceptionMedia } = require('../services/service-reception-media.service');
+const { normalizeDocumentDispatch } = require('../domain/service-document-dispatch');
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -119,6 +119,7 @@ async function getOrder(
           so.estado::text AS estado,
           so.tecnico_id,
           so.client_id,
+          so.descripcion_inicial,
           so.fecha_inicio,
           so.fecha_fin,
           so."createdAt" AS created_at,
@@ -302,6 +303,7 @@ async function loadSnapshot(
     thirdPartyEvidenceResult,
     satisfactionResult,
     notificationsResult,
+    intakeResult,
   ] = await Promise.all([
     client.query(
       `
@@ -370,6 +372,8 @@ async function loadSnapshot(
       `
         SELECT
           original_name,
+          storage_path,
+          mime_type,
           category,
           note,
           captured_at,
@@ -500,6 +504,8 @@ async function loadSnapshot(
       `,
       [order.id]
     ),
+    client.query(`SELECT request_description, equipment_intake
+      FROM service_order_intakes WHERE service_order_id = $1 LIMIT 1`, [order.id]),
   ]);
 
   const team =
@@ -554,6 +560,7 @@ async function loadSnapshot(
 
   return {
     order,
+    intake: intakeResult.rows[0] || null,
     team,
     primary_technician_id:
       primary?.technician_id ||
@@ -773,10 +780,15 @@ exports.listDocuments =
           ]
         );
 
+      const dispatches = await client.query(`SELECT id, document_id, actor_user_id, metadata, created_at
+        FROM service_order_document_events WHERE service_order_id = $1
+          AND event_type = 'manual_dispatch_recorded' ORDER BY created_at DESC`, [order.id]);
+
       return res.json({
         success: true,
         data: {
           order,
+          dispatches: dispatches.rows,
           documents:
             result.rows,
           available_types:
@@ -900,6 +912,10 @@ exports.generateDocument =
         snapshot
       );
 
+      if (documentType === 'reception_act') {
+        await loadReceptionMedia(snapshot, EVIDENCE_DIR);
+      }
+
       const html =
         buildServiceDocumentHtml(
           documentType,
@@ -910,6 +926,9 @@ exports.generateDocument =
         await generatePdfBuffer(
           html
         );
+
+      // Las imágenes se incrustan en el PDF; conservar solo metadatos en JSONB.
+      for (const photo of snapshot.reception_evidences || []) delete photo.data_uri;
 
       const sha256 =
         crypto
@@ -1190,6 +1209,7 @@ exports.generateDocument =
 
       if (
         [
+          'RECEPTION_MEDIA_MISSING',
           'RECEPTION_ACT_NOT_SIGNED',
           'TECHNICAL_CLOSURE_REQUIRED',
           'FINAL_DELIVERY_REQUIRED',
@@ -1405,3 +1425,33 @@ exports.getDocumentFile =
       client.release();
     }
   };
+
+// Registro declarado por el operador después de enviar el archivo desde su canal habitual.
+exports.recordManualDispatch = async (req, res) => {
+  let payload;
+  try { payload = normalizeDocumentDispatch(req.body); }
+  catch (error) { return res.status(400).json({ success: false, message: error.message }); }
+  if (!UUID_RE.test(String(req.params.documentId || ''))) {
+    return res.status(400).json({ success: false, message: 'ID de documento no válido' });
+  }
+  const client = await pool.connect();
+  try {
+    const order = await getOrder(client, req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Orden no encontrada' });
+    if (!(await canReadOrder(client, req, order))) {
+      return res.status(403).json({ success: false, message: 'No autorizado para registrar el envío' });
+    }
+    const document = await client.query(`SELECT id FROM service_order_documents
+      WHERE id = $1 AND service_order_id = $2 AND status = 'generated'`, [req.params.documentId, order.id]);
+    if (!document.rows.length) return res.status(409).json({ success: false, message: 'Selecciona la versión vigente del documento' });
+    const result = await client.query(`INSERT INTO service_order_document_events
+      (id, service_order_id, document_id, event_type, actor_user_id, metadata, created_at)
+      VALUES ($1,$2,$3,'manual_dispatch_recorded',$4,$5::jsonb,NOW())
+      RETURNING id, document_id, actor_user_id, metadata, created_at`,
+      [randomUUID(), order.id, req.params.documentId, req.user.id, JSON.stringify(payload)]);
+    return res.status(201).json({ success: true, data: result.rows[0], message: 'Envío manual registrado' });
+  } catch (error) {
+    console.error('Error recording manual document dispatch:', error);
+    return res.status(500).json({ success: false, message: 'No fue posible registrar el envío' });
+  } finally { client.release(); }
+};

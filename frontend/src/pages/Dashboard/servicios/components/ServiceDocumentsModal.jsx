@@ -9,6 +9,7 @@ import {
   FileCheck2,
   FileText,
   RefreshCw,
+  Share2,
   ShieldCheck,
   X,
 } from 'lucide-react';
@@ -79,8 +80,17 @@ export default function ServiceDocumentsModal({
   const [busyType, setBusyType] =
     useState('');
 
-  const [error, setError] =
-    useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [prepared, setPrepared] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [dispatch, setDispatch] = useState({ channel: 'whatsapp', recipient_name: '', recipient_contact: '', reference: '', confirmed_sent: false });
+
+  useEffect(() => {
+    setPrepared(null);
+    setData(null);
+    setNotice('');
+  }, [service?.id]);
 
   const load = useCallback(
     async () => {
@@ -282,9 +292,59 @@ export default function ServiceDocumentsModal({
       }
     };
 
-  if (!service) {
-    return null;
-  }
+  const prepareSend = async (document) => {
+    setSending(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await api.get(`/api/service-orders/${service.id}/documents/${document.id}/file`, { responseType: 'blob' });
+      const file = new File([response.data], document.original_name || `${service.codigo_os}.pdf`, { type: 'application/pdf' });
+      setPrepared({ document, file });
+      setDispatch({ channel: 'whatsapp', recipient_name: data?.order?.client_name || '',
+        recipient_contact: data?.order?.client_phone || '', reference: '', confirmed_sent: false });
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No fue posible preparar el PDF');
+    } finally { setSending(false); }
+  };
+
+  const downloadPrepared = () => {
+    if (!prepared) return;
+    const url = URL.createObjectURL(prepared.file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = prepared.file.name;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setNotice('PDF descargado. Adjúntalo al mensaje o correo del cliente y registra el envío cuando lo hayas realizado.');
+  };
+
+  const sharePrepared = async () => {
+    if (!prepared) return;
+    try {
+      if (navigator.canShare?.({ files: [prepared.file] }) && navigator.share) {
+        await navigator.share({ files: [prepared.file], title: `Constancia ${service.codigo_os}` });
+        setNotice('Verifica el destinatario y el envío en la aplicación elegida antes de registrar la entrega.');
+      } else { downloadPrepared(); }
+    } catch (error) {
+      if (error.name !== 'AbortError') setError('No fue posible compartir. Usa Descargar PDF y adjunta el archivo al mensaje del cliente.');
+    }
+  };
+
+  const recordDispatch = async () => {
+    if (!prepared) return;
+    setSending(true);
+    setError('');
+    try {
+      await api.post(`/api/service-orders/${service.id}/documents/${prepared.document.id}/manual-dispatch`, dispatch);
+      setPrepared(null);
+      await load();
+      setNotice('Envío manual registrado con destinatario, canal, fecha y responsable.');
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No fue posible registrar el envío');
+    } finally { setSending(false); }
+  };
+
+  if (!service) return null;
 
   return (
     <div className="fixed inset-0 z-[146] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
@@ -300,7 +360,7 @@ export default function ServiceDocumentsModal({
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              PDFs versionados, inmutables y auditables.
+              Consulta, descarga y entrega las constancias al cliente.
             </p>
           </div>
 
@@ -344,17 +404,53 @@ export default function ServiceDocumentsModal({
             </div>
           )}
 
+          {notice && <div role="status" className="rounded-xl border border-emerald-200 p-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</div>}
+          {prepared && (
+            <section className="rounded-2xl border border-emerald-300 dark:border-emerald-800 p-4 space-y-3">
+              <h4 className="font-bold">Enviar {prepared.file.name}</h4>
+              <p className="text-sm text-slate-500">Comparte el archivo desde el dispositivo o descárgalo y adjúntalo en WhatsApp o correo. Luego registra el envío realizado.</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={sharePrepared} className="min-h-11 rounded-xl bg-emerald-600 text-white px-4 font-semibold">Compartir PDF</button>
+                <button type="button" onClick={downloadPrepared} className="min-h-11 rounded-xl border border-slate-300 px-4 font-semibold">Descargar PDF</button>
+                <button type="button" onClick={() => setPrepared(null)} className="min-h-11 px-4">Cerrar envío</button>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="text-sm">Canal
+                  <select value={dispatch.channel} onChange={event => {
+                    const channel = event.target.value;
+                    setDispatch(prev => ({ ...prev, channel, confirmed_sent: false,
+                      recipient_contact: channel === 'email' ? data?.order?.client_email || '' : channel === 'whatsapp' ? data?.order?.client_phone || '' : '' }));
+                  }} className="block mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3">
+                    <option value="whatsapp">WhatsApp</option><option value="email">Correo</option>
+                    <option value="physical">Entrega física</option><option value="other">Otro</option>
+                  </select>
+                </label>
+                <label className="text-sm">Destinatario *
+                  <input value={dispatch.recipient_name} maxLength={180} onChange={event => setDispatch(prev => ({ ...prev, recipient_name: event.target.value }))} className="block mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                </label>
+                <label className="text-sm">Contacto o identificación *
+                  <input value={dispatch.recipient_contact} maxLength={220} onChange={event => setDispatch(prev => ({ ...prev, recipient_contact: event.target.value }))} className="block mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                </label>
+                <label className="text-sm">Referencia / observación
+                  <input value={dispatch.reference} maxLength={1000} onChange={event => setDispatch(prev => ({ ...prev, reference: event.target.value }))} className="block mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
+                </label>
+              </div>
+              <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={dispatch.confirmed_sent} onChange={event => setDispatch(prev => ({ ...prev, confirmed_sent: event.target.checked }))} className="mt-1" />Confirmo que ya envié o entregué este PDF al destinatario indicado.</label>
+              <button type="button" disabled={sending || !dispatch.confirmed_sent} onClick={recordDispatch} className="min-h-11 rounded-xl bg-blue-600 text-white px-4 font-semibold disabled:opacity-50">{sending ? 'Guardando...' : 'Registrar envío realizado'}</button>
+            </section>
+          )}
+
           <div className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 p-4">
             <div className="flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
 
               <div className="text-sm">
                 <p className="font-bold">
-                  Control documental V16
+                  Constancias del servicio
                 </p>
 
                 <p className="mt-1 text-slate-600 dark:text-slate-300">
-                  Cada regeneración crea una nueva versión con SHA-256 y conserva las versiones anteriores.
+                  Confirma la recepción, carga fotos y solicita la firma antes de generar el acta. Las versiones anteriores se conservan.
                 </p>
               </div>
             </div>
@@ -487,6 +583,8 @@ export default function ServiceDocumentsModal({
                                   </p>
                                 </div>
 
+                                <div className="flex flex-wrap gap-2">
+                                {document.status === 'generated' && <button type="button" disabled={sending} onClick={() => prepareSend(document)} className="min-h-10 rounded-xl bg-emerald-600 text-white px-3 font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"><Share2 className="w-4 h-4" />Preparar envío</button>}
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -499,6 +597,7 @@ export default function ServiceDocumentsModal({
                                   <Download className="w-4 h-4" />
                                   Abrir PDF
                                 </button>
+                                </div>
                               </article>
                             )
                           )}
@@ -514,6 +613,14 @@ export default function ServiceDocumentsModal({
               }
             )
           )}
+
+          {(data?.dispatches || []).length > 0 && <section className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+            <h4 className="font-bold">Envíos registrados</h4>
+            {(data.dispatches || []).map(item => {
+              const doc = documents.find(document => document.id === item.document_id);
+              return <p key={item.id} className="mt-2 text-sm">{TYPE_LABELS[doc?.document_type] || 'Documento'} v{doc?.version || '—'} · {item.metadata?.recipient_name} · {item.metadata?.recipient_contact} · {item.metadata?.channel} · {fmt(item.created_at)}{item.metadata?.reference ? ` · ${item.metadata.reference}` : ''}</p>;
+            })}
+          </section>}
 
           {!isAdmin && (
             <p className="text-xs text-slate-500">

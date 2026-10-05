@@ -1,0 +1,87 @@
+﻿ACTUALIZACIÓN DE RECEPCIÓN Y CONSTANCIAS - 5 DE OCTUBRE DE 2026
+
+Qué incluye
+- Conserva la creación que ya ajustamos: cliente, falla, equipo, estado físico,
+  accesorios, cargador, batería, persona que entrega y referencia de World Office.
+- Conserva asignación, custodia, pagos y aprobación existentes.
+- El técnico confirma el checklist, carga fotografías y recoge la firma.
+- Antes de firmar, la pantalla muestra estado físico, accesorios y observaciones.
+- El acta PDF muestra valores del equipo, falla, firmante, fotos incrustadas y firma.
+- El cierre técnico PDF muestra el equipo y la solución/resultado escrito.
+- Permite preparar, compartir o descargar el PDF para adjuntarlo al mensaje del cliente.
+- Guarda un historial de envíos manuales: documento/versión, canal, destinatario,
+  contacto, referencia, fecha y usuario responsable.
+- Incluye las dos correcciones de agenda ya realizadas: source 'auto' y parámetros
+  [startAt, TZ] con $2::text. Se aplican una vez, no por orden.
+
+INSTALAR EN WINDOWS
+1. Detén backend y frontend (Ctrl+C en cada terminal). Extrae TODO este ZIP a una
+   carpeta nueva. Necesitas Node/npm y Chrome o Edge instalados en este equipo.
+2. Abre PowerShell dentro de la carpeta extraída (donde está INSTALAR.ps1), ejecuta:
+
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR.ps1
+
+   La ruta predeterminada es:
+   C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico
+
+   Si cambia, agrega -ProjectPath "C:\ruta\Servicio-Tecnico" al comando.
+3. El instalador respalda los archivos reemplazados en backups\recepcion-FECHA-HORA,
+   copia la actualización, instala dependencias, verifica navegador y tablas previas,
+   ejecuta las dos migraciones idempotentes, corre 20 pruebas y compila frontend.
+   No borra órdenes ni accede a World Office para modificar sus datos.
+4. Si termina OK, inicia backend y frontend con los mismos comandos habituales
+   que usabas antes. Si falla, detente y comparte el mensaje completo del error.
+
+SQL
+No pegues SQL directamente en PowerShell. El instalador lo ejecuta mediante Node
+usando backend/.env. La columna equipment_intake que ya creaste se conserva.
+V16 crea service_order_documents y service_order_document_events si faltan.
+Las tablas de etapas anteriores se verifican; este paquete no reinstala todo el esquema.
+Si Chrome/Edge está en una ubicación no detectada, configura en backend/.env:
+SERVICE_DOCUMENT_BROWSER_PATH=C:\ruta\a\chrome.exe
+Puppeteer Core usa el navegador instalado: https://pptr.dev/guides/installation
+
+PROBAR CON OS-2026-0012 (O UNA ORDEN DE PRUEBA)
+1. Confirma que está aprobada/asignada. No la vuelvas a crear si ya existe.
+2. En Mis servicios del técnico, acepta la asignación y toma la custodia.
+3. Abre recepción: verifica datos precargados, accesorios y observaciones. Confirma.
+4. Carga al menos una fotografía inicial (JPG, PNG o WEBP).
+5. Solicita a la persona que entrega que revise los datos, acepte y firme en pantalla.
+6. Usa Generar / enviar constancia PDF. Genera el acta de recepción y ábrela.
+   Comprueba cliente, equipo, serial, falla, accesorios, fotos, nombre y firma.
+7. Pulsa Preparar envío. Comparte el archivo desde el dispositivo o descárgalo y
+   adjúntalo manualmente en WhatsApp/correo. Verifica el destinatario.
+8. Solo después del envío real, marca la confirmación y registra el envío realizado.
+   Reabre el modal: debe aparecer en Envíos registrados.
+9. Después del trabajo, registra diagnóstico, resultado funcional y cierre técnico.
+   Genera su acta para entregar la solución al cliente.
+
+ALCANCE Y VERIFICACIÓN
+El procedimiento del documento se adapta a la aplicación: captura, fotos, firma,
+PDF y entrega manual. Se reemplaza la exportación a Excel por una constancia PDF
+versionada. El pedido de World Office (incluido VACIO) continúa en el procedimiento
+externo; este paquete guarda su referencia, no crea pedidos automáticamente allí.
+El envío es manual; el registro es una declaración del operador, no un comprobante
+automático de recepción del cliente ni una integración nueva de correo/WhatsApp.
+Los PDFs antiguos no se modifican: genera una nueva versión con esta actualización.
+
+Pruebas realizadas: 20 pruebas Node correctas; compilación frontend correcta;
+generación real de PDF A4 con foto y firma y revisión visual; prueba de pantalla
+móvil con respuestas de API simuladas. No se probó contra tu PostgreSQL ni con
+cliente real: esos pasos se verifican en tu equipo tras instalar.
+
+RESTABLECER ARCHIVOS
+Si necesitas volver al código anterior, detén los servidores y copia los archivos
+respaldados a sus mismas rutas. archivos.json indica cuáles se añadieron por primera
+vez. Ejecuta npm ci en backend y frontend después de restaurar package-lock.json.
+Las migraciones son aditivas; no borres tablas o la columna al restaurar el código.
+
+Este paquete no contiene credenciales ni .env. Revisa el respaldo antes de instalar
+si hiciste otros cambios locales en estos mismos archivos después del ZIP enviado.
+
+INSTALADOR CORREGIDO
+Puede ejecutarse dentro del proyecto si todos los archivos del paquete ya fueron
+copiados: verifica sus versiones y omite la copia sobre si mismos. Si faltan archivos
+o hay cambios locales, ejecutalo desde una carpeta extraida separada. Solo procesa
+los 24 archivos de la actualizacion; no recorre dependencias ni credenciales.
+En modo dentro del proyecto no puede recuperar el codigo anterior a la copia manual.

@@ -148,57 +148,50 @@ function yesNo(value) {
   return '—';
 }
 
+const FIELD_LABELS = {
+  good: 'Buen estado', scratches: 'Rayones', dents: 'Golpes / abolladuras',
+  broken: 'Partes rotas', humidity: 'Señales de humedad', tampered: 'Manipulado / abierto',
+  other: 'Otra novedad', charger: 'Cargador / adaptador recibido', battery: 'Batería recibida',
+  bag: 'Maletín / estuche', power_cable: 'Cable de poder', network_cable: 'Cable de red',
+};
+
 function checklistRows(checklist) {
-  if (
-    !checklist ||
-    typeof checklist !== 'object'
-  ) {
-    return `
-      <div class="muted">
-        Sin checklist registrado.
-      </div>
-    `;
+  if (!checklist || typeof checklist !== 'object' || !Object.keys(checklist).length) {
+    return '<div class="muted">Sin elementos registrados.</div>';
   }
+  return Object.entries(checklist).map(([key, value]) => {
+    const label = FIELD_LABELS[key] || key.replaceAll('_', ' ');
+    const text = typeof value === 'boolean' ? yesNo(value)
+      : value && typeof value === 'object' ? JSON.stringify(value) : value;
+    return `<div class="check-row"><strong>${escapeHtml(label)}:</strong>
+      <span>${escapeHtml(text ?? '—')}</span></div>`;
+  }).join('');
+}
 
-  const items =
-    Object.entries(checklist);
+function receptionEquipmentSection(snapshot) {
+  const checklist = snapshot.reception_checklist?.checklist || snapshot.reception_checklist || {};
+  return `<h2>Equipo recibido</h2><div class="grid">
+    ${row('Equipo', checklist.equipment_type)}${row('Marca', checklist.brand)}
+    ${row('Modelo', checklist.model)}${row('Serial', checklist.serial_number || 'Ver observaciones')}
+    ${row('Entregado por', checklist.received_from_name)}
+    ${row('Documento de quien entrega', checklist.received_from_document)}
+    ${row('Pedido World Office', snapshot.intake?.equipment_intake?.worldoffice_order_reference)}
+    ${row('Recepción confirmada', fmtDate(checklist.confirmed_at))}
+    </div><h3>Falla reportada / solicitud del cliente</h3>
+    <div class="note">${escapeHtml(snapshot.intake?.request_description || snapshot.order?.descripcion_inicial || '—')}</div>
+    <h3>Estado físico</h3><div class="checklist">${checklistRows(checklist.condition_flags)}</div>
+    <h3>Accesorios, cargador y batería</h3><div class="checklist">${checklistRows(checklist.accessories)}</div>
+    <div class="note">${escapeHtml(checklist.accessories_other || 'Sin accesorios adicionales registrados')}</div>
+    <h3>Observaciones de recepción</h3><div class="note">${escapeHtml(checklist.observations || '—')}</div>`;
+}
 
-  if (!items.length) {
-    return `
-      <div class="muted">
-        Sin checklist registrado.
-      </div>
-    `;
-  }
-
-  return items
-    .map(
-      ([key, value]) => `
-        <div class="check-row">
-          <span class="check">
-            ${
-              value === true
-                ? '✓'
-                : value === false
-                  ? '✗'
-                  : '•'
-            }
-          </span>
-          <span>
-            ${escapeHtml(
-              key
-                .replaceAll('_', ' ')
-                .replace(
-                  /\b\w/g,
-                  (letter) =>
-                    letter.toUpperCase()
-                )
-            )}
-          </span>
-        </div>
-      `
-    )
-    .join('');
+function receptionPhotos(items) {
+  if (!Array.isArray(items) || !items.length) return '<div class="muted">Sin fotografías registradas.</div>';
+  return `<div class="photo-grid">${items.map(item => `<figure class="photo-card">
+    <img src="${escapeHtml(item.data_uri)}" alt="${escapeHtml(item.note || item.original_name || 'Equipo recibido')}">
+    <figcaption>${escapeHtml(item.note || item.original_name || 'Equipo recibido')}<br>
+    ${escapeHtml(fmtDate(item.captured_at || item.created_at))}</figcaption>
+    </figure>`).join('')}</div>`;
 }
 
 function evidenceList(items) {
@@ -467,6 +460,11 @@ function baseHtml({
     font-size: 7.8pt;
   }
 
+  .photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .photo-card { margin: 0; padding: 8px; border: 1px solid #dfe3ea; border-radius: 7px; break-inside: avoid; }
+  .photo-card img { width: 100%; height: 210px; object-fit: contain; }
+  .photo-card figcaption { margin-top: 6px; font-size: 8.5pt; overflow-wrap: anywhere; }
+  .signature-grid { break-inside: avoid; }
   .page-break {
     break-before: page;
   }
@@ -562,12 +560,6 @@ function buildReceptionAct(snapshot) {
     snapshot.reception_act ||
     {};
 
-  const checklist =
-    snapshot.reception_checklist
-      ?.checklist ||
-    snapshot.reception_checklist ||
-    {};
-
   const body = `
     ${commonOrderSection(snapshot)}
 
@@ -576,11 +568,11 @@ function buildReceptionAct(snapshot) {
     <div class="grid">
       ${row(
         'Firmante',
-        act.signer_name
+        (act.signed_by_name || act.signer_name)
       )}
       ${row(
         'Documento firmante',
-        act.signer_document
+        (act.signed_by_document || act.signer_document)
       )}
       ${row(
         'Fecha de firma',
@@ -594,15 +586,9 @@ function buildReceptionAct(snapshot) {
       )}
     </div>
 
-    <h3>Checklist de recepción</h3>
-    <div class="checklist">
-      ${checklistRows(checklist)}
-    </div>
-
-    <h3>Evidencias iniciales</h3>
-    ${evidenceList(
-      snapshot.reception_evidences
-    )}
+    ${receptionEquipmentSection(snapshot)}
+    <h3>Fotografías del estado inicial</h3>
+    ${receptionPhotos(snapshot.reception_evidences)}
 
     <h2>Firma de recepción</h2>
     <div class="signature-grid">
@@ -613,7 +599,7 @@ function buildReceptionAct(snapshot) {
         )}
         <div class="signature-label">
           ${escapeHtml(
-            act.signer_name ||
+            (act.signed_by_name || act.signer_name) ||
               'Firmante'
           )}
         </div>
@@ -621,7 +607,7 @@ function buildReceptionAct(snapshot) {
 
       <div>
         <div class="signature-empty">
-          Firma / validación del responsable técnico
+          Recepción confirmada en el sistema por el técnico
         </div>
         <div class="signature-label">
           ${escapeHtml(
@@ -653,6 +639,8 @@ function buildTechnicalClosure(snapshot) {
 
   const body = `
     ${commonOrderSection(snapshot)}
+
+    ${receptionEquipmentSection(snapshot)}
 
     <h2>Diagnóstico / resultado</h2>
 
@@ -706,7 +694,6 @@ function buildTechnicalClosure(snapshot) {
     <div class="note">
       ${escapeHtml(
         diagnosis.functional_result ||
-          diagnosis.solution_available ||
           '—'
       )}
     </div>

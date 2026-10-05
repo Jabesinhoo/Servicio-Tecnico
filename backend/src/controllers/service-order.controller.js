@@ -4534,7 +4534,7 @@ exports.getReceptionAct = async (req, res) => {
       ),
       client.query(
         `SELECT id, status, received_from_name, received_from_document, equipment_type,
-                brand, model, serial_number, observations, confirmed_at
+                brand, model, serial_number, condition_flags, accessories, accessories_other, observations, confirmed_at
          FROM service_order_reception_checklists
          WHERE service_order_id = $1 LIMIT 1`,
         [id]

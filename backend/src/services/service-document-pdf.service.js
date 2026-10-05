@@ -39,7 +39,7 @@ function loadPuppeteer() {
   } catch (error) {
     const wrapped =
       new Error(
-        'Puppeteer Core no está instalado. Ejecuta INSTALAR-DEPENDENCIA-PDF-V16.ps1.'
+        'Puppeteer Core no está instalado. Ejecuta npm ci en la carpeta backend.'
       );
 
     wrapped.code =
@@ -231,6 +231,20 @@ async function generatePdfBuffer(
           ),
       }
     );
+
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await Promise.all(Array.from(document.images, image => {
+        if (image.complete) {
+          if (!image.naturalWidth) throw new Error('No fue posible cargar una imagen del documento');
+          return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = () => reject(new Error('No fue posible cargar una imagen del documento'));
+        });
+      }));
+    });
 
     await page.emulateMediaType(
       'print'

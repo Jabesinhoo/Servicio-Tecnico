@@ -244,6 +244,12 @@ router.get(
   serviceDocumentController.getDocumentFile
 );
 
+router.post(
+  '/service-orders/:id/documents/:documentId/manual-dispatch',
+  allowRoles('admin', 'tecnico'),
+  serviceDocumentController.recordManualDispatch
+);
+
 // ============================================================
 // V15 · WORKER AISLADO / PLANTILLAS / HISTORIAL SLA
 // ============================================================

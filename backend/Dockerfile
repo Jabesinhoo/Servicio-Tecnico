@@ -3,6 +3,8 @@ FROM node:20-alpine
 
 # Crear directorio de trabajo
 WORKDIR /app
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV SERVICE_DOCUMENT_BROWSER_PATH=/usr/bin/chromium
 
 # Copiar archivos de dependencias
 COPY package*.json ./

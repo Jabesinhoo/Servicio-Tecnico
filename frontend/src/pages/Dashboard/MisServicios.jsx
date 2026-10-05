@@ -1423,7 +1423,7 @@ const SignatureCanvas = ({ onReady, clearToken = 0 }) => {
   );
 };
 
-const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh }) => {
+const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh, onDocuments }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1545,7 +1545,7 @@ const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh }) => {
           ) : act ? (
             <>
               <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 p-4">
-                <p className="font-bold text-emerald-800 dark:text-emerald-300">Acta firmada y bloqueada</p>
+                <p className="font-bold text-emerald-800 dark:text-emerald-300">Acta firmada y bloqueada</p><button type="button" onClick={() => onDocuments?.(service)} className="mt-3 min-h-11 rounded-xl bg-emerald-600 text-white px-4 font-semibold">Generar / enviar constancia PDF</button>
                 <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">Firmó: {act.signed_by_name}</p>
                 <p className="text-sm text-emerald-700 dark:text-emerald-300">Documento: {act.signed_by_document || 'No registrado'}</p>
                 <p className="text-sm text-emerald-700 dark:text-emerald-300">Fecha: {formatDateTime(act.signed_at)}</p>
@@ -1564,6 +1564,13 @@ const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh }) => {
                 <Info label="Serial" value={checklist?.serial_number} />
                 <Info label="Checklist" value={checklist?.status === 'confirmed' ? 'Confirmado' : 'Pendiente'} />
                 <Info label="Evidencias iniciales" value={`${Number(data?.reception_evidence_count || 0)} fotografía(s)`} />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 text-sm">
+                <Info label="Estado físico" value={CONDITION_OPTIONS.filter(([key]) => checklist?.condition_flags?.[key]).map(([, label]) => label).join(' · ') || 'Sin detalle'} />
+                <Info label="Accesorios recibidos" value={ACCESSORY_OPTIONS.filter(([key]) => checklist?.accessories?.[key]).map(([, label]) => label).join(' · ') || 'Ninguno marcado como recibido'} />
+                <Info label="Detalle de accesorios" value={checklist?.accessories_other} />
+                <div><p className="font-semibold">Falla reportada y observaciones de recepción</p><p className="mt-1 whitespace-pre-wrap">{checklist?.observations || 'Sin observaciones'}</p></div>
               </div>
 
               {!canSign && !isAdmin && (
@@ -4116,6 +4123,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
 
       <ReceptionActModal
         service={receptionActService}
+        onDocuments={(service) => { setReceptionActService(null); setDocumentsService(service); }}
         isAdmin={isAdmin}
         onClose={() => setReceptionActService(null)}
         onRefresh={() => load(true)}
