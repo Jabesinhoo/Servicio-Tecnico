@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import api from '../../../services/api';
 import { bogotaDateInput } from './serviceFormatters';
+import EquipmentIntakeFields, { emptyEquipmentIntake, equipmentIntakeError } from './components/EquipmentIntakeFields';
 
 const DEFAULT_CONDITIONS =
   'El cliente fue informado del alcance inicial del servicio, tiempos estimados, posibles costos adicionales y de que cualquier reparación o repuesto adicional requerirá autorización previa.';
@@ -43,6 +44,7 @@ function money(value) {
 
 const steps = [
   ['Solicitud', UserRound],
+  ['Equipo recibido', ClipboardList],
   ['Clasificación', Wrench],
   ['Condiciones', ClipboardList],
   ['Aceptación', ShieldCheck],
@@ -94,6 +96,7 @@ export default function ServicioCreateWizard({
   const initialEditSnapshot = useRef(null);
 
   const [form, setForm] = useState({
+    equipment_intake: emptyEquipmentIntake(),
     request_description: '',
     classification: 'diagnostic',
     service_type_id: '',
@@ -259,6 +262,7 @@ export default function ServicioCreateWizard({
         setPaymentReference(intake.payment_reference || '');
 
         setForm({
+          equipment_intake: intake.equipment_intake || null,
           request_description: intake.request_description || row.descripcion_inicial || '',
           classification: intake.classification || row.classification || 'diagnostic',
           service_type_id: intake.service_type_id || row.service_type_id || '',
@@ -537,21 +541,26 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 1) {
+    if (step === 1 && !isEdit) {
+      const equipmentError = equipmentIntakeError(form.equipment_intake);
+      if (equipmentError) return equipmentError;
+    }
+
+    if (step === 2) {
       if (!form.classification) return 'Selecciona la clasificación.';
       if (!form.service_type_name.trim()) {
         return 'Selecciona un tipo de servicio.';
       }
     }
 
-    if (step === 2) {
+    if (step === 3) {
       if (!form.scope_text.trim()) return 'Define el alcance inicial.';
       if (!form.conditions_text.trim()) {
         return 'Registra las condiciones informadas al cliente.';
       }
     }
 
-    if (step === 3) {
+    if (step === 4) {
       if (!form.client_acceptance) {
         return 'Debes registrar la aceptación inicial del cliente.';
       }
@@ -567,7 +576,7 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 4) {
+    if (step === 5) {
       if (isAdmin && !primaryTechnicianId) {
         return 'Selecciona el técnico responsable principal.';
       }
@@ -579,7 +588,7 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 5 && form.billing_mode === 'prepaid') {
+    if (step === 6 && form.billing_mode === 'prepaid') {
       if (!form.invoice_reference.trim()) {
         return 'Registra la referencia de factura.';
       }
@@ -588,7 +597,7 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 5 && form.billing_mode === 'postpaid') {
+    if (step === 6 && form.billing_mode === 'postpaid') {
       if (!isAdmin) return 'Solo administración puede autorizar pospago.';
       if (!form.postpaid_reason.trim()) {
         return 'Indica por qué este servicio se manejará como pospago.';
@@ -608,7 +617,7 @@ export default function ServicioCreateWizard({
   };
 
   const submit = async () => {
-    const message = validateStep();
+    const message = validateStep() || (!isEdit && equipmentIntakeError(form.equipment_intake));
     if (message) {
       setError(message);
       return;
@@ -827,7 +836,7 @@ export default function ServicioCreateWizard({
             <p className="text-sm text-gray-500 mt-1">
               {isEdit
                 ? 'Mismos datos de creación, precargados para edición segura.'
-                : 'Solicitud → clasificación → condiciones → aceptación → facturación.'}
+                : 'Solicitud → equipo recibido → clasificación → condiciones → aceptación → facturación.'}
             </p>
           </div>
 
@@ -958,7 +967,7 @@ export default function ServicioCreateWizard({
 
               <label className="block">
                 <span className="text-sm font-semibold">
-                  ¿Qué necesita el cliente? *
+                  Falla reportada / solicitud del cliente *
                 </span>
                 <textarea
                   rows={5}
@@ -999,6 +1008,12 @@ export default function ServicioCreateWizard({
           )}
 
           {step === 1 && (
+            isEdit && !form.equipment_intake ? (
+              <p className="text-sm text-gray-500">Este servicio se creó antes del registro de equipo en la solicitud. Consulta su checklist de recepción.</p>
+            ) : <EquipmentIntakeFields value={form.equipment_intake} onChange={(value) => update('equipment_intake', value)} readOnly={isEdit} />
+          )}
+
+          {step === 2 && (
             <div className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
@@ -1111,7 +1126,7 @@ export default function ServicioCreateWizard({
             </div>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <div className="space-y-4">
               <label className="block">
                 <span className="text-sm font-semibold">Alcance inicial *</span>
@@ -1153,7 +1168,7 @@ export default function ServicioCreateWizard({
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="space-y-4">
               <label className="flex items-start gap-3 rounded-2xl border border-gray-200 dark:border-gray-800 p-4">
                 <input
@@ -1343,7 +1358,7 @@ export default function ServicioCreateWizard({
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="space-y-5">
               {/* SECCIÓN: Opciones de programación */}
               <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-4">
@@ -1684,7 +1699,7 @@ export default function ServicioCreateWizard({
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="space-y-5">
               {isAdmin && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

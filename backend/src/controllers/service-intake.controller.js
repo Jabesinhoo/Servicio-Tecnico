@@ -2,6 +2,7 @@
 
 const pool = require('../db/pool');
 const { randomUUID } = require('crypto');
+const { normalizeEquipmentIntake, receptionDraft } = require('../domain/service-equipment-intake');
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -671,6 +672,9 @@ function validateCorePayload(body, { partial = false } = {}) {
     }
   }
 
+  const equipment = normalizeEquipmentIntake(body?.equipment_intake);
+  errors.push(...equipment.errors);
+
   const baseValue = parseMoney(body?.base_value);
   const estimatedMinutes = parsePositiveInt(body?.estimated_minutes);
   const estimatedDuration = parsePositiveInt(body?.estimated_duration);
@@ -682,6 +686,7 @@ function validateCorePayload(body, { partial = false } = {}) {
   return {
     errors,
     values: {
+      equipmentIntake: equipment.value,
       clientId,
       sourceType:
         cleanText(body?.source_type, 30) ||
@@ -718,6 +723,7 @@ function validateCorePayload(body, { partial = false } = {}) {
 
 function evaluateReadiness(intake) {
   const missing = [];
+  if (normalizeEquipmentIntake(intake.equipment_intake).errors.length) missing.push('datos_ingreso_equipo');
 
   if (!intake.client_id) missing.push('cliente');
   if (!String(intake.request_description || '').trim()) missing.push('solicitud');
@@ -1253,6 +1259,14 @@ exports.create = async (req, res) => {
           v.clientAcceptanceClientId;
     }
 
+    if (v.equipmentIntake) {
+      await client.query(
+        'UPDATE service_order_intakes SET equipment_intake = $1::jsonb WHERE id = $2',
+        [JSON.stringify(v.equipmentIntake), id]
+      );
+      result.rows[0].equipment_intake = v.equipmentIntake;
+    }
+
     await saveIntakeTeam(client, id, team, req.user.id);
 
     await addEvent(client, {
@@ -1508,6 +1522,14 @@ exports.update = async (req, res) => {
       result.rows[0]
         .client_acceptance_client_id =
           v.clientAcceptanceClientId;
+    }
+
+    if (req.body?.equipment_intake !== undefined) {
+      await client.query(
+        'UPDATE service_order_intakes SET equipment_intake = $1::jsonb WHERE id = $2',
+        [v.equipmentIntake ? JSON.stringify(v.equipmentIntake) : null, intake.id]
+      );
+      result.rows[0].equipment_intake = v.equipmentIntake;
     }
 
     await addEvent(client, {
@@ -1988,6 +2010,32 @@ exports.activate = async (req, res) => {
     );
 
     console.log('✅ Detalle del servicio guardado en service_order_services');
+
+    // Initial observations are a draft, never a verified reception or client signature.
+    const draft = receptionDraft(intake.equipment_intake, intake);
+    if (draft) {
+      await client.query(
+        `INSERT INTO service_order_reception_checklists (
+          id, service_order_id, technician_id, status,
+          equipment_type, brand, model, serial_number,
+          received_from_name, received_from_document,
+          condition_flags, accessories, accessories_other, observations,
+          created_at, updated_at
+        ) VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,NOW(),NOW())
+        ON CONFLICT (service_order_id) DO NOTHING`,
+        [randomUUID(), serviceOrderId, intake.primary_technician_id,
+          draft.equipment_type, draft.brand, draft.model, draft.serial_number,
+          draft.received_from_name, draft.received_from_document,
+          JSON.stringify(draft.condition_flags), JSON.stringify(draft.accessories),
+          draft.accessories_other, draft.observations]
+      );
+      await addEvent(client, {
+        intakeId: intake.id, serviceOrderId, eventType: 'equipment_intake_registered',
+        actorUserId: req.user.id,
+        metadata: { checklist_status: 'draft', worldoffice_order_reference: intake.equipment_intake.worldoffice_order_reference },
+      });
+    }
+
 
 console.log('👥 Getting planned team...');
     let plannedTeam = [];
