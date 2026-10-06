@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const {normalizeBranding,logoUri}=require('./service-document-branding.service');
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -240,7 +241,7 @@ function baseHtml({
   footerText,
 }) {
   const logo =
-    logoDataUri();
+    order.document_branding?logoUri(order.document_branding.logo_key):logoDataUri();
 
   return `<!doctype html>
 <html lang="es">
@@ -273,7 +274,7 @@ function baseHtml({
     justify-content: space-between;
     gap: 14px;
     padding-bottom: 10px;
-    border-bottom: 2px solid #1e7d47;
+    border-bottom: 2px solid ${order.document_branding?.accent_color||'#1e7d47'};
   }
 
   .brand {
@@ -318,7 +319,7 @@ function baseHtml({
   h2 {
     margin: 18px 0 8px;
     font-size: 12.5pt;
-    border-left: 4px solid #1e7d47;
+    border-left: 4px solid ${order.document_branding?.accent_color||'#1e7d47'};
     padding-left: 8px;
   }
 
@@ -390,7 +391,7 @@ function baseHtml({
   .check {
     width: 18px;
     font-weight: 800;
-    color: #1e7d47;
+    color: ${order.document_branding?.accent_color||'#1e7d47'};
   }
 
   .signature-grid {
@@ -444,7 +445,7 @@ function baseHtml({
     padding: 4px 8px;
     font-size: 8.5pt;
     font-weight: 700;
-    background: #eaf7ef;
+    background: ${order.document_branding?.background_color||'#eaf7ef'};
     color: #17643a;
   }
 
@@ -473,6 +474,17 @@ function baseHtml({
     .avoid-break {
       break-inside: avoid;
     }
+  }
+  @media screen {
+    body { padding: 12px; overflow-wrap: anywhere; }
+    .header, .brand, .doc-meta, .grid > *, .grid-3 > *, .signature-grid > * { min-width: 0; }
+    img { max-width: 100%; }
+  }
+  @media screen and (max-width: 600px) {
+    .header { flex-wrap: wrap; }
+    .doc-meta { text-align: left; }
+    .grid, .grid-3, .signature-grid { grid-template-columns: 1fr; }
+    .brand img { width: 110px; }
   }
 </style>
 </head>
@@ -1011,8 +1023,10 @@ function buildFinalDelivery(snapshot) {
 
 function buildServiceDocumentHtml(
   documentType,
-  snapshot
+  snapshot,
+  branding
 ) {
+  snapshot={...snapshot,order:{...snapshot.order,document_branding:normalizeBranding(branding??snapshot.document_branding)}};
   switch (documentType) {
     case 'reception_act':
       return buildReceptionAct(

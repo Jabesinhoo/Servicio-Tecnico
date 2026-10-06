@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Calendar, Clock, CreditCard, FileText, History, MapPin,
-  Package, Phone, Mail, UsersRound, Wrench, X, ShieldCheck,
+  Package, Phone, Mail, UsersRound, UserRound, Wrench, X, ShieldCheck,
 } from 'lucide-react';
 import api from '../../../services/api';
+import ClientProfilePanel from './components/ClientProfilePanel';
+import AcceptanceEvidenceFiles from './components/AcceptanceEvidenceFiles';
 import StatusBadge from './StatusBadge';
 import MaterialesPanel from './components/MaterialesPanel';
 import ServiceDocumentsModal from './components/ServiceDocumentsModal';
@@ -18,7 +20,7 @@ const Field = ({ label, value, wide = false }) => (
 
 const Section = ({ title, icon: Icon, children }) => (
   <section className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30 p-4">
-    <h4 className="mb-4 flex items-center gap-2 text-sm font-bold"><Icon className="w-4 h-4 text-blue-600" />{title}</h4>
+    <h4 className="mb-4 flex items-center gap-2 text-sm font-bold"><Icon className="w-4 h-4 accent-text" />{title}</h4>
     {children}
   </section>
 );
@@ -182,14 +184,14 @@ export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh 
   const activeBlocks = blocks.filter((item) => item.status === 'active');
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/60 p-2 sm:p-4 flex items-start sm:items-center justify-center overflow-y-auto">
+    <div className="workflow-theme fixed inset-0 z-[120] bg-black/60 p-2 sm:p-4 flex items-start sm:items-center justify-center overflow-y-auto">
       <div className="w-full max-w-6xl max-h-[95vh] overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl flex flex-col">
         <header className="shrink-0 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-xl font-bold">{servicio?.codigo_os || 'Detalle de servicio'}</h2>
               {servicio?.estado && <StatusBadge status={servicio.estado} />}
-              {servicio?.prioridad && <span className="text-xs font-semibold rounded-full bg-blue-50 dark:bg-blue-950 px-2 py-1">{String(servicio.prioridad).toUpperCase()}</span>}
+              {servicio?.prioridad && <span className="text-xs font-semibold rounded-full accent-soft dark:accent-soft px-2 py-1">{String(servicio.prioridad).toUpperCase()}</span>}
             </div>
             <p className="text-xs text-gray-500 mt-1">Creada {formatDateTime(servicio?.createdAt)} · Actualizada {formatDateTime(servicio?.updatedAt)}</p>
           </div>
@@ -207,7 +209,7 @@ export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh 
               ['historial', `Historial (${events.length})`],
               ['materiales', 'Materiales'],
             ].map(([id, label]) => (
-              <button key={id} onClick={() => setTab(id)} className={`px-3 py-2 rounded-lg text-sm ${tab === id ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{label}</button>
+              <button key={id} onClick={() => setTab(id)} className={`px-3 py-2 rounded-lg text-sm ${tab === id ? 'accent-fill text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{label}</button>
             ))}
           </div>
         </nav>
@@ -246,6 +248,15 @@ export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh 
                 </div>
               </Section>
 
+              {intake.client_snapshot && <Section title="Ficha del cliente al crear el servicio" icon={UserRound}><ClientProfilePanel profile={intake.client_snapshot} /></Section>}
+              {servicio.service_site && <Section title="Lugar de atención" icon={MapPin}><div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Atención en" value={{customer:'Dirección del cliente',workshop:'Taller / oficina',other:'Otra sede'}[servicio.service_site.mode]} />
+                <Field label="Dirección" value={servicio.service_site.address} /><Field label="Ciudad" value={servicio.service_site.city} />
+                <Field label="Contacto" value={servicio.service_site.contact_name} /><Field label="Teléfono" value={servicio.service_site.contact_phone} />
+                <Field label="Coordenadas" value={`${servicio.service_site.latitude}, ${servicio.service_site.longitude}`} />
+                <Field label="Radio permitido (m)" value={servicio.service_site.radius_m} /><Field label="Indicaciones" value={servicio.service_site.instructions} wide />
+              </div></Section>}
+
               <Section title="Solicitud y alcance" icon={FileText}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field label="Clasificación" value={intake.classification || servicio.classification} />
@@ -268,6 +279,7 @@ export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh 
                   <Field label="Canal" value={intake.client_acceptance_channel} />
                   <Field label="Referencia / evidencia" value={intake.client_acceptance_reference} wide />
                 </div>
+                {intake.id && <AcceptanceEvidenceFiles intakeId={intake.id} />}
               </Section>
             </div>
           )}
@@ -390,7 +402,7 @@ export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh 
 
         <footer className="shrink-0 border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <button onClick={() => setShowDocuments(true)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm flex items-center gap-2"><FileText className="w-4 h-4" /> Documentos</button>
-          <button onClick={async () => { await load(); await onRefresh?.(); }} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm">Actualizar</button>
+          <button onClick={async () => { await load(); await onRefresh?.(); }} className="px-3 py-2 rounded-lg accent-fill text-white text-sm">Actualizar</button>
         </footer>
       </div>
 

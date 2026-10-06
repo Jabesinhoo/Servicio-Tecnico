@@ -8,14 +8,14 @@ export default function ServiceCard({ servicio, onViewDetail, onEdit, onDelete, 
     <article className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <button onClick={() => onViewDetail(servicio.id)} className="font-bold text-blue-600 hover:underline">
+          <button onClick={() => onViewDetail(servicio.id)} className="font-bold accent-text hover:underline">
             {servicio.codigo_os}
           </button>
           <div className="mt-1"><StatusBadge status={servicio.estado} /></div>
         </div>
         <div className="flex gap-1">
-          <button onClick={() => onViewDetail(servicio.id)} className="p-1.5 text-blue-600" title="Ver"><Eye className="w-4 h-4" /></button>
-          {canEdit && <button onClick={() => onEdit(servicio)} className="p-1.5 text-emerald-600" title="Editar"><Edit className="w-4 h-4" /></button>}
+          <button onClick={() => onViewDetail(servicio.id)} className="p-1.5 accent-text" title="Ver"><Eye className="w-4 h-4" /></button>
+          {canEdit && <button onClick={() => onEdit(servicio)} className="p-1.5 accent-text" title="Editar"><Edit className="w-4 h-4" /></button>}
           {canEdit && !['cerrada', 'rechazado', 'cancelado'].includes(servicio.estado) && (
             <button onClick={() => onDelete(servicio)} className="p-1.5 text-red-600" title="Eliminar / cancelar"><Trash2 className="w-4 h-4" /></button>
           )}

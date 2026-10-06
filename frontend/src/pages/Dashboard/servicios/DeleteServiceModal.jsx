@@ -60,7 +60,7 @@ export default function DeleteServiceModal({ service, onClose, onConfirm }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[220] bg-black/65 p-3 sm:p-4 flex items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[220] bg-black/65 p-3 sm:p-4 flex items-center justify-center">
       <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800">
         <header className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -128,7 +128,7 @@ export default function DeleteServiceModal({ service, onClose, onConfirm }) {
           )}
 
           {resultMessage && (
-            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/25 p-4 text-sm text-emerald-800 dark:text-emerald-300">
+            <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 text-sm accent-text dark:accent-text">
               {resultMessage}
             </div>
           )}

@@ -505,11 +505,11 @@ export default function FinancialControlModal({
     };
 
   return (
-    <div className="fixed inset-0 z-[147] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[147] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-6xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide font-semibold text-emerald-600">
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text">
               {service.codigo_os}
             </p>
 
@@ -554,7 +554,7 @@ export default function FinancialControlModal({
               <section
                 className={`rounded-2xl border p-4 ${
                   ready
-                    ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20'
+                    ? 'accent-border dark:accent-border accent-soft dark:accent-soft'
                     : control.clearance_status ===
                         'blocked'
                       ? 'border-rose-200 dark:border-rose-900 bg-rose-50/60 dark:bg-rose-950/20'
@@ -563,7 +563,7 @@ export default function FinancialControlModal({
               >
                 <div className="flex items-start gap-3">
                   {ready ? (
-                    <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <BadgeCheck className="w-5 h-5 accent-text shrink-0 mt-0.5" />
                   ) : (
                     <TriangleAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                   )}
@@ -647,7 +647,7 @@ export default function FinancialControlModal({
               {isAdmin && (
                 <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5">
                   <div className="flex items-center gap-2">
-                    <CircleDollarSign className="w-4 h-4 text-emerald-600" />
+                    <CircleDollarSign className="w-4 h-4 accent-text" />
                     <h4 className="font-bold">
                       Configuración financiera
                     </h4>
@@ -860,11 +860,11 @@ export default function FinancialControlModal({
               )}
 
               {isAdmin && (
-                <section className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-950/20 p-4 sm:p-5">
+                <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <Search className="w-4 h-4 text-blue-600" />
+                        <Search className="w-4 h-4 accent-text" />
                         <h4 className="font-bold">
                           Correlación WorldOffice
                         </h4>
@@ -881,7 +881,7 @@ export default function FinancialControlModal({
                       onClick={
                         loadCorrelation
                       }
-                      className="w-full sm:w-auto min-h-10 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-3 flex items-center justify-center gap-2"
+                      className="w-full sm:w-auto min-h-10 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-3 flex items-center justify-center gap-2"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Consultar espejo
@@ -889,7 +889,7 @@ export default function FinancialControlModal({
                   </div>
 
                   {correlation && (
-                    <div className="mt-3 rounded-xl border border-blue-200 dark:border-blue-900 bg-white/70 dark:bg-slate-950/30 p-3 text-sm">
+                    <div className="mt-3 rounded-xl border accent-border dark:accent-border bg-white/70 dark:bg-slate-950/30 p-3 text-sm">
                       <p className="font-semibold">
                         {correlation.correlated
                           ? 'Cliente correlacionado'
@@ -910,7 +910,7 @@ export default function FinancialControlModal({
                           ) => (
                             <div
                               key={`${match.id_externo}-${index}`}
-                              className="mt-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 p-2"
+                              className="mt-2 rounded-lg accent-soft dark:accent-soft p-2"
                             >
                               <p className="font-semibold">
                                 {match.razon_social ||
@@ -943,11 +943,11 @@ export default function FinancialControlModal({
               )}
 
               {isAdmin && (
-                <section className="rounded-2xl border border-cyan-200 dark:border-cyan-900 bg-cyan-50/30 dark:bg-cyan-950/20 p-4 sm:p-5">
+                <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 sm:p-5">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-cyan-700 dark:text-cyan-300" />
+                        <ShieldCheck className="w-4 h-4 accent-text dark:accent-text" />
                         <h4 className="font-bold">
                           WorldOffice V18 · lectura financiera en vivo
                         </h4>
@@ -967,7 +967,7 @@ export default function FinancialControlModal({
                             true
                           )
                         }
-                        className="min-h-10 rounded-xl border border-cyan-300 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 font-semibold px-3"
+                        className="min-h-10 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-3"
                       >
                         Configurar lectura
                       </button>
@@ -978,7 +978,7 @@ export default function FinancialControlModal({
                         onClick={
                           runWorldOfficeLiveCheck
                         }
-                        className="min-h-10 rounded-xl bg-cyan-700 hover:bg-cyan-800 disabled:opacity-50 text-white font-semibold px-3"
+                        className="min-h-10 rounded-xl accent-fill hover:accent-soft disabled:opacity-50 text-white font-semibold px-3"
                       >
                         Consultar factura
                       </button>
@@ -986,7 +986,7 @@ export default function FinancialControlModal({
                   </div>
 
                   {worldOfficeLive && (
-                    <div className="mt-4 rounded-xl border border-cyan-200 dark:border-cyan-900 bg-white/80 dark:bg-slate-950/40 p-4">
+                    <div className="mt-4 rounded-xl border accent-border dark:accent-border bg-white/80 dark:bg-slate-950/40 p-4">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                         <div>
                           <p className="font-bold">
@@ -1006,7 +1006,7 @@ export default function FinancialControlModal({
                           </p>
                         </div>
 
-                        <span className="rounded-full bg-cyan-100 dark:bg-cyan-950/50 text-cyan-800 dark:text-cyan-200 px-2 py-1 text-xs font-semibold">
+                        <span className="rounded-full accent-soft dark:accent-soft accent-text dark:accent-text px-2 py-1 text-xs font-semibold">
                           {worldOfficeLive.mapping?.source_schema}.{worldOfficeLive.mapping?.source_object}
                         </span>
                       </div>
@@ -1084,7 +1084,7 @@ export default function FinancialControlModal({
                           onClick={
                             registerWorldOfficeZeroBalance
                           }
-                          className="mt-4 w-full sm:w-auto min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-4"
+                          className="mt-4 w-full sm:w-auto min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4"
                         >
                           Registrar saldo cero y liberar
                         </button>
@@ -1102,9 +1102,9 @@ export default function FinancialControlModal({
               )}
 
               {isAdmin && (
-                <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/30 dark:bg-emerald-950/20 p-4 sm:p-5">
+                <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <ShieldCheck className="w-4 h-4 accent-text" />
                     <h4 className="font-bold">
                       Registrar verificación
                     </h4>
@@ -1327,7 +1327,7 @@ export default function FinancialControlModal({
                     onClick={
                       saveVerification
                     }
-                    className="mt-3 w-full sm:w-auto min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-4"
+                    className="mt-3 w-full sm:w-auto min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4"
                   >
                     Registrar verificación
                   </button>

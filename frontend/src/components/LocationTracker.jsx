@@ -34,6 +34,11 @@ const LocationTracker = () => {
   const [accuracy, setAccuracy] = useState(null);
   const [message, setMessage] = useState('');
   const [precisionTier, setPrecisionTier] = useState(null);
+  const [showHelp,setShowHelp]=useState(false);
+  const acquisitionTimerRef=useRef(null);
+  const reportedAccuracyRef=useRef(null);
+  const lastSentTierRef=useRef(null);
+  const trackingGenerationRef=useRef(0);
 
   const watchIdRef = useRef(null);
   const mountedRef = useRef(true);
@@ -42,6 +47,9 @@ const LocationTracker = () => {
   const lastSentCoordsRef = useRef(null);
 
   const clearWatch = useCallback(() => {
+    clearTimeout(acquisitionTimerRef.current);
+    acquisitionTimerRef.current=null;
+    trackingGenerationRef.current+=1;
     if (watchIdRef.current !== null && navigator.geolocation) {
       navigator.geolocation.clearWatch(watchIdRef.current);
     }
@@ -53,15 +61,17 @@ const LocationTracker = () => {
 
     const coords = position.coords;
     const reportedAccuracy = Number(coords.accuracy);
+    reportedAccuracyRef.current=Number.isFinite(reportedAccuracy)?reportedAccuracy:null;
+    clearTimeout(acquisitionTimerRef.current);
     setAccuracy(Number.isFinite(reportedAccuracy) ? reportedAccuracy : null);
 
     if (!Number.isFinite(reportedAccuracy) || reportedAccuracy > TRACKING_ACCEPTABLE_ACCURACY_M) {
-      setStatus('requesting');
+      setStatus('coarse');
       setPrecisionTier(null);
       setMessage(
         Number.isFinite(reportedAccuracy)
-          ? `Afinando ubicación · ±${Math.round(reportedAccuracy)} m`
-          : 'Obteniendo ubicación'
+          ? `Ubicación aproximada · ±${Math.round(reportedAccuracy)} m`
+          : 'No se pudo medir la precisión de ubicación'
       );
       return;
     }
@@ -76,7 +86,7 @@ const LocationTracker = () => {
     setMessage(
       tier === 'precise'
         ? `Ubicación lista · ±${Math.round(reportedAccuracy)} m`
-        : `Ubicación obtenida · ±${Math.round(reportedAccuracy)} m · afinando precisión`
+        : `Ubicación aproximada · ±${Math.round(reportedAccuracy)} m`
     );
 
     const now = Date.now();
@@ -95,10 +105,11 @@ const LocationTracker = () => {
       lastSentAtRef.current === 0 ||
       (elapsed >= MIN_SEND_INTERVAL_MS && movedMeters >= MIN_MOVEMENT_METERS) ||
       elapsed >= STATIONARY_REFRESH_MS ||
-      (tier === 'precise' && precisionTier !== 'precise');
+      (tier === 'precise' && lastSentTierRef.current !== 'precise');
 
     if (!shouldSend || sendingRef.current) return;
     sendingRef.current = true;
+    const generation=trackingGenerationRef.current;
 
     try {
       await api.post('/api/usuarios/me/location', {
@@ -117,9 +128,12 @@ const LocationTracker = () => {
         device_id: getDeviceId(),
       });
 
+      if(!mountedRef.current||generation!==trackingGenerationRef.current)return;
+      lastSentTierRef.current=tier;
       lastSentAtRef.current = now;
       lastSentCoordsRef.current = { latitude, longitude };
     } catch (error) {
+      if(!mountedRef.current||generation!==trackingGenerationRef.current)return;
       const code = error.response?.data?.code;
       if (code === 'LOCATION_INTEGRITY_REJECTED') {
         setStatus('server_error');
@@ -140,7 +154,7 @@ const LocationTracker = () => {
     } finally {
       sendingRef.current = false;
     }
-  }, [clearWatch, precisionTier]);
+  }, [clearWatch]);
 
   const handleGeoError = useCallback((error) => {
     if (!mountedRef.current) return;
@@ -152,8 +166,9 @@ const LocationTracker = () => {
       setStatus('unavailable');
       setMessage('Ubicación temporalmente no disponible');
     } else if (error.code === 3) {
-      setStatus('requesting');
-      setMessage('Obteniendo ubicación');
+      if(reportedAccuracyRef.current!==null)return;
+      setStatus('unavailable');
+      setMessage('El dispositivo no pudo obtener ubicación. Reintenta.');
     } else {
       setStatus('unavailable');
       setMessage('Ubicación no disponible');
@@ -181,18 +196,26 @@ const LocationTracker = () => {
     clearWatch();
     setStatus('requesting');
     setMessage('Obteniendo ubicación');
+    reportedAccuracyRef.current=null;setAccuracy(null);setPrecisionTier(null);
+    acquisitionTimerRef.current=setTimeout(()=>{
+      if(!mountedRef.current||reportedAccuracyRef.current!==null)return;
+      setStatus('unavailable');setMessage('El dispositivo no respondió con una ubicación. Reintenta.');
+    },30_000);
+    const generation=trackingGenerationRef.current;
+    const receive=position=>{if(generation===trackingGenerationRef.current)sendPosition(position);};
+    const receiveError=error=>{if(generation===trackingGenerationRef.current)handleGeoError(error);};
 
     // 1) Intento rápido: permite aprovechar una lectura reciente del SO.
     navigator.geolocation.getCurrentPosition(
-      sendPosition,
+      receive,
       () => {},
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: FAST_FIX_TIMEOUT_MS }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: FAST_FIX_TIMEOUT_MS }
     );
 
     // 2) Seguimiento de alta precisión: continúa refinando sin bloquear la UI.
     watchIdRef.current = navigator.geolocation.watchPosition(
-      sendPosition,
-      handleGeoError,
+      receive,
+      receiveError,
       { enableHighAccuracy: true, maximumAge: 5_000, timeout: WATCH_TIMEOUT_MS }
     );
   }, [clearWatch, handleGeoError, sendPosition]);
@@ -209,6 +232,7 @@ const LocationTracker = () => {
   const retry = () => {
     lastSentAtRef.current = 0;
     lastSentCoordsRef.current = null;
+    lastSentTierRef.current=null;
     startTracking();
   };
 
@@ -219,6 +243,7 @@ const LocationTracker = () => {
   const denied = status === 'denied';
 
   return (
+    <div className="relative">
     <div
       className={`flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs max-w-[310px] ${
         active
@@ -233,13 +258,21 @@ const LocationTracker = () => {
     >
       {active ? <LocateFixed className="w-3.5 h-3.5 shrink-0" /> : requesting ? <MapPin className="w-3.5 h-3.5 shrink-0" /> : denied ? <MapPinOff className="w-3.5 h-3.5 shrink-0" /> : <ShieldAlert className="w-3.5 h-3.5 shrink-0" />}
       <span className="hidden lg:inline truncate">
-        {active && accuracy !== null ? `Ubicación ±${Math.round(accuracy)} m${precisionTier === 'provisional' ? ' · afinando' : ''}` : message}
+        {active && accuracy !== null ? `Ubicación ±${Math.round(accuracy)} m${precisionTier === 'provisional' ? ' · aproximada' : ''}` : message}
       </span>
-      {!active && !requesting && (
+      <button type="button" onClick={()=>setShowHelp(!showHelp)} aria-label="Ayuda de ubicación" className="rounded border px-1">?</button>
+      {(!active || precisionTier !== 'precise') && (
         <button type="button" onClick={retry} className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10" title="Reintentar ubicación">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       )}
+    </div>
+    {showHelp&&<div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-xl border bg-white dark:bg-gray-900 p-3 shadow-xl text-sm">
+      <p className="font-semibold">Ubicación del dispositivo</p><p className="mt-2">{message}</p>
+      <p className="mt-2">Remoto y en el local permiten tomar custodia sin GPS. Las visitas externas necesitan una lectura reciente y precisa.</p>
+      <p className="mt-2">Si solo obtienes una ubicación aproximada, abre la plataforma en un celular, habilita ubicación precisa para el navegador y reintenta. El sitio debe usar HTTPS o localhost.</p>
+      <button type="button" onClick={()=>setShowHelp(false)} className="mt-2 underline">Cerrar</button>
+    </div>}
     </div>
   );
 };

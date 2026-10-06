@@ -20,9 +20,9 @@ const ClientCard = ({ cliente, onViewDetail, onEdit, onDelete, canEdit }) => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             {cliente.tipo_persona === 'juridica' ? (
-              <Building className="w-5 h-5 text-purple-500" />
+              <Building className="w-5 h-5 accent-text" />
             ) : (
-              <User className="w-5 h-5 text-blue-500" />
+              <User className="w-5 h-5 accent-text" />
             )}
             <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate">
               {getNombreMostrar()}
@@ -57,8 +57,8 @@ const ClientCard = ({ cliente, onViewDetail, onEdit, onDelete, canEdit }) => {
           <div className="mt-3">
             <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
               cliente.tipo_persona === 'juridica' 
-                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                ? 'accent-soft accent-text dark:accent-soft dark:accent-text'
+                : 'accent-soft accent-text dark:accent-soft dark:accent-text'
             }`}>
               {getTipoPersona()}
             </span>
@@ -68,7 +68,7 @@ const ClientCard = ({ cliente, onViewDetail, onEdit, onDelete, canEdit }) => {
         <div className="flex items-center gap-1 ml-2">
           <button
             onClick={() => onViewDetail(cliente.id)}
-            className="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+            className="p-1.5 accent-text hover:accent-text dark:accent-text hover:accent-soft dark:hover:accent-soft rounded-lg transition-colors"
             title="Ver detalle"
           >
             <Eye className="w-4 h-4" />
@@ -77,7 +77,7 @@ const ClientCard = ({ cliente, onViewDetail, onEdit, onDelete, canEdit }) => {
             <>
               <button
                 onClick={() => onEdit(cliente)}
-                className="p-1.5 text-green-600 hover:text-green-800 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-colors"
+                className="p-1.5 accent-text hover:accent-text dark:accent-text hover:accent-soft dark:hover:accent-soft rounded-lg transition-colors"
                 title="Editar"
               >
                 <Edit className="w-4 h-4" />

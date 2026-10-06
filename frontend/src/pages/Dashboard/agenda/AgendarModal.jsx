@@ -41,7 +41,7 @@ const AgendarModal = ({ isOpen, onClose, servicioId, servicioCodigo, onSave }) =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+    <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -117,7 +117,7 @@ const AgendarModal = ({ isOpen, onClose, servicioId, servicioCodigo, onSave }) =
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 text-white accent-fill rounded-lg hover:accent-fill disabled:opacity-50 flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
               {loading ? 'Guardando...' : 'Agendar'}

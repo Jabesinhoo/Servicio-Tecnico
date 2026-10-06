@@ -114,7 +114,7 @@ export default function ServicioEditModal({ service, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[130] bg-black/60 p-2 sm:p-4 flex items-start sm:items-center justify-center overflow-y-auto">
+    <div className="workflow-theme fixed inset-0 z-[130] bg-black/60 p-2 sm:p-4 flex items-start sm:items-center justify-center overflow-y-auto">
       <form onSubmit={save} className="w-full max-w-4xl max-h-[95vh] overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl flex flex-col">
         <header className="shrink-0 px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <div><h2 className="text-lg font-bold">Editar {detail?.codigo_os || service?.codigo_os}</h2><p className="text-xs text-gray-500">Solo se muestran campos que el backend puede guardar de forma consistente.</p></div>
@@ -149,7 +149,7 @@ export default function ServicioEditModal({ service, onClose, onSaved }) {
                 <label><span className="text-sm font-semibold">Diagnóstico final</span><textarea rows={4} value={form.diagnostico_final} onChange={(e) => update('diagnostico_final', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 p-3" /></label>
               </div>
 
-              <section className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-4">
+              <section className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
                 <label className="flex items-center gap-2 font-semibold"><input type="checkbox" checked={form.reschedule} onChange={(e) => update('reschedule', e.target.checked)} /> Reprogramar esta orden</label>
                 <p className="text-xs text-gray-500 mt-1">Al reprogramar se validan todos los técnicos del equipo y se reemplazan los bloques activos de agenda.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
@@ -164,7 +164,7 @@ export default function ServicioEditModal({ service, onClose, onSaved }) {
 
         <footer className="shrink-0 border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700">Cancelar</button>
-          <button type="submit" disabled={saving || loading} className="px-4 py-2 rounded-lg bg-blue-600 text-white flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</button>
+          <button type="submit" disabled={saving || loading} className="px-4 py-2 rounded-lg accent-fill text-white flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</button>
         </footer>
       </form>
     </div>

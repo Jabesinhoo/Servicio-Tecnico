@@ -7,6 +7,7 @@ const orderId = '065c0370-c9c2-4b51-a935-c82e6fabf069';
 const documentId = '8c216b18-0266-4a44-8efc-d359869e0efc';
 const client = { release() {}, async query(sql, params) {
   if (sql.includes('FROM service_orders so')) return { rows: scenario.order ? [scenario.order] : [] };
+  if (sql.includes('FROM service_order_intakes')) return {rows:[]};
   if (sql.includes('FROM service_order_team_members')) return { rows: [] };
   if (sql.includes('SELECT id FROM service_order_documents')) {
     assert.deepEqual(params, [documentId, orderId]); return { rows: scenario.document ? [{ id: documentId }] : [] };

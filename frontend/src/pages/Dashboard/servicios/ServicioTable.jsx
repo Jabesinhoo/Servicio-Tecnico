@@ -4,8 +4,8 @@ import StatusBadge from './StatusBadge';
 import { formatDateOnly, formatDateTime, formatTime, money } from './serviceFormatters';
 
 const priorityClass = {
-  baja: 'bg-green-100 text-green-800',
-  normal: 'bg-blue-100 text-blue-800',
+  baja: 'accent-soft accent-text',
+  normal: 'accent-soft accent-text',
   alta: 'bg-orange-100 text-orange-800',
   urgente: 'bg-red-100 text-red-800',
 };
@@ -46,7 +46,7 @@ export default function ServicioTable({
           {servicios.map((servicio) => (
             <tr key={servicio.id} className="align-top hover:bg-gray-50 dark:hover:bg-gray-800/60">
               <td className="px-4 py-4">
-                <button onClick={() => onViewDetail(servicio.id)} className="font-semibold text-blue-600 hover:underline">
+                <button onClick={() => onViewDetail(servicio.id)} className="font-semibold accent-text hover:underline">
                   {servicio.codigo_os}
                 </button>
                 <div className="mt-1 max-w-[240px] text-xs text-gray-500 line-clamp-2">
@@ -91,16 +91,16 @@ export default function ServicioTable({
 
               <td className="px-4 py-4">
                 <div className="flex justify-end gap-1">
-                  <button onClick={() => onViewDetail(servicio.id)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950" title="Ver detalle">
+                  <button onClick={() => onViewDetail(servicio.id)} className="p-2 rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Ver detalle">
                     <Eye className="w-4 h-4" />
                   </button>
                   {isAdmin && (
-                    <button onClick={() => onEdit(servicio)} className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950" title="Editar">
+                    <button onClick={() => onEdit(servicio)} className="p-2 rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Editar">
                       <Edit className="w-4 h-4" />
                     </button>
                   )}
                   {isAdmin && !servicio.tecnico_id && !['cancelado', 'cerrada', 'rechazado'].includes(servicio.estado) && (
-                    <button onClick={() => onAssignTech(servicio.id)} className="p-2 rounded-lg text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950" title="Asignar técnico">
+                    <button onClick={() => onAssignTech(servicio.id)} className="p-2 rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Asignar técnico">
                       <UserCheck className="w-4 h-4" />
                     </button>
                   )}

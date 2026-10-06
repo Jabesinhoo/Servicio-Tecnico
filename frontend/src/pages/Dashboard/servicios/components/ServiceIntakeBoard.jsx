@@ -1,3 +1,4 @@
+import {serviceMode} from '../serviceLocation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   X,
@@ -210,11 +211,11 @@ export default function ServiceIntakeBoard({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[115] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[115] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-6xl bg-white dark:bg-gray-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide font-semibold text-blue-600">
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text">
               Antes de convertirse en OS
             </p>
             <h2 className="text-xl font-bold">Solicitudes de servicio</h2>
@@ -301,11 +302,11 @@ export default function ServiceIntakeBoard({
                       </div>
                       <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                         row.status === 'activated'
-                          ? 'bg-emerald-100 text-emerald-700'
+                          ? 'accent-soft accent-text'
                           : row.status === 'cancelled'
                             ? 'bg-gray-100 text-gray-600'
                             : ready
-                              ? 'bg-blue-100 text-blue-700'
+                              ? 'accent-soft accent-text'
                               : 'bg-amber-100 text-amber-700'
                       }`}>
                         {row.status === 'draft' && ready
@@ -323,6 +324,12 @@ export default function ServiceIntakeBoard({
                       </p>
                     </div>
 
+                    {row.service_site && <div className="rounded-xl border accent-border dark:accent-border p-3 text-sm space-y-1">
+                      <p className="font-semibold">Modalidad: {({remote:'Remoto',local:'En el local',external:'Visita externa'})[serviceMode(row.service_site)]}</p><p>{row.service_site.address} · {row.service_site.city}</p>
+                      <p>{row.service_site.contact_name} · {row.service_site.contact_phone}</p><p>{row.service_site.instructions}</p>
+                      {serviceMode(row.service_site)==='external' && <a className="accent-text underline" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${row.service_site.latitude},${row.service_site.longitude}`}>Revisar punto antes de crear la OS</a>}
+                    </div>}
+
                     <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-3">
                       <p className="text-xs text-gray-500">Equipo técnico</p>
                       <div className="mt-1 flex flex-wrap gap-1.5">
@@ -336,8 +343,8 @@ export default function ServiceIntakeBoard({
                               key={`${member.technician_id}-${member.member_role}`}
                               className={`rounded-lg px-2 py-1 text-xs font-semibold ${
                                 member.member_role === 'primary'
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : 'bg-blue-100 text-blue-700'
+                                  ? 'accent-soft accent-text'
+                                  : 'accent-soft accent-text'
                               }`}
                             >
                               {member.nombre1 || member.usuario || 'Técnico'}
@@ -376,7 +383,7 @@ export default function ServiceIntakeBoard({
                     )}
 
                     {row.status === 'activated' && (
-                      <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 p-3 text-sm text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+                      <div className="rounded-xl accent-soft dark:accent-soft p-3 text-sm accent-text dark:accent-text flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4" />
                         {row.codigo_os || 'OS creada'}
                       </div>
@@ -390,7 +397,7 @@ export default function ServiceIntakeBoard({
                               type="button"
                               disabled={isBusy}
                               onClick={() => verifyPayment(row)}
-                              className="min-h-11 rounded-xl border border-blue-300 text-blue-700 font-semibold px-3 flex items-center justify-center gap-2"
+                              className="min-h-11 rounded-xl border accent-border accent-text font-semibold px-3 flex items-center justify-center gap-2"
                             >
                               <CreditCard className="w-4 h-4" />
                               Verificar pago
@@ -401,7 +408,7 @@ export default function ServiceIntakeBoard({
                           type="button"
                           disabled={isBusy || !ready}
                           onClick={() => activate(row)}
-                          className="min-h-11 rounded-xl bg-emerald-600 disabled:opacity-40 text-white font-semibold px-3 flex items-center justify-center gap-2"
+                          className="min-h-11 rounded-xl accent-fill disabled:opacity-40 text-white font-semibold px-3 flex items-center justify-center gap-2"
                         >
                           <FileText className="w-4 h-4" />
                           Crear OS

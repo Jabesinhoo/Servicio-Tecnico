@@ -6,7 +6,7 @@ const ClienteDetail = ({ isOpen, onClose, cliente, onEdit }) => {
   if (!isOpen || !cliente) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+    <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
           <div>
@@ -20,7 +20,7 @@ const ClienteDetail = ({ isOpen, onClose, cliente, onEdit }) => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => onEdit(cliente)}
-              className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors p-1"
+              className="accent-text hover:accent-text dark:accent-text transition-colors p-1"
               title="Editar"
             >
               <Edit className="w-5 h-5" />

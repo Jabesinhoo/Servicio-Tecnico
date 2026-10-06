@@ -19,9 +19,12 @@ import { useNotificacionesGlobal } from '../../context/NotificacionesContext';
 
 const NotificacionesCampana = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [assignmentNotice, setAssignmentNotice] = useState(null);
+    const seenRef = useRef(null);
+    const sessionRef = useRef(null);
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
-    const { notificaciones, noLeidas, marcarComoLeida, marcarTodasLeidas, eliminarNotificacion, refrescar } = useNotificacionesGlobal();
+    const { notificaciones, noLeidas, marcarComoLeida, marcarTodasLeidas, eliminarNotificacion, refrescar, initialized } = useNotificacionesGlobal();
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -50,6 +53,26 @@ const NotificacionesCampana = () => {
         setIsOpen(false);
     };
 
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (sessionRef.current !== token) {
+            sessionRef.current = token;
+            seenRef.current = null;
+            setAssignmentNotice(null);
+        }
+        if (!token || !initialized) return;
+        const ids = new Set(notificaciones.map(item => item.id));
+        const fresh = notificaciones.find(item => item.service_order_id && !item.leido && (!seenRef.current || !seenRef.current.has(item.id)));
+        if (fresh) setAssignmentNotice(fresh);
+        seenRef.current = ids;
+    }, [notificaciones, initialized]);
+
+    useEffect(() => {
+        if (!assignmentNotice) return undefined;
+        const timer = window.setTimeout(() => setAssignmentNotice(null), 10000);
+        return () => window.clearTimeout(timer);
+    }, [assignmentNotice]);
+
     const getIconByTipo = (tipo) => {
         const icons = {
             solicitud: FileText,
@@ -66,9 +89,9 @@ const NotificacionesCampana = () => {
 
     const getColorByTipo = (tipo) => {
         const colors = {
-            solicitud: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-            aprobacion: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
-            despacho: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+            solicitud: 'accent-soft accent-text dark:accent-soft dark:accent-text',
+            aprobacion: 'accent-soft accent-text dark:accent-soft dark:accent-text',
+            despacho: 'accent-soft accent-text dark:accent-soft dark:accent-text',
             revision: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
             devolucion: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
             alerta: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
@@ -91,13 +114,24 @@ const NotificacionesCampana = () => {
 
     return (
         <div className="relative inline-block">
+            {assignmentNotice && <div role="status" aria-live="polite" className="fixed top-20 right-3 sm:right-6 z-[200] w-[calc(100vw-24px)] sm:w-96 rounded-2xl border accent-border dark:accent-border bg-white dark:bg-gray-900 shadow-xl p-4">
+                <div className="flex items-start gap-3">
+                    <Wrench className="w-5 h-5 accent-text shrink-0" />
+                    <button type="button" onClick={() => handleNotificacionClick(assignmentNotice.id, assignmentNotice.link, assignmentNotice.leido)} className="flex-1 text-left">
+                        <p className="font-bold text-sm">{assignmentNotice.titulo}</p>
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{assignmentNotice.mensaje}</p>
+                        <p className="mt-2 text-xs font-semibold accent-text">Abrir Mis servicios</p>
+                    </button>
+                    <button type="button" aria-label="Cerrar aviso" onClick={() => setAssignmentNotice(null)}><X className="w-4 h-4" /></button>
+                </div>
+            </div>}
             <button
                 ref={buttonRef}
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="relative p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:accent-ring"
                 aria-label="Notificaciones"
             >
-                <Bell className={`w-5 h-5 transition-colors ${noLeidas > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`} />
+                <Bell className={`w-5 h-5 transition-colors ${noLeidas > 0 ? 'accent-text dark:accent-text' : 'text-gray-600 dark:text-gray-400'}`} />
                 {noLeidas > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 shadow-lg shadow-red-500/25">
                         {noLeidas > 99 ? '99+' : noLeidas}
@@ -108,7 +142,7 @@ const NotificacionesCampana = () => {
             {isOpen && (
                 <>
                     <div 
-                        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+                        className="workflow-theme fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
                         onClick={() => setIsOpen(false)}
                     />
                     
@@ -119,8 +153,8 @@ const NotificacionesCampana = () => {
                         {/* Header */}
                         <div className="px-5 py-4 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
                             <div className="flex items-center gap-2.5">
-                                <div className={`p-1.5 rounded-xl ${noLeidas > 0 ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                                    <Bell className={`w-4 h-4 ${noLeidas > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`} />
+                                <div className={`p-1.5 rounded-xl ${noLeidas > 0 ? 'accent-soft dark:accent-soft' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                                    <Bell className={`w-4 h-4 ${noLeidas > 0 ? 'accent-text dark:accent-text' : 'text-gray-500'}`} />
                                 </div>
                                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
                                     Notificaciones
@@ -135,7 +169,7 @@ const NotificacionesCampana = () => {
                                 {noLeidas > 0 && (
                                     <button
                                         onClick={marcarTodasLeidas}
-                                        className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 px-2.5 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-1"
+                                        className="text-xs accent-text hover:accent-text dark:accent-text dark:hover:accent-text px-2.5 py-1 rounded-lg hover:accent-soft dark:hover:accent-soft transition-colors flex items-center gap-1"
                                     >
                                         <CheckCheck className="w-3.5 h-3.5" />
                                         <span className="hidden xs:inline">Marcar todas</span>
@@ -167,7 +201,7 @@ const NotificacionesCampana = () => {
                                         <div
                                             key={notif.id}
                                             className={`group relative px-5 py-3.5 hover:bg-gray-50/80 dark:hover:bg-gray-800/80 cursor-pointer transition-all duration-150 ${
-                                                !notif.leido ? 'bg-blue-50/50 dark:bg-blue-900/10 border-l-4 border-blue-500' : ''
+                                                !notif.leido ? 'accent-soft dark:accent-soft border-l-4 accent-border' : ''
                                             }`}
                                             onClick={() => handleNotificacionClick(notif.id, notif.link, notif.leido)}
                                         >
@@ -182,7 +216,7 @@ const NotificacionesCampana = () => {
                                                             {notif.titulo}
                                                         </p>
                                                         {!notif.leido && (
-                                                            <Circle className="w-2 h-2 fill-blue-500 text-blue-500 flex-shrink-0 mt-1.5" />
+                                                            <Circle className="w-2 h-2 fill-blue-500 accent-text flex-shrink-0 mt-1.5" />
                                                         )}
                                                     </div>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5 leading-relaxed">

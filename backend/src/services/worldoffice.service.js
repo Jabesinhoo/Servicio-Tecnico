@@ -1,5 +1,7 @@
 // backend/src/services/worldoffice.service.js
 const sql = require('mssql');
+const {extractClients}=require('./worldoffice-client-extraction.service');
+const {saveClientMirror}=require('./worldoffice-client-mirror.service');
 require('dotenv').config();
 
 // Configuración de conexión a World Office
@@ -85,26 +87,7 @@ const connect = async () => {
 
 // Obtener clientes desde Terceros
 const getClientes = async () => {
-    try {
-        const pool = await connect();
-        const result = await pool.request().query(`
-            SELECT 
-                IdTercero,
-                Identificacion,
-                Nombre,
-                Primer_Nombre,
-                Segundo_Nombre,
-                Primer_Apellido,
-                Segundo_Apellido,
-                Activo,
-                IdTipoIdentificacion
-            FROM Terceros
-        `);
-        return result.recordset;
-    } catch (error) {
-        console.error('❌ Error al obtener clientes:', error.message);
-        return [];
-    }
+    return extractClients(await connect());
 };
 
 // Obtener productos desde Inventarios
@@ -194,35 +177,8 @@ const syncAllData = async (pgPool) => {
         // ============================================================
         // 1. CLIENTES
         // ============================================================
-        if (clientes.length > 0) {
-            // Eliminar datos existentes (sin truncar)
-            await pgPool.query('DELETE FROM sync_clientes');
-
-            for (const cliente of clientes) {
-                const esActivo = cliente.Activo === -1 || cliente.Activo === true;
-
-                await pgPool.query(`
-                    INSERT INTO sync_clientes (
-                        id_externo, documento, razon_social, primer_nombre, 
-                        segundo_nombre, primer_apellido, segundo_apellido,
-                        activo, tipo_documento, datos_completos
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                `, [
-                    cliente.IdTercero,
-                    cliente.Identificacion,
-                    cliente.Nombre,
-                    cliente.Primer_Nombre || null,
-                    cliente.Segundo_Nombre || null,
-                    cliente.Primer_Apellido || null,
-                    cliente.Segundo_Apellido || null,
-                    esActivo,
-                    cliente.IdTipoIdentificacion,
-                    JSON.stringify(cliente)
-                ]);
-            }
-            results.clientes = clientes.length;
-            console.log(`✅ Clientes: ${results.clientes}`);
-        }
+        results.clientes = await saveClientMirror(pgPool, clientes);
+        console.log(`✅ Clientes completos: ${results.clientes}`);
 
         // ============================================================
         // 2. PRODUCTOS

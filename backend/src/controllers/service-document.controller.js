@@ -19,6 +19,7 @@ const {
 } = require('../services/service-notification-outbox.service');
 
 const { randomUUID } = crypto;
+const {normalizeBranding,brandingOptions}=require('../services/service-document-branding.service');
 const { loadReceptionMedia } = require('../services/service-reception-media.service');
 const { normalizeDocumentDispatch } = require('../domain/service-document-dispatch');
 
@@ -205,6 +206,7 @@ async function canReadOrder(
     return false;
   }
 
+  if((await client.query('SELECT 1 FROM service_order_intakes WHERE service_order_id=$1 AND created_by=$2 LIMIT 1',[order.id,req.user.id])).rows.length)return true;
   return (
     order.tecnico_id ===
       req.user.id ||
@@ -667,7 +669,7 @@ function assertPrerequisites(
     ) {
       const error =
         new Error(
-          'Primero debe existir un cierre técnico confirmado.'
+          'El técnico asignado debe completar Cierre técnico y pulsar Confirmar cierre técnico antes de emitir esta acta. La asignación por sí sola no confirma el cierre.'
         );
 
       error.code =
@@ -791,6 +793,9 @@ exports.listDocuments =
           dispatches: dispatches.rows,
           documents:
             result.rows,
+          branding_options:brandingOptions(),
+          delivery_status:(await client.query('SELECT status FROM service_order_deliveries WHERE service_order_id=$1',[order.id])).rows[0]?.status||'draft',
+          closure_status:(await client.query('SELECT status FROM service_order_closures WHERE service_order_id=$1',[order.id])).rows[0]?.status||'draft',
           available_types:
             Array.from(
               DOCUMENT_TYPES
@@ -906,6 +911,7 @@ exports.generateDocument =
           order
         );
 
+      snapshot.document_branding=normalizeBranding(req.body?.document_branding);
       assertPrerequisites(
         req,
         documentType,
@@ -1277,6 +1283,7 @@ exports.generateDocument =
           });
       }
 
+      if(error.status===400)return res.status(400).json({success:false,message:error.message});
       return res
         .status(500)
         .json({
@@ -1454,4 +1461,37 @@ exports.recordManualDispatch = async (req, res) => {
     console.error('Error recording manual document dispatch:', error);
     return res.status(500).json({ success: false, message: 'No fue posible registrar el envío' });
   } finally { client.release(); }
+};
+
+exports.previewDocument = async (req, res) => {
+ const client = await pool.connect();
+ try {
+  const order = await getOrder(client, req.params.id);
+  if (!order) return res.status(404).json({message:'Orden no encontrada'});
+  if (!(await canReadOrder(client, req, order))) return res.status(403).json({message:'No autorizado'});
+  const type = req.params.documentType;
+  if (!DOCUMENT_TYPES.has(type)) return res.status(400).json({message:'Tipo de documento no válido'});
+  const snapshot = await loadSnapshot(client, order);
+  const warnings = [];
+  snapshot.document_branding = normalizeBranding(req.body?.document_branding);
+  if (snapshot.document_branding) {
+   const option = brandingOptions().find(o => o.key === snapshot.document_branding.logo_key);
+   if (!option?.available) {
+    warnings.push('El logo seleccionado no está disponible. La vista previa usa el formato básico; coloca el archivo original antes de emitir el acta con ese logo.');
+    snapshot.document_branding = null;
+   }
+  }
+  if (type === 'reception_act' && snapshot.reception_act?.signed_at) {
+   try { await loadReceptionMedia(snapshot, EVIDENCE_DIR); }
+   catch (error) {
+    if (error.code !== 'RECEPTION_MEDIA_MISSING') throw error;
+    warnings.push(error.message);
+   }
+  }
+  const html = buildServiceDocumentHtml(type, snapshot).replace('<body>', '<body><div style="padding:12px;border:2px dashed #666;text-align:center">VISTA PREVIA — BORRADOR. No constituye un acta confirmada.</div>');
+  return res.json({success:true,data:{html,warnings}});
+ } catch (error) {
+  console.error('Error preparing service document preview:', error);
+  return res.status(error.status || 500).json({message:error.status ? error.message : 'No fue posible preparar la vista previa. Revisa el error del backend.'});
+ } finally { client.release(); }
 };

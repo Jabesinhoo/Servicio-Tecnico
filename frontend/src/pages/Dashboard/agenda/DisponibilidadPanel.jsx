@@ -5,6 +5,7 @@ import api from '../../../services/api';
 
 const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
   const [tecnicos, setTecnicos] = useState([]);
+  const [errorMessage,setErrorMessage]=useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -17,9 +18,12 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
     setLoading(true);
     try {
       const res = await api.get(`/api/agenda/disponibilidad?fecha=${fecha}`);
-      setTecnicos(res.data || []);
+      const rows=Array.isArray(res.data)?res.data:res.data?.data;
+      if(!Array.isArray(rows))throw new Error('Respuesta de disponibilidad no válida');
+      setTecnicos(rows);setErrorMessage('');
     } catch (error) {
       console.error('Error fetching disponibilidad:', error);
+      setErrorMessage(error.response?.data?.message||'No fue posible cargar la disponibilidad de técnicos.');
     } finally {
       setLoading(false);
     }
@@ -28,19 +32,20 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        <Loader2 className="w-6 h-6 animate-spin accent-text" />
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      {errorMessage&&<p role="alert" className="text-sm text-red-600">{errorMessage}</p>}
       <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
         <User className="w-4 h-4" />
         Disponibilidad de Técnicos
       </h3>
       
-      {tecnicos.length === 0 ? (
+      {tecnicos.length === 0 && !errorMessage ? (
         <p className="text-sm text-gray-500 text-center py-4">No hay técnicos registrados</p>
       ) : (
         tecnicos.map((tecnico) => (
@@ -48,7 +53,7 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
             key={tecnico.tecnico_id}
             className={`p-3 rounded-lg border cursor-pointer transition-all ${
               tecnico.disponible
-                ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800 hover:bg-green-100'
+                ? 'accent-soft accent-border dark:accent-soft dark:accent-border hover:accent-soft'
                 : 'bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700 cursor-not-allowed'
             }`}
             onClick={() => tecnico.disponible && onSelectTecnico(tecnico)}
@@ -60,8 +65,8 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
                 </p>
                 {tecnico.disponible ? (
                   <div className="flex items-center gap-2 mt-1">
-                    <Clock className="w-3 h-3 text-green-600" />
-                    <span className="text-xs text-green-600">
+                    <Clock className="w-3 h-3 accent-text" />
+                    <span className="text-xs accent-text">
                       {tecnico.horario_laboral?.inicio} - {tecnico.horario_laboral?.fin}
                     </span>
                   </div>
@@ -70,7 +75,7 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
                 )}
               </div>
               {tecnico.disponible ? (
-                <CheckCircle className="w-5 h-5 text-green-500" />
+                <CheckCircle className="w-5 h-5 accent-text" />
               ) : (
                 <XCircle className="w-5 h-5 text-gray-400" />
               )}

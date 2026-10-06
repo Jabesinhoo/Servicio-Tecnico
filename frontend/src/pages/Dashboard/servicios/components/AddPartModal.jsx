@@ -78,7 +78,7 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+    <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Agregar Repuesto</h3>
@@ -107,7 +107,7 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
 
             {searching ? (
               <div className="text-center py-4">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" />
+                <Loader2 className="w-6 h-6 animate-spin accent-text mx-auto" />
                 <p className="text-sm text-gray-500 mt-2">Cargando productos...</p>
               </div>
             ) : filteredProducts.length > 0 ? (
@@ -118,7 +118,7 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
                     type="button"
                     onClick={() => setSelectedProduct(product)}
                     className={`w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                      selectedProduct?.id === product.id ? 'bg-blue-50 dark:bg-blue-900/30' : ''
+                      selectedProduct?.id === product.id ? 'accent-soft dark:accent-soft' : ''
                     }`}
                   >
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{product.nombre}</p>
@@ -136,13 +136,13 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
 
             {selectedProduct && (
               <>
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">{selectedProduct.nombre}</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                <div className="accent-soft dark:accent-soft p-3 rounded-lg">
+                  <p className="text-sm font-medium accent-text dark:accent-text">{selectedProduct.nombre}</p>
+                  <p className="text-xs accent-text dark:accent-text mt-1">
                     Stock disponible: {selectedProduct.stock_actual} unidades
                   </p>
                   {selectedProduct.precio_venta > 0 && (
-                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                    <p className="text-xs accent-text dark:accent-text">
                       Precio unitario: ${selectedProduct.precio_venta.toLocaleString()}
                     </p>
                   )}
@@ -192,7 +192,7 @@ const AddPartModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
             <button
               type="submit"
               disabled={!selectedProduct || loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 text-sm font-medium text-white accent-fill rounded-lg hover:accent-fill disabled:opacity-50 flex items-center gap-2"
             >
               <Package className="w-4 h-4" />
               {loading ? 'Agregando...' : 'Agregar Repuesto'}

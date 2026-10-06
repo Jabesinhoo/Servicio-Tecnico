@@ -16,6 +16,10 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import api from '../../../services/api';
+import ClientProfilePanel from './components/ClientProfilePanel';
+import ServiceSiteFields from './components/ServiceSiteFields';
+import {emptyServiceSite,serviceSiteError} from './serviceLocation';
+import AcceptanceEvidenceFiles, {uploadAcceptanceFiles} from './components/AcceptanceEvidenceFiles';
 import { bogotaDateInput } from './serviceFormatters';
 import EquipmentIntakeFields, { emptyEquipmentIntake, equipmentIntakeError } from './components/EquipmentIntakeFields';
 
@@ -69,6 +73,10 @@ export default function ServicioCreateWizard({
   const [clientQuery, setClientQuery] = useState('');
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [completeProfile,setCompleteProfile]=useState(null);
+  const [profileLoading,setProfileLoading]=useState(false);
+  const [profileError,setProfileError]=useState('');
+  const [profileRetry,setProfileRetry]=useState(0);
   // V7_CLIENT_SWITCH
   const isEditMode = mode === 'edit';
   const canChangeClient = isAdmin && isEditMode;
@@ -86,6 +94,9 @@ export default function ServicioCreateWizard({
   const [supportTechnicianIds, setSupportTechnicianIds] = useState([]);
   const [loadingClients, setLoadingClients] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [acceptanceFiles, setAcceptanceFiles] = useState([]);
+  const createdIntakeRef = useRef(null);
+  const uploadEvidence = async (id) => uploadAcceptanceFiles(id, acceptanceFiles, key => setAcceptanceFiles(files => files.filter(file => file.key !== key)));
   const [error, setError] = useState('');
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('transfer');
@@ -96,6 +107,7 @@ export default function ServicioCreateWizard({
   const initialEditSnapshot = useRef(null);
 
   const [form, setForm] = useState({
+    service_site: emptyServiceSite(),
     equipment_intake: emptyEquipmentIntake(),
     request_description: '',
     classification: 'diagnostic',
@@ -121,6 +133,26 @@ export default function ServicioCreateWizard({
     scheduled_date: '',
     scheduled_time: '09:00',
   });
+
+  useEffect(() => {
+    if (!isOpen) { createdIntakeRef.current = null; setAcceptanceFiles([]); }
+  }, [isOpen]);
+
+  useEffect(() => {
+    let active=true;setCompleteProfile(null);setProfileError('');
+    if(!isOpen||!selectedClient?.id){setProfileLoading(false);return;}
+    setProfileLoading(true);
+    api.get(`/api/clients/${selectedClient.id}/profile`,{params:{origin:selectedClient.origen||'local'}}).then(response=>{
+      if(!active)return;
+      const profile=response.data?.data;setCompleteProfile(profile);setSelectedClient(previous=>({...previous,...profile}));
+      if(!isEdit)setForm(previous=>({...previous,service_site:['customer','external'].includes(previous.service_site?.mode)?{
+        ...emptyServiceSite(),address:profile.direccion||'',city:profile.ciudad||'',contact_name:profile.contacto||clientName(profile),contact_phone:profile.telefono||'',
+        latitude:profile.latitude??'',longitude:profile.longitude??'',confirmed:false,
+      }:previous.service_site}));
+    }).catch(error=>{if(active)setProfileError(error.response?.data?.message||'No se pudo cargar la ficha completa del cliente.');})
+      .finally(()=>{if(active)setProfileLoading(false);});
+    return()=>{active=false;};
+  },[isOpen,selectedClient?.id,selectedClient?.origen,profileRetry,isEdit]);
 
   useEffect(() => {
     if (!isOpen || !isEditMode || selectedClient || !service?.client_id) return;
@@ -262,6 +294,7 @@ export default function ServicioCreateWizard({
         setPaymentReference(intake.payment_reference || '');
 
         setForm({
+          service_site: row.service_site || intake.service_site || null,
           equipment_intake: intake.equipment_intake || null,
           request_description: intake.request_description || row.descripcion_inicial || '',
           classification: intake.classification || row.classification || 'diagnostic',
@@ -536,6 +569,9 @@ export default function ServicioCreateWizard({
 
     if (step === 0) {
       if (!selectedClient) return 'Selecciona el cliente.';
+      if (profileLoading) return 'Espera a que cargue la ficha del cliente.';
+      if (profileError) return 'Carga la ficha completa del cliente antes de continuar.';
+      const siteError=serviceSiteError(form.service_site);if(siteError)return siteError;
       if (!form.request_description.trim()) {
         return 'Describe la necesidad o solicitud del cliente.';
       }
@@ -617,7 +653,7 @@ export default function ServicioCreateWizard({
   };
 
   const submit = async () => {
-    const message = validateStep() || (!isEdit && equipmentIntakeError(form.equipment_intake));
+    const message = validateStep() || serviceSiteError(form.service_site) || (!isEdit && equipmentIntakeError(form.equipment_intake));
     if (message) {
       setError(message);
       return;
@@ -656,6 +692,7 @@ export default function ServicioCreateWizard({
           `/api/service-orders/${targetServiceId}`,
           {
             client_id: selectedClient?.id || null,
+            ...(form.service_site?{service_site:form.service_site}:{}),
             request_description: form.request_description,
             descripcion_inicial: form.request_description,
             classification: form.classification,
@@ -710,6 +747,8 @@ export default function ServicioCreateWizard({
           });
         }
 
+        if (intakeId) await uploadEvidence(intakeId);
+
         if (updateResponse.data?.schedule_warning) {
           setError(
             `Cambios guardados. La programación automática quedó pendiente: ${updateResponse.data.schedule_warning}`
@@ -723,27 +762,11 @@ export default function ServicioCreateWizard({
         return;
       }
 
-      const createResponse = await api.post('/api/service-orders/intakes', {
+      const intakePayload = {
         client_id: selectedClient.id,
         client_origin: selectedClient.origen || 'local',
         client_external_id: selectedClient.id_externo || null,
         client_key: selectedClient.cliente_key || null,
-        client_snapshot: {
-          id: selectedClient.id,
-          id_externo: selectedClient.id_externo || null,
-          origen: selectedClient.origen || 'local',
-          tipo_persona: selectedClient.tipo_persona || null,
-          documento: selectedClient.documento || null,
-          razon_social: selectedClient.razon_social || null,
-          primer_nombre: selectedClient.primer_nombre || null,
-          segundo_nombre: selectedClient.segundo_nombre || null,
-          primer_apellido: selectedClient.primer_apellido || null,
-          segundo_apellido: selectedClient.segundo_apellido || null,
-          telefono: selectedClient.telefono || null,
-          email: selectedClient.email || null,
-          direccion: selectedClient.direccion || null,
-          ciudad: selectedClient.ciudad || null,
-        },
         source_type: isAdmin ? 'customer' : 'technician',
         created_from_technician: !isAdmin,
         ...form,
@@ -754,13 +777,21 @@ export default function ServicioCreateWizard({
         base_value: form.base_value === '' ? null : Number(form.base_value),
         estimated_minutes: form.estimated_minutes ? Number(form.estimated_minutes) : null,
         estimated_duration: form.estimated_duration ? Number(form.estimated_duration) : null,
-      });
-
-      const intake = createResponse.data?.data;
+      };
+      let intake = createdIntakeRef.current;
+      if (!intake) {
+        const createResponse = await api.post('/api/service-orders/intakes', intakePayload);
+        intake = createResponse.data?.data;
+        if (intake?.id) createdIntakeRef.current = intake;
+      } else if (intake.status !== 'activated') {
+        await api.put(`/api/service-orders/intakes/${intake.id}`, intakePayload);
+      }
 
       if (!intake?.id) {
         throw new Error('No se recibió el ID de la solicitud');
       }
+
+      await uploadEvidence(intake.id);
 
       if (isAdmin && form.billing_mode === 'prepaid' && paymentVerified) {
         await api.post(`/api/service-orders/intakes/${intake.id}/verify-payment`, {
@@ -772,11 +803,17 @@ export default function ServicioCreateWizard({
 
       if (isAdmin) {
         try {
-          const activateResponse = await api.post(
-            `/api/service-orders/intakes/${intake.id}/activate`
-          );
+          const activateResponse = intake.status === 'activated'
+            ? {data:{data:{id:intake.service_order_id}}}
+            : await api.post(`/api/service-orders/intakes/${intake.id}/activate`).catch(error => {
+                if (error.response?.data?.code === 'INTAKE_ALREADY_ACTIVATED') {
+                  return {data:{data:{id:error.response.data.service_order_id}}};
+                }
+                throw error;
+              });
 
           const order = activateResponse.data?.data || null;
+          createdIntakeRef.current = {...intake, status:'activated', service_order_id:order?.id};
 
           if (order?.id && primaryTechnicianId) {
             await api.patch(`/api/service-orders/${order.id}/approve`, {
@@ -823,11 +860,11 @@ export default function ServicioCreateWizard({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[110] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl bg-white dark:bg-gray-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+            <p className="text-xs font-semibold uppercase tracking-wide accent-text">
               {isEdit ? 'Edición controlada de servicio' : 'Creación controlada de servicio'}
             </p>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -856,9 +893,9 @@ export default function ServicioCreateWizard({
                 key={label}
                 className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold ${
                   index === step
-                    ? 'bg-blue-600 text-white'
+                    ? 'accent-fill text-white'
                     : index < step
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                      ? 'accent-soft accent-text dark:accent-soft dark:accent-text'
                       : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
                 }`}
               >
@@ -880,7 +917,7 @@ export default function ServicioCreateWizard({
           )}
 
           {loadingExisting && (
-            <div className="mb-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-3 text-sm text-blue-700 dark:text-blue-300">
+            <div className="mb-4 rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-3 text-sm accent-text dark:accent-text">
               Cargando todos los datos del servicio...
             </div>
           )}
@@ -900,7 +937,7 @@ export default function ServicioCreateWizard({
                 </div>
 
                 {selectedClient && (
-                  <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+                  <div className="mt-3 rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-semibold">{clientName(selectedClient)}</p>
@@ -965,6 +1002,9 @@ export default function ServicioCreateWizard({
                 )}
               </div>
 
+              {selectedClient && <ClientProfilePanel profile={completeProfile} loading={profileLoading} error={profileError} onRetry={()=>setProfileRetry(value=>value+1)} />}
+              {selectedClient && <ServiceSiteFields value={form.service_site} onChange={value=>update('service_site',value)} disabled={saving||profileLoading} />}
+
               <label className="block">
                 <span className="text-sm font-semibold">
                   Falla reportada / solicitud del cliente *
@@ -995,11 +1035,11 @@ export default function ServicioCreateWizard({
                   </select>
                 </label>
 
-                <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-3">
-                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-3">
+                  <p className="text-sm font-semibold accent-text dark:accent-text">
                     Fecha y hora automáticas
                   </p>
-                  <p className="text-xs text-blue-600/80 dark:text-blue-300/80 mt-1">
+                  <p className="text-xs accent-text dark:accent-text mt-1">
                     El sistema buscará el primer espacio común disponible de todos los técnicos seleccionados y bloqueará la agenda por la duración estimada.
                   </p>
                 </div>
@@ -1021,7 +1061,7 @@ export default function ServicioCreateWizard({
                   onClick={() => update('classification', 'diagnostic')}
                   className={`min-h-24 rounded-2xl border p-4 text-left ${
                     form.classification === 'diagnostic'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                      ? 'accent-border accent-soft dark:accent-soft'
                       : 'border-gray-200 dark:border-gray-800'
                   }`}
                 >
@@ -1037,7 +1077,7 @@ export default function ServicioCreateWizard({
                   onClick={() => update('classification', 'specific')}
                   className={`min-h-24 rounded-2xl border p-4 text-left ${
                     form.classification === 'specific'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                      ? 'accent-border accent-soft dark:accent-soft'
                       : 'border-gray-200 dark:border-gray-800'
                   }`}
                 >
@@ -1245,7 +1285,7 @@ export default function ServicioCreateWizard({
                   </div>
 
                   {selectedAcceptanceClient && (
-                    <div className="mt-2 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+                    <div className="mt-2 rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold">
@@ -1261,7 +1301,7 @@ export default function ServicioCreateWizard({
                         {selectedClient &&
                           selectedAcceptanceClient.id ===
                             selectedClient.id && (
-                            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                            <span className="text-xs font-semibold accent-text dark:accent-text">
                               Cliente de la solicitud
                             </span>
                           )}
@@ -1345,7 +1385,8 @@ export default function ServicioCreateWizard({
                   <span className="text-sm font-semibold">
                     Referencia / evidencia
                   </span>
-                  <input
+                  <textarea
+                    rows={3}
                     value={form.client_acceptance_reference}
                     onChange={(event) =>
                       update('client_acceptance_reference', event.target.value)
@@ -1355,25 +1396,26 @@ export default function ServicioCreateWizard({
                   />
                 </label>
               </div>
+              {(!isEdit || editDetail?.intake?.id) && <AcceptanceEvidenceFiles intakeId={isEdit ? editDetail?.intake?.id : createdIntakeRef.current?.id} pending={acceptanceFiles} onChange={setAcceptanceFiles} disabled={saving} />}
             </div>
           )}
 
           {step === 5 && (
             <div className="space-y-5">
               {/* SECCIÓN: Opciones de programación */}
-              <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-4">
-                <h4 className="font-semibold text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
+              <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
+                <h4 className="font-semibold accent-text dark:accent-text mb-3 flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
                   Opciones de programación
                 </h4>
-                <p className="text-sm text-blue-600/80 dark:text-blue-300/80 mb-3">
+                <p className="text-sm accent-text dark:accent-text mb-3">
                   Elige cómo quieres que se programe esta orden de servicio
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label
                     className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
                       schedulingMode === 'auto'
-                        ? 'border-blue-500 bg-blue-100/50 dark:bg-blue-900/30'
+                        ? 'accent-border accent-soft dark:accent-soft'
                         : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
                     }`}
                   >
@@ -1396,7 +1438,7 @@ export default function ServicioCreateWizard({
                   <label
                     className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
                       schedulingMode === 'manual'
-                        ? 'border-blue-500 bg-blue-100/50 dark:bg-blue-900/30'
+                        ? 'accent-border accent-soft dark:accent-soft'
                         : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
                     }`}
                   >
@@ -1418,8 +1460,8 @@ export default function ServicioCreateWizard({
                 </div>
 
                 {schedulingMode === 'auto' && (
-                  <div className="mt-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-900">
-                    <p className="text-xs text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
+                  <div className="mt-3 p-3 accent-soft dark:accent-soft rounded-lg border accent-border dark:accent-border">
+                    <p className="text-xs accent-text dark:accent-text flex items-start gap-2">
                       <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
                       El sistema buscará desde el próximo bloque de 15 minutos el primer intervalo libre para todo el equipo. Los técnicos no tienen jornada fija: solo se consideran ocupados los bloques ya registrados en Agenda.
                     </p>
@@ -1459,9 +1501,9 @@ export default function ServicioCreateWizard({
 
               {/* Resto del contenido del paso 4: Técnicos */}
               {!isAdmin ? (
-                <div className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-4">
+                <div className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
                   <div className="flex items-start gap-3">
-                    <UserCheck className="w-5 h-5 mt-0.5 text-blue-600 shrink-0" />
+                    <UserCheck className="w-5 h-5 mt-0.5 accent-text shrink-0" />
                     <div>
                       <p className="font-bold">
                         Quedarás propuesto como técnico responsable
@@ -1493,8 +1535,8 @@ export default function ServicioCreateWizard({
                   </div>
 
                   {selectedPrimary && (
-                    <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 p-4">
-                      <p className="text-xs uppercase tracking-wide font-semibold text-emerald-700 dark:text-emerald-300">
+                    <div className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
+                      <p className="text-xs uppercase tracking-wide font-semibold accent-text dark:accent-text">
                         Responsable principal
                       </p>
                       <p className="font-bold mt-1">
@@ -1524,7 +1566,7 @@ export default function ServicioCreateWizard({
                           ids.filter((id) => id !== nextPrimary)
                         );
                       }}
-                      className="min-h-10 rounded-xl border border-blue-300 text-blue-700 dark:text-blue-300 px-3 text-sm font-semibold"
+                      className="min-h-10 rounded-xl border accent-border accent-text dark:accent-text px-3 text-sm font-semibold"
                     >
                       Marcar visibles
                     </button>
@@ -1555,9 +1597,9 @@ export default function ServicioCreateWizard({
                           key={tech.id}
                           className={`rounded-xl border p-3 flex items-start gap-3 cursor-pointer ${
                             isPrimary
-                              ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'
+                              ? 'accent-border accent-soft dark:accent-soft'
                               : isSupport
-                                ? 'border-blue-300 bg-blue-50 dark:bg-blue-950/20'
+                                ? 'accent-border accent-soft dark:accent-soft'
                                 : 'border-gray-200 dark:border-gray-800'
                           }`}
                         >
@@ -1618,7 +1660,7 @@ export default function ServicioCreateWizard({
                             </p>
 
                             {isChecked && (
-                              <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                              <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold accent-text dark:accent-text">
                                 <input
                                   type="radio"
                                   name="primary-technician"
@@ -1653,9 +1695,9 @@ export default function ServicioCreateWizard({
                           <span
                             className={`shrink-0 rounded-lg px-2 py-1 text-xs font-semibold ${
                               isPrimary
-                                ? 'bg-emerald-600 text-white'
+                                ? 'accent-fill text-white'
                                 : isSupport
-                                  ? 'bg-blue-600 text-white'
+                                  ? 'accent-fill text-white'
                                   : 'bg-gray-100 text-gray-500 dark:bg-gray-800'
                             }`}
                           >
@@ -1708,7 +1750,7 @@ export default function ServicioCreateWizard({
                     onClick={() => update('billing_mode', 'prepaid')}
                     className={`rounded-2xl border p-4 text-left ${
                       form.billing_mode === 'prepaid'
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                        ? 'accent-border accent-soft dark:accent-soft'
                         : 'border-gray-200 dark:border-gray-800'
                     }`}
                   >
@@ -1722,7 +1764,7 @@ export default function ServicioCreateWizard({
                     onClick={() => update('billing_mode', 'postpaid')}
                     className={`rounded-2xl border p-4 text-left ${
                       form.billing_mode === 'postpaid'
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                        ? 'accent-border accent-soft dark:accent-soft'
                         : 'border-gray-200 dark:border-gray-800'
                     }`}
                   >
@@ -1735,7 +1777,7 @@ export default function ServicioCreateWizard({
               )}
 
               {!isAdmin && (
-                <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-4 text-sm text-blue-700 dark:text-blue-300">
+                <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 text-sm accent-text dark:accent-text">
                   Tu solicitud quedará pendiente de validación administrativa,
                   pago y activación como OS.
                 </div>
@@ -1906,7 +1948,7 @@ export default function ServicioCreateWizard({
               <button
                 type="button"
                 onClick={goNext}
-                className="min-h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 font-semibold flex items-center justify-center gap-2"
+                className="min-h-11 rounded-xl accent-fill hover:accent-fill text-white px-5 font-semibold flex items-center justify-center gap-2"
               >
                 Siguiente
                 <ChevronRight className="w-4 h-4" />
@@ -1916,7 +1958,7 @@ export default function ServicioCreateWizard({
                 type="button"
                 disabled={saving || loadingExisting}
                 onClick={submit}
-                className="min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-5 font-semibold flex items-center justify-center gap-2"
+                className="min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white px-5 font-semibold flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 {saving

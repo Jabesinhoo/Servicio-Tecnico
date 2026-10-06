@@ -60,6 +60,11 @@ const {
 } = require('../middlewares/service-authorization-guard.middleware');
 
 router.use(authRequired);
+const acceptanceEvidence = require('../controllers/service-acceptance-evidence.controller');
+router.get('/service-orders/intakes/:intakeId/acceptance-evidences', allowRoles('admin','tecnico'), acceptanceEvidence.list);
+router.post('/service-orders/intakes/:intakeId/acceptance-evidences', allowRoles('admin','tecnico'), acceptanceEvidence.upload);
+router.get('/service-orders/intakes/:intakeId/acceptance-evidences/:evidenceId/download', allowRoles('admin','tecnico'), acceptanceEvidence.download);
+
 
 // ============================================================
 // V9 · SOLICITUD / CLASIFICACIÓN / ACTIVACIÓN DE SERVICIO
@@ -226,6 +231,12 @@ router.get(
 // V16 · DOCUMENTOS FORMALES PDF
 // ============================================================
 
+const serviceActivityController=require('../controllers/service-activity.controller');
+router.get('/service-orders/:id/activity-history',allowRoles('admin','tecnico'),serviceActivityController.history);
+router.get('/service-orders/:id/client-signatures',allowRoles('admin','tecnico'),serviceActivityController.signatures);
+router.get('/service-orders/:id/client-signatures/:signatureId/file',allowRoles('admin','tecnico'),serviceActivityController.signatureFile);
+router.post('/service-orders/:id/documents/:documentType/preview',allowRoles('admin','tecnico'),serviceDocumentController.previewDocument);
+
 router.get(
   '/service-orders/:id/documents',
   allowRoles('admin', 'tecnico'),
@@ -330,19 +341,19 @@ router.get(
 
 router.post(
   '/service-orders/:id/delivery/notifications',
-  allowRoles('admin'),
+  allowRoles('admin', 'tecnico'),
   serviceDeliveryController.recordNotification
 );
 
 router.put(
   '/service-orders/:id/delivery',
-  allowRoles('admin'),
+  allowRoles('admin', 'tecnico'),
   serviceDeliveryController.saveDraft
 );
 
 router.post(
   '/service-orders/:id/delivery/evidences',
-  allowRoles('admin'),
+  allowRoles('admin', 'tecnico'),
   serviceDeliveryController.uploadEvidence
 );
 
@@ -354,7 +365,7 @@ router.get(
 
 router.post(
   '/service-orders/:id/delivery/signature',
-  allowRoles('admin'),
+  allowRoles('admin', 'tecnico'),
   serviceDeliveryController.saveSignature
 );
 
@@ -366,13 +377,13 @@ router.get(
 
 router.post(
   '/service-orders/:id/delivery/confirm',
-  allowRoles('admin'),
+  allowRoles('admin', 'tecnico'),
   serviceDeliveryController.confirmDelivery
 );
 
 router.put(
   '/service-orders/:id/delivery/satisfaction',
-  allowRoles('admin'),
+  allowRoles('admin', 'tecnico'),
   serviceDeliveryController.saveSatisfaction
 );
 

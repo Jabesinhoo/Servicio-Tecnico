@@ -311,70 +311,10 @@ exports.exportData = async (req, res) => {
 // Agregar esta funcion al final del archivo
 
 // Buscar clientes en sync_clientes
-exports.buscarClientes = async (req, res) => {
-    try {
-        const { q } = req.query;
-        
-        if (!q || q.length < 2) {
-            return res.json({
-                success: true,
-                data: [],
-                message: 'Ingrese al menos 2 caracteres para buscar'
-            });
-        }
-
-        const searchTerm = `%${q.toLowerCase()}%`;
-        
-        const result = await pgPool.query(`
-            SELECT 
-                id_externo as id,
-                documento,
-                razon_social,
-                primer_nombre,
-                primer_apellido,
-                activo,
-                'juridica' as tipo_persona
-            FROM sync_clientes
-            WHERE 
-                LOWER(documento) LIKE $1 OR
-                LOWER(razon_social) LIKE $1 OR
-                LOWER(primer_nombre) LIKE $1 OR
-                LOWER(primer_apellido) LIKE $1
-            ORDER BY 
-                CASE 
-                    WHEN documento = $2 THEN 1
-                    WHEN razon_social ILIKE $3 THEN 2
-                    WHEN primer_nombre ILIKE $3 THEN 3
-                    ELSE 4
-                END
-            LIMIT 20
-        `, [searchTerm, q, `${q}%`]);
-
-        // Formatear para que coincida con el formato que espera el frontend
-        const clientes = result.rows.map(row => ({
-            id: row.id,
-            tipo_persona: row.tipo_persona || 'natural',
-            razon_social: row.razon_social || null,
-            primer_nombre: row.primer_nombre || null,
-            primer_apellido: row.primer_apellido || null,
-            documento: row.documento || null,
-            telefono: null,
-            email: null,
-            ciudad: null,
-            activo: row.activo
-        }));
-
-        res.json({
-            success: true,
-            data: clientes,
-            total: clientes.length
-        });
-    } catch (error) {
-        console.error('Error al buscar clientes:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al buscar clientes',
-            error: error.message
-        });
-    }
+exports.buscarClientes = async (req,res) => {
+ try {const {searchClients}=require('../services/client-query.service');
+  const q=String(req.query.q||'').trim();if(q.length<2)return res.json({success:true,data:[]});
+  const result=await searchClients({search:q,origin:'melissa',limit:20});
+  res.json({success:true,data:result.data,total:result.data.length});
+ }catch(error){console.error('Error buscando clientes completos:',error);res.status(500).json({message:'Error al buscar clientes'});}
 };

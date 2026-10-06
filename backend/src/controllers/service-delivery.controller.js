@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../db/pool');
+const {deliveryPermissions}=require('../domain/service-delivery-permissions');
 const { randomUUID } = require('crypto');
 const fsp = require('fs/promises');
 const path = require('path');
@@ -219,6 +220,20 @@ function safePath(relative) {
   return absolute;
 }
 
+async function permissionsFor(client,req,order,closure,delivery,custody) {
+ return deliveryPermissions({admin:isAdmin(req),tech:isTech(req),assigned:await canRead(client,req,order),
+  custodyMine:custody?.holder_user_id===req.user.id,closureStatus:closure?.status,
+  deliveryStatus:delivery?.status,deliveredBy:delivery?.delivered_by,actorId:req.user.id});
+}
+async function authorizeDelivery(client,req,order,satisfaction=false) {
+ const [closure,delivery,custody]=await Promise.all([getClosure(client,order.id),getDelivery(client,order.id),getCustody(client,order.id)]);
+ const permissions=await permissionsFor(client,req,order,closure,delivery,custody);
+ if (!(satisfaction ? permissions.can_record_satisfaction : permissions.can_manage_delivery)) {
+  throw Object.assign(new Error(permissions.blocking_reasons[0] || (delivery?.status==='delivered'?'La entrega ya fue confirmada':'Todavía no puedes gestionar esta entrega.')),
+   {status:(await canRead(client,req,order))?409:403,code:'DELIVERY_NOT_READY'});
+ }
+}
+
 exports.getDelivery = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -248,6 +263,7 @@ exports.getDelivery = async (req, res) => {
         evidences,
         satisfaction,
         current_custody_holder: custody?.holder_user_id || null,
+        permissions:await permissionsFor(client,req,order,closure,delivery,custody),
       },
     });
   } catch (error) {
@@ -268,13 +284,14 @@ exports.getDelivery = async (req, res) => {
 exports.recordNotification = async (req, res) => {
   const client = await pool.connect();
   try {
-    if (!isAdmin(req)) return res.status(403).json({ success:false, message:'Solo administración puede registrar la notificación' });
+    if (!isAdmin(req)&&!isTech(req)) return res.status(403).json({success:false,message:'No autorizado para gestionar esta entrega'});
     const channel = clean(req.body?.channel, 30);
     if (!CHANNELS.has(channel)) return res.status(400).json({ success:false, message:'Canal no válido' });
 
     await client.query('BEGIN');
     const order = await getOrder(client, req.params.id, true);
     if (!order) { await rollback(client); return res.status(404).json({ success:false, message:'Orden no encontrada' }); }
+    await authorizeDelivery(client,req,order);
     const closure = await getClosure(client, order.id);
     if (closure?.status !== 'validated') {
       await rollback(client);
@@ -301,6 +318,7 @@ exports.recordNotification = async (req, res) => {
     return res.status(201).json({ success:true, message:'Notificación registrada', data:r.rows[0] });
   } catch (error) {
     await rollback(client);
+    if(error.status)return res.status(error.status).json({success:false,code:error.code,message:error.message});
     console.error('Error recording client notification:', error);
     return res.status(500).json({ success:false, message:'Error al registrar notificación' });
   } finally {
@@ -311,7 +329,7 @@ exports.recordNotification = async (req, res) => {
 exports.saveDraft = async (req, res) => {
   const client = await pool.connect();
   try {
-    if (!isAdmin(req)) return res.status(403).json({ success:false, message:'Solo administración puede preparar la entrega' });
+    if (!isAdmin(req)&&!isTech(req)) return res.status(403).json({success:false,message:'No autorizado para gestionar esta entrega'});
     const receiverType = clean(req.body?.receiver_type,20);
     if (!['client','third_party'].includes(receiverType)) {
       return res.status(400).json({ success:false, message:'Selecciona quién recibe' });
@@ -320,6 +338,7 @@ exports.saveDraft = async (req, res) => {
     await client.query('BEGIN');
     const order = await getOrder(client, req.params.id, true);
     if (!order) { await rollback(client); return res.status(404).json({ success:false, message:'Orden no encontrada' }); }
+    await authorizeDelivery(client,req,order);
     const closure = await getClosure(client, order.id);
     if (closure?.status !== 'validated') {
       await rollback(client);
@@ -364,6 +383,7 @@ exports.saveDraft = async (req, res) => {
     return res.json({ success:true, message:'Datos de entrega guardados', data:r.rows[0] });
   } catch (error) {
     await rollback(client);
+    if(error.status)return res.status(error.status).json({success:false,code:error.code,message:error.message});
     console.error('Error saving delivery draft:', error);
     return res.status(500).json({ success:false, message:'Error al guardar datos de entrega' });
   } finally {
@@ -375,12 +395,14 @@ exports.uploadEvidence = async (req, res) => {
   const client = await pool.connect();
   let absolute = null;
   try {
-    if (!isAdmin(req)) return res.status(403).json({ success:false, message:'Solo administración puede adjuntar soportes' });
+    if (!isAdmin(req)&&!isTech(req)) return res.status(403).json({success:false,message:'No autorizado para gestionar esta entrega'});
     const category = clean(req.query?.category,40) || 'other';
     if (!CATEGORIES.has(category)) return res.status(400).json({ success:false, message:'Categoría no válida' });
 
-    const order = await getOrder(client, req.params.id);
+    await client.query('BEGIN');
+    const order = await getOrder(client, req.params.id,true);
     if (!order) return res.status(404).json({ success:false, message:'Orden no encontrada' });
+    await authorizeDelivery(client,req,order);
     const delivery = await getDelivery(client, order.id);
     if (delivery?.status === 'delivered') return res.status(409).json({ success:false, message:'La entrega ya fue confirmada' });
 
@@ -410,13 +432,17 @@ exports.uploadEvidence = async (req, res) => {
     ]);
 
     await event(client, order.id, 'delivery_evidence_added', req.user.id, { evidence_id:evidenceId, category });
+    await client.query('COMMIT');
     return res.status(201).json({ success:true, message:'Soporte registrado', data:r.rows[0] });
   } catch (error) {
+    await rollback(client);
+    if(error.status)return res.status(error.status).json({success:false,code:error.code,message:error.message});
     if (absolute) { try { await fsp.unlink(absolute); } catch (_) {} }
     console.error('Error uploading delivery evidence:', error);
     if (error?.code === 'FILE_TOO_LARGE') return res.status(413).json({ success:false, message:'Archivo demasiado grande' });
     return res.status(500).json({ success:false, message:'Error al cargar soporte' });
   } finally {
+    await rollback(client);
     client.release();
   }
 };
@@ -450,9 +476,11 @@ exports.saveSignature = async (req, res) => {
   const client = await pool.connect();
   let absolute = null;
   try {
-    if (!isAdmin(req)) return res.status(403).json({ success:false, message:'Solo administración puede registrar la firma' });
-    const order = await getOrder(client, req.params.id);
+    if (!isAdmin(req)&&!isTech(req)) return res.status(403).json({success:false,message:'No autorizado para gestionar esta entrega'});
+    await client.query('BEGIN');
+    const order = await getOrder(client, req.params.id,true);
     if (!order) return res.status(404).json({ success:false, message:'Orden no encontrada' });
+    await authorizeDelivery(client,req,order);
 
     const current = await getDelivery(client, order.id);
     if (current?.status === 'delivered') return res.status(409).json({ success:false, message:'La entrega ya fue confirmada' });
@@ -480,18 +508,18 @@ exports.saveSignature = async (req, res) => {
       RETURNING *
     `, [mime, relative, order.id]);
 
-    if (existing?.signature_storage_path) {
-      const old = safePath(existing.signature_storage_path);
-      try { await fsp.unlink(old); } catch (_) {}
-    }
-
     await event(client, order.id, 'delivery_signature_captured', req.user.id);
+    await client.query('COMMIT');
+    if(existing?.signature_storage_path){try{await fsp.unlink(safePath(existing.signature_storage_path));}catch(_){}}
     return res.json({ success:true, message:'Firma registrada', data:r.rows[0] });
   } catch (error) {
+    await rollback(client);
+    if(error.status)return res.status(error.status).json({success:false,code:error.code,message:error.message});
     if (absolute) { try { await fsp.unlink(absolute); } catch (_) {} }
     console.error('Error saving delivery signature:', error);
     return res.status(500).json({ success:false, message:'Error al guardar firma' });
   } finally {
+    await rollback(client);
     client.release();
   }
 };
@@ -521,11 +549,12 @@ exports.getSignature = async (req, res) => {
 exports.confirmDelivery = async (req, res) => {
   const client = await pool.connect();
   try {
-    if (!isAdmin(req)) return res.status(403).json({ success:false, message:'Solo administración puede confirmar la entrega' });
+    if (!isAdmin(req)&&!isTech(req)) return res.status(403).json({success:false,message:'No autorizado para gestionar esta entrega'});
     await client.query('BEGIN');
 
     const order = await getOrder(client, req.params.id, true);
     if (!order) { await rollback(client); return res.status(404).json({ success:false, message:'Orden no encontrada' }); }
+    await authorizeDelivery(client,req,order);
     if (order.estado === 'cerrada') { await rollback(client); return res.status(409).json({ success:false, message:'La orden ya está cerrada' }); }
 
     const closure = await getClosure(client, order.id);
@@ -723,6 +752,7 @@ exports.confirmDelivery = async (req, res) => {
     });
   } catch (error) {
     await rollback(client);
+    if(error.status)return res.status(error.status).json({success:false,code:error.code,message:error.message});
     console.error('Error confirming final delivery:', error);
     return res.status(500).json({ success:false, message:'Error al confirmar entrega final' });
   } finally {
@@ -733,7 +763,7 @@ exports.confirmDelivery = async (req, res) => {
 exports.saveSatisfaction = async (req, res) => {
   const client = await pool.connect();
   try {
-    if (!isAdmin(req)) return res.status(403).json({ success:false, message:'Solo administración puede registrar la encuesta' });
+    if (!isAdmin(req)&&!isTech(req)) return res.status(403).json({success:false,message:'No autorizado para gestionar esta entrega'});
     const rating = Number(req.body?.rating);
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
       return res.status(400).json({ success:false, message:'Calificación debe estar entre 1 y 5' });
@@ -742,6 +772,7 @@ exports.saveSatisfaction = async (req, res) => {
     await client.query('BEGIN');
     const order = await getOrder(client, req.params.id, true);
     if (!order) { await rollback(client); return res.status(404).json({ success:false, message:'Orden no encontrada' }); }
+    await authorizeDelivery(client,req,order,true);
     const delivery = await getDelivery(client, order.id);
     if (delivery?.status !== 'delivered') {
       await rollback(client);
@@ -775,6 +806,7 @@ exports.saveSatisfaction = async (req, res) => {
     return res.json({ success:true, message:'Satisfacción registrada', data:r.rows[0] });
   } catch (error) {
     await rollback(client);
+    if(error.status)return res.status(error.status).json({success:false,code:error.code,message:error.message});
     console.error('Error saving satisfaction:', error);
     return res.status(500).json({ success:false, message:'Error al registrar satisfacción' });
   } finally {

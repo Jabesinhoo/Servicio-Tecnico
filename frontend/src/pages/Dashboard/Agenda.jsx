@@ -1,3 +1,5 @@
+import {useTheme} from '../../context/ThemeContext';
+import ServicioDetail from './servicios/ServicioDetail';
 import React, {
   useCallback,
   useEffect,
@@ -36,6 +38,8 @@ function localDate() {
 
 const Agenda = () => {
   const { user } = useAuth();
+  const {primaryColor}=useTheme();
+  const [detailOrderId,setDetailOrderId]=useState(null);
   const calendarRef = useRef(null);
 
   const [eventos, setEventos] = useState([]);
@@ -352,7 +356,7 @@ const Agenda = () => {
     mobile ? 'timeGridDay' : currentView;
 
   return (
-    <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
+    <div className="workflow-theme responsive-page min-w-0 space-y-4 sm:space-y-6">
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -373,7 +377,7 @@ const Agenda = () => {
                 }
                 className={`min-h-10 px-3 rounded-lg text-sm font-semibold ${
                   currentView === 'timeGridDay'
-                    ? 'bg-blue-600 text-white'
+                    ? 'accent-fill text-white'
                     : 'bg-gray-100 dark:bg-gray-800'
                 }`}
               >
@@ -385,7 +389,7 @@ const Agenda = () => {
                 }
                 className={`min-h-10 px-3 rounded-lg text-sm font-semibold ${
                   currentView === 'timeGridWeek'
-                    ? 'bg-blue-600 text-white'
+                    ? 'accent-fill text-white'
                     : 'bg-gray-100 dark:bg-gray-800'
                 }`}
               >
@@ -397,7 +401,7 @@ const Agenda = () => {
                 }
                 className={`min-h-10 px-3 rounded-lg text-sm font-semibold ${
                   currentView === 'dayGridMonth'
-                    ? 'bg-blue-600 text-white'
+                    ? 'accent-fill text-white'
                     : 'bg-gray-100 dark:bg-gray-800'
                 }`}
               >
@@ -424,11 +428,7 @@ const Agenda = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 sm:gap-6">
         <div className="min-w-0 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-2 sm:p-4 overflow-hidden">
-          {loading ? (
-            <div className="flex justify-center items-center h-[60dvh] sm:h-[620px]">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            </div>
-          ) : (
+          {loading && <div role="status" className="flex items-center gap-2 mb-2 text-sm accent-text"><Loader2 className="w-4 h-4 animate-spin"/>Actualizando agenda…</div>}
             <div className="min-w-0 overflow-x-auto">
               <div className={mobile ? 'min-w-[640px]' : 'min-w-0'}>
                 <FullCalendar
@@ -440,7 +440,10 @@ const Agenda = () => {
                     multimonthPlugin,
                   ]}
                   initialView={getView()}
-                  events={eventos}
+                  initialDate={selectedDate}
+                  events={eventos.map(event=>({...event,backgroundColor:primaryColor,borderColor:primaryColor,textColor:'var(--color-on-primary)'}))}
+                  eventClick={info=>setDetailOrderId(info.event.extendedProps?.service_order_id||null)}
+                  eventDidMount={info=>{info.el.title=[info.event.title,info.event.extendedProps?.cliente,info.event.extendedProps?.estado].filter(Boolean).join(' · ');}}
                   datesSet={handleDatesSet}
                   editable={isAdmin}
                   eventStartEditable={isAdmin}
@@ -469,7 +472,6 @@ const Agenda = () => {
                 />
               </div>
             </div>
-          )}
         </div>
 
         <aside className="min-w-0 space-y-4">
@@ -497,7 +499,7 @@ const Agenda = () => {
                       );
                     }
                   }}
-                  className="text-xs font-semibold text-blue-600"
+                  className="text-xs font-semibold accent-text"
                 >
                   {visibleTechnicians.length ===
                   tecnicosList.length
@@ -526,7 +528,7 @@ const Agenda = () => {
                         className="flex-1 min-h-10 px-2 text-left flex items-center gap-2"
                       >
                         {checked ? (
-                          <CheckSquare className="w-4 h-4 text-blue-600 shrink-0" />
+                          <CheckSquare className="w-4 h-4 accent-text shrink-0" />
                         ) : (
                           <Square className="w-4 h-4 text-gray-400 shrink-0" />
                         )}
@@ -574,6 +576,7 @@ const Agenda = () => {
           await fetchEventos();
         }}
       />
+      <ServicioDetail isOpen={Boolean(detailOrderId)} servicioId={detailOrderId} onClose={()=>setDetailOrderId(null)} onRefresh={fetchEventos}/>
     </div>
   );
 };

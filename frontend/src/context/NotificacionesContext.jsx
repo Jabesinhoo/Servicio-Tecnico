@@ -25,6 +25,8 @@ export const NotificacionesProvider = ({ children }) => {
     const mountedRef = useRef(true);
 
     const cargarNotificaciones = useCallback(async (soloNoLeidas = false) => {
+        const requestToken = localStorage.getItem('token');
+        if (!requestToken) return;
         if (loadingRef.current) {
             return;
         }
@@ -43,7 +45,7 @@ export const NotificacionesProvider = ({ children }) => {
                 },
             });
 
-            if (!mountedRef.current) {
+            if (!mountedRef.current || localStorage.getItem('token') !== requestToken) {
                 return;
             }
 
@@ -61,7 +63,7 @@ export const NotificacionesProvider = ({ children }) => {
 
             setInitialized(true);
         } catch (err) {
-            if (!mountedRef.current) {
+            if (!mountedRef.current || localStorage.getItem('token') !== requestToken) {
                 return;
             }
 
@@ -184,6 +186,27 @@ export const NotificacionesProvider = ({ children }) => {
 
         return () => {
             mountedRef.current = false;
+        };
+    }, [cargarNotificaciones]);
+
+    // Consulta ligera mientras hay sesión y la pestaña está visible.
+    useEffect(() => {
+        const refresh = () => {
+            if (!localStorage.getItem('token')) {
+                setNotificaciones([]);
+                setNoLeidas(0);
+                setInitialized(false);
+                return;
+            }
+            if (document.visibilityState !== 'hidden') cargarNotificaciones(false);
+        };
+        const timer = window.setInterval(refresh, 15000);
+        window.addEventListener('focus', refresh);
+        document.addEventListener('visibilitychange', refresh);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener('focus', refresh);
+            document.removeEventListener('visibilitychange', refresh);
         };
     }, [cargarNotificaciones]);
 

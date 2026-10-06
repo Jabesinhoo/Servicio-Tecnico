@@ -26,12 +26,12 @@ const STATUS_LABELS = {
 
 const STATUS_CLASSES = {
   solicitado: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-  aprobado: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+  aprobado: 'accent-soft accent-text dark:accent-soft dark:accent-text',
   rechazado: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300',
-  entrega_parcial: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300',
-  entregado: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300',
-  en_uso: 'bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
-  consumido: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
+  entrega_parcial: 'accent-soft accent-text dark:accent-soft dark:accent-text',
+  entregado: 'accent-soft accent-text dark:accent-soft dark:accent-text',
+  en_uso: 'accent-soft accent-text dark:accent-soft dark:accent-text',
+  consumido: 'accent-soft accent-text dark:accent-soft dark:accent-text',
   devuelto: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
 };
 
@@ -68,7 +68,7 @@ function StatusBadge({ status }) {
 
 function ModalShell({ title, children, onClose, busy, footer }) {
   return (
-    <div className="fixed inset-0 z-[240] bg-black/65 p-3 flex items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[240] bg-black/65 p-3 flex items-center justify-center">
       <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden">
         <header className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
           <h3 className="font-bold text-lg">{title}</h3>
@@ -326,7 +326,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
             <button
               type="button"
               onClick={() => setShowRequest(true)}
-              className="px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold flex items-center gap-2"
+              className="px-3 py-2 rounded-xl accent-fill text-white text-sm font-semibold flex items-center gap-2"
             >
               <Plus className="w-4 h-4" /> Solicitar material
             </button>
@@ -404,17 +404,17 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
                   <div className="flex flex-wrap gap-2">
                     {canManage && item.estado === 'solicitado' && (
                       <>
-                        <button onClick={() => openAction('approve', item)} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold flex items-center gap-1"><Check className="w-3.5 h-3.5" />Aprobar</button>
+                        <button onClick={() => openAction('approve', item)} className="px-3 py-1.5 rounded-lg accent-fill text-white text-xs font-semibold flex items-center gap-1"><Check className="w-3.5 h-3.5" />Aprobar</button>
                         <button onClick={() => openAction('reject', item)} className="px-3 py-1.5 rounded-lg border border-red-300 text-red-600 text-xs font-semibold flex items-center gap-1"><XCircle className="w-3.5 h-3.5" />Rechazar</button>
                       </>
                     )}
 
                     {canManage && ['aprobado', 'entrega_parcial'].includes(item.estado) && (
-                      <button onClick={() => openAction('deliver', item)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold flex items-center gap-1"><Send className="w-3.5 h-3.5" />Entregar</button>
+                      <button onClick={() => openAction('deliver', item)} className="px-3 py-1.5 rounded-lg accent-fill text-white text-xs font-semibold flex items-center gap-1"><Send className="w-3.5 h-3.5" />Entregar</button>
                     )}
 
                     {canUse && available > 0 && ['entregado', 'en_uso'].includes(item.estado) && (
-                      <button onClick={() => openAction('use', item)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Registrar uso</button>
+                      <button onClick={() => openAction('use', item)} className="px-3 py-1.5 rounded-lg accent-fill text-white text-xs font-semibold">Registrar uso</button>
                     )}
 
                     {canManage && available > 0 && ['entregado', 'en_uso'].includes(item.estado) && (
@@ -436,7 +436,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
           footer={
             <>
               <button type="button" onClick={closeRequest} disabled={busy} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 font-semibold">Cancelar</button>
-              <button type="button" onClick={submitRequest} disabled={busy || !selectedProduct} className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50">{busy ? 'Solicitando...' : 'Solicitar'}</button>
+              <button type="button" onClick={submitRequest} disabled={busy || !selectedProduct} className="px-4 py-2 rounded-xl accent-fill text-white font-semibold disabled:opacity-50">{busy ? 'Solicitando...' : 'Solicitar'}</button>
             </>
           }
         >
@@ -476,14 +476,14 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
                           setRequestQty(1);
                           setRequestError('');
                         }}
-                        className={`w-full p-3 text-left disabled:opacity-45 ${selected ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/60'}`}
+                        className={`w-full p-3 text-left disabled:opacity-45 ${selected ? 'accent-soft dark:accent-soft' : 'hover:bg-gray-50 dark:hover:bg-gray-800/60'}`}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <p className="font-semibold truncate">{product.nombre}</p>
                             <p className="text-xs text-gray-500">{product.codigo || 'Sin código'}{product.proveedor ? ` · ${product.proveedor}` : ''}</p>
                           </div>
-                          <span className={`text-xs font-bold ${stock > 0 ? 'text-emerald-600' : 'text-red-500'}`}>Stock: {stock}</span>
+                          <span className={`text-xs font-bold ${stock > 0 ? 'accent-text' : 'text-red-500'}`}>Stock: {stock}</span>
                         </div>
                       </button>
                     );
@@ -493,9 +493,9 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
             </div>
 
             {selectedProduct && (
-              <div className="rounded-xl bg-blue-50 dark:bg-blue-950/25 border border-blue-200 dark:border-blue-900 p-3 text-sm">
+              <div className="rounded-xl accent-soft dark:accent-soft border accent-border dark:accent-border p-3 text-sm">
                 <strong>{selectedProduct.nombre}</strong>
-                <div className="text-xs text-blue-700/80 dark:text-blue-300 mt-1">Disponible: {Number(selectedProduct.stock_actual || 0)} unidad(es)</div>
+                <div className="text-xs accent-text dark:accent-text mt-1">Disponible: {Number(selectedProduct.stock_actual || 0)} unidad(es)</div>
               </div>
             )}
 
@@ -535,7 +535,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
           footer={
             <>
               <button type="button" onClick={closeAction} disabled={busy} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 font-semibold">Cancelar</button>
-              <button type="button" onClick={submitAction} disabled={busy} className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50">{busy ? 'Guardando...' : 'Confirmar'}</button>
+              <button type="button" onClick={submitAction} disabled={busy} className="px-4 py-2 rounded-xl accent-fill text-white font-semibold disabled:opacity-50">{busy ? 'Guardando...' : 'Confirmar'}</button>
             </>
           }
         >

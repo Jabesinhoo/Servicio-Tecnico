@@ -1,7 +1,11 @@
+const {custodyRequiresLocation}=require('../domain/service-site');
 'use strict';
 
 // backend/src/controllers/service-order.controller.js
 const pool = require('../db/pool');
+const {normalizeServiceSite}=require('../domain/service-site');
+const {saveOrderSite}=require('../services/service-site.service');
+const {clientProfile}=require('../services/client-profile.service');
 const { randomUUID } = require('crypto');
 const fs = require('fs');
 const fsp = require('fs/promises');
@@ -574,7 +578,7 @@ exports.getById = async (req, res) => {
     if (userRole === 'tecnico') {
       params.push(userId);
       ownershipSql = `AND (
-        so.tecnico_id = $2
+        so.tecnico_id = $2 OR EXISTS(SELECT 1 FROM service_order_intakes creator WHERE creator.service_order_id=so.id AND creator.created_by=$2)
         OR EXISTS (
           SELECT 1
           FROM service_order_team_members own_tm
@@ -1225,12 +1229,12 @@ exports.changeStatus = async (req, res) => {
         SET
           estado = $1,
           fecha_inicio = CASE
-            WHEN $1::text = 'en_ejecucion'
+            WHEN $3::boolean
               THEN COALESCE(fecha_inicio, NOW())
             ELSE fecha_inicio
           END,
           fecha_fin = CASE
-            WHEN $1::text = 'cerrada'
+            WHEN $4::boolean
               THEN NOW()
             ELSE fecha_fin
           END,
@@ -1238,7 +1242,7 @@ exports.changeStatus = async (req, res) => {
         WHERE id = $2
         RETURNING *
       `,
-      [estado, id]
+      [estado, id, estado === SERVICE_ORDER_STATES.EN_EJECUCION, estado === SERVICE_ORDER_STATES.CERRADA]
     );
 
     await client.query('COMMIT');
@@ -1611,6 +1615,7 @@ exports.myWork = async (req, res) => {
         WHERE
           so.tecnico_id = $1
           OR team_me.technician_id IS NOT NULL
+          OR EXISTS(SELECT 1 FROM service_order_intakes creator WHERE creator.service_order_id=so.id AND creator.created_by=$1)
         ORDER BY
           CASE so.estado::text
             WHEN 'asignada' THEN 1
@@ -1650,7 +1655,7 @@ exports.myWork = async (req, res) => {
 
     return res.json({
       success: true,
-      data: result.rows,
+      data: result.rows.map(order=>({...order,creator_view_only:order.tecnico_id!==userId&&!order.team_role,custody_requires_location:custodyRequiresLocation(order.service_site,CUSTODY_REQUIRE_PRECISE_LOCATION)})),
       gps,
     });
   } catch (error) {
@@ -2334,7 +2339,8 @@ exports.takeCustody = async (req, res) => {
           id,
           codigo_os,
           estado,
-          tecnico_id
+          tecnico_id,
+          service_site
         FROM service_orders
         WHERE id = $1
         FOR UPDATE
@@ -2431,13 +2437,11 @@ exports.takeCustody = async (req, res) => {
       });
     }
 
-    const location = await getRecentPreciseLocation(
-      client,
-      userId
-    );
+    const location = custodyRequiresLocation(order.service_site,CUSTODY_REQUIRE_PRECISE_LOCATION)
+      ? await getRecentPreciseLocation(client,userId) : null;
 
     if (
-      CUSTODY_REQUIRE_PRECISE_LOCATION &&
+      custodyRequiresLocation(order.service_site,CUSTODY_REQUIRE_PRECISE_LOCATION) &&
       !location
     ) {
       await safeRollback(client);
@@ -3698,6 +3702,18 @@ exports.update = async (req, res) => {
       }
     }
 
+    if (isAdmin && body.service_site !== undefined) {
+      const site = normalizeServiceSite(body.service_site);
+      if (!site) throw Object.assign(new Error('Lugar de atención no válido'),{status:400});
+      await saveOrderSite(client,id,site,userId);
+      if(intake) await client.query('UPDATE service_order_intakes SET service_site=$1::jsonb WHERE id=$2',[JSON.stringify(site),intake.id]);
+      changedFields.push('service_site');
+    }
+    if (isAdmin && intake && body.client_id !== undefined && body.client_id !== current.client_id) {
+      const profile=await clientProfile(client,body.client_id);
+      await client.query('UPDATE service_order_intakes SET client_snapshot=$1::jsonb WHERE id=$2',[JSON.stringify(profile),intake.id]);
+    }
+
     if (intake) {
       const refreshedIntake = await client.query(
         `SELECT billing_mode, invoice_reference, base_value, payment_status
@@ -3769,6 +3785,7 @@ exports.update = async (req, res) => {
     });
   } catch (error) {
     await safeRollback(client);
+    if(error.status===400)return res.status(400).json({message:error.message,code:error.code});
     console.error('Error updating service order:', error);
 
     if (
@@ -4009,8 +4026,8 @@ exports.setServiceGeofence = async (req, res) => {
   try {
     if (!isAdminRole(req)) return res.status(403).json({ success: false, message: 'Solo administrador' });
     const { id } = req.params;
-    const latitude = Number(req.body?.latitude);
-    const longitude = Number(req.body?.longitude);
+    const latitude = req.body?.latitude === null || req.body?.latitude === undefined || String(req.body.latitude).trim() === '' ? NaN : Number(req.body.latitude);
+    const longitude = req.body?.longitude === null || req.body?.longitude === undefined || String(req.body.longitude).trim() === '' ? NaN : Number(req.body.longitude);
     const radiusM = Number(req.body?.radius_m || 150);
     if (!isUuid(id) || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180 || !Number.isFinite(radiusM) || radiusM < 25 || radiusM > 2000) {
       return res.status(400).json({ success: false, message: 'Coordenadas o radio no válidos' });
@@ -4036,8 +4053,10 @@ exports.markEnRoute = async (req, res) => {
   try {
     if (!isTechnicianRole(req)) return res.status(403).json({ success: false, message: 'Solo técnico' });
     const { id } = req.params;
-    const own = await pool.query(`SELECT id FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1`, [id, req.user.id]);
+    const own = await pool.query(`SELECT id, service_site FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1`, [id, req.user.id]);
     if (!own.rows[0]) return res.status(404).json({ success: false, message: 'Servicio no asignado a este técnico' });
+    const mode=({customer:'external',other:'external',workshop:'local'})[own.rows[0].service_site?.mode]||own.rows[0].service_site?.mode;
+    if(mode!=='external') return res.status(409).json({success:false,code:'VISIT_MODE_REQUIRED',message:mode?'La llegada GPS solo aplica a visitas externas.':'Administración debe configurar la modalidad y el punto del servicio.'});
     await pool.query(
       `INSERT INTO service_order_visit_events (id, service_order_id, tecnico_id, event_type, created_at)
        VALUES ($1,$2,$3,'en_camino',NOW())`,
@@ -4056,12 +4075,14 @@ exports.markArrived = async (req, res) => {
     if (!isTechnicianRole(req)) return res.status(403).json({ success: false, message: 'Solo técnico' });
     const { id } = req.params;
     await client.query('BEGIN');
-    const own = await client.query(`SELECT id FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1 FOR UPDATE`, [id, req.user.id]);
+    const own = await client.query(`SELECT id, service_site FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1 FOR UPDATE`, [id, req.user.id]);
     if (!own.rows[0]) { await safeRollback(client); return res.status(404).json({ success: false, message: 'Servicio no asignado a este técnico' }); }
 
+    const mode=({customer:'external',other:'external',workshop:'local'})[own.rows[0].service_site?.mode]||own.rows[0].service_site?.mode;
+    if(mode!=='external') { await safeRollback(client); return res.status(409).json({success:false,code:'VISIT_MODE_REQUIRED',message:mode?'La llegada GPS solo aplica a visitas externas.':'Administración debe configurar la modalidad y el punto del servicio.'}); }
     const fenceResult = await client.query(`SELECT * FROM service_order_geofences WHERE service_order_id=$1 LIMIT 1`, [id]);
     const fence = fenceResult.rows[0];
-    if (!fence) { await safeRollback(client); return res.status(409).json({ success: false, code: 'GEOFENCE_NOT_CONFIGURED', message: 'La ubicación objetivo del servicio todavía no está configurada' }); }
+    if (!fence) { await safeRollback(client); return res.status(409).json({ success: false, code: 'GEOFENCE_NOT_CONFIGURED', message: 'Administración debe confirmar el punto de esta visita en Mis servicios > Punto del servicio.' }); }
 
     const location = await getRecentPreciseLocation(client, req.user.id);
     if (!location) { await safeRollback(client); return res.status(409).json({ success: false, code: 'TRUSTED_PRECISE_LOCATION_REQUIRED', message: 'No fue posible validar una ubicación precisa y confiable para confirmar la llegada' }); }

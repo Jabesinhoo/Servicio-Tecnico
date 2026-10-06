@@ -222,6 +222,9 @@ export function ThemeProvider({ children }) {
         root.style.setProperty('--color-primary-hex', hex);
         root.style.setProperty('--color-primary-hover', `rgb(${hoverRgb})`);
         root.style.setProperty('--color-primary-light', `rgba(${primaryRgb}, 0.15)`);
+        const linear = primary.map(v => { const c=v/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4); });
+        const luminance=.2126*linear[0]+.7152*linear[1]+.0722*linear[2];
+        root.style.setProperty('--color-on-primary', luminance>.179 ? '#111827' : '#ffffff');
 
         localStorage.setItem('themeColor', color);
     }, [color, customColor]);
@@ -307,6 +310,7 @@ export function ThemeProvider({ children }) {
         FONT_FAMILIES,
         FONT_SIZES,
 
+        primaryColor: getColor(),
         isDark: theme === 'dark',
         getColor,
     };
@@ -317,6 +321,8 @@ export function ThemeProvider({ children }) {
     );
 }
 
+// Provider and its hook intentionally share this module.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
     const context = useContext(ThemeContext);
 

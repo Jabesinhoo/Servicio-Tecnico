@@ -2,64 +2,72 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Building, Phone, Mail, MapPin, FileText, CreditCard, Calendar, DollarSign, CheckCircle, XCircle } from 'lucide-react';
 import api from '../../../services/api';
+import ClientProfilePanel from '../servicios/components/ClientProfilePanel';
 
-const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
+const ClienteDetailModal = ({ isOpen, onClose, clienteId }) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  const [profile,setProfile]=useState(null);
+  const [error,setError]=useState('');
+  const [statsWarning,setStatsWarning]=useState('');
 
   useEffect(() => {
-    if (isOpen && clienteId) {
-      fetchClienteStats();
-    }
-  }, [isOpen, clienteId]);
-
-  const fetchClienteStats = async () => {
-    try {
-      setLoading(true);
-      const res = await api.get(`/api/clients/${clienteId}/stats`);
-      setStats(res.data);
-    } catch (error) {
-      console.error('Error fetching client stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if(!isOpen||!clienteId)return;
+    let active=true;
+    const id=typeof clienteId==='object'?clienteId.id:clienteId;
+    const origin=clienteId.origin||'local';
+    setLoading(true);setStats(null);setProfile(null);setError('');setStatsWarning('');
+    (async()=>{
+      try{
+        const response=await api.get(`/api/clients/${id}/profile`,{params:{origin}});
+        if(!active)return;
+        const data=response.data.data;setProfile(data);
+        setStats({cliente:data});
+        if(origin!=='melissa') {
+          try { const result=await api.get(`/api/clients/${id}/stats`);if(active)setStats({...result.data,cliente:data}); }
+          catch { if(active)setStatsWarning('La ficha está disponible. No fue posible cargar las estadísticas de servicios.'); }
+        }
+      }catch(e){if(active)setError(e.response?.data?.message||'No se pudo cargar el detalle del cliente.');}
+      finally{if(active)setLoading(false);}
+    })();
+    return ()=>{active=false;};
+  },[isOpen,clienteId]);
 
   if (!isOpen) return null;
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+      <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
         <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-8">
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 accent-border"></div>
           </div>
         </div>
       </div>
     );
   }
 
-  const cliente = stats?.cliente;
-  if (!cliente) return null;
+  const cliente = profile || stats?.cliente;
+  if (!cliente) return <div className="workflow-theme fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"><div className="bg-white dark:bg-gray-900 rounded-xl p-6"><p role="alert">{error}</p><button onClick={onClose} className="mt-4 underline">Cerrar</button></div></div>;
 
   const esJuridico = cliente.tipo_persona === 'juridica';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+    <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900">
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-              {stats.cliente.nombre_completo || stats.cliente.razon_social}
+              {cliente.nombre_completo || cliente.razon_social || [cliente.primer_nombre,cliente.segundo_nombre,cliente.primer_apellido,cliente.segundo_apellido].filter(Boolean).join(' ')}
             </h3>
             <div className="flex items-center gap-2 mt-1">
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                stats.cliente.activo 
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                cliente.activo 
+                  ? 'accent-soft accent-text dark:accent-soft dark:accent-text'
                   : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
               }`}>
-                {stats.cliente.activo ? 'Activo' : 'Inactivo'}
+                {cliente.activo ? 'Activo' : 'Inactivo'}
               </span>
               <span className="text-xs text-gray-500">
                 {esJuridico ? 'Persona Jurídica' : 'Persona Natural'}
@@ -72,10 +80,12 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
         </div>
 
         <div className="p-4 sm:p-6 space-y-6">
+          {statsWarning && <p role="status" className="text-sm text-gray-500">{statsWarning}</p>}
+          <ClientProfilePanel profile={profile} />
           {/* Información General */}
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-blue-600" />
+              <FileText className="w-4 h-4 accent-text" />
               Información General
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -110,7 +120,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
           {(cliente.telefono || cliente.email) && (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <Phone className="w-4 h-4 text-blue-600" />
+                <Phone className="w-4 h-4 accent-text" />
                 Contacto
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -146,7 +156,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
           {(cliente.direccion || cliente.ciudad) && (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-blue-600" />
+                <MapPin className="w-4 h-4 accent-text" />
                 Dirección
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -179,15 +189,15 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
           )}
 
           {/* Configuración Fiscal */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+          {clienteId.origin !== 'melissa' && <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <Building className="w-4 h-4 text-blue-600" />
+              <Building className="w-4 h-4 accent-text" />
               Configuración Fiscal
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-2">
                 {cliente.responsable_iva ? (
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <CheckCircle className="w-4 h-4 accent-text" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-600" />
                 )}
@@ -195,7 +205,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
               </div>
               <div className="flex items-center gap-2">
                 {cliente.autoretenedor ? (
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <CheckCircle className="w-4 h-4 accent-text" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-600" />
                 )}
@@ -203,7 +213,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
               </div>
               <div className="flex items-center gap-2">
                 {cliente.gran_contribuyente ? (
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <CheckCircle className="w-4 h-4 accent-text" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-600" />
                 )}
@@ -228,13 +238,13 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Crédito y Comercial */}
           {(cliente.plazo_credito > 0 || cliente.cupo_credito > 0 || cliente.lista_precios || cliente.forma_pago) && (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-blue-600" />
+                <CreditCard className="w-4 h-4 accent-text" />
                 Crédito y Comercial
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -279,9 +289,9 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
           )}
 
           {/* Estadísticas de Servicios */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+          {stats?.totalServicios !== undefined && <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-blue-600" />
+              <DollarSign className="w-4 h-4 accent-text" />
               Estadísticas de Servicios
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -290,7 +300,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
                 <p className="text-xs text-gray-500">Total Servicios</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">${stats.totalGenerado?.toLocaleString()}</p>
+                <p className="text-2xl font-bold accent-text">{stats.totalGenerado == null ? 'Sin dato' : '$'+Number(stats.totalGenerado).toLocaleString('es-CO')}</p>
                 <p className="text-xs text-gray-500">Total Generado</p>
               </div>
               <div className="text-center">
@@ -298,21 +308,21 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId, onRefresh }) => {
                 <p className="text-xs text-gray-500">Pendientes</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{stats.serviciosCompletados}</p>
+                <p className="text-2xl font-bold accent-text">{stats.serviciosCompletados}</p>
                 <p className="text-xs text-gray-500">Completados</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
               <div>
                 <p className="text-xs text-gray-500">Promedio por Servicio</p>
-                <p className="text-sm font-semibold">${stats.promedioPorServicio?.toLocaleString()}</p>
+                <p className="text-sm font-semibold">{stats.promedioPorServicio == null ? 'Sin dato' : '$'+Number(stats.promedioPorServicio).toLocaleString('es-CO')}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Servicio más caro</p>
-                <p className="text-sm font-semibold">${stats.servicioMasCaro?.toLocaleString()}</p>
+                <p className="text-sm font-semibold">{stats.servicioMasCaro == null ? 'Sin dato' : '$'+Number(stats.servicioMasCaro).toLocaleString('es-CO')}</p>
               </div>
             </div>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

@@ -1,0 +1,14 @@
+'use strict';const test=require('node:test');const assert=require('node:assert/strict');const fs=require('fs');
+const {withActor,currentActor}=require('../src/context/request-actor');const {normalizeBranding,logoUri}=require('../src/services/service-document-branding.service');
+test('el actor queda separado por petición concurrente y no se conserva en tareas sin usuario',async()=>{const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222';const values=await Promise.all([withActor(a,async()=>{await new Promise(r=>setTimeout(r,5));return currentActor();}),withActor(b,async()=>{await Promise.resolve();return currentActor();})]);assert.deepEqual(values,[a,b]);assert.equal(currentActor(),'');});
+test('rechaza identificadores de actor no válidos',()=>withActor('no-es-uuid',()=>assert.equal(currentActor(),'')));
+test('solo admite los dos logos y colores hexadecimales completos',()=>{assert.equal(normalizeBranding({logo_key:'logot'}).logo_key,'logot');assert.equal(normalizeBranding({logo_key:'logo3',accent_color:'#ff0000'}).accent_color,'#ff0000');assert.throws(()=>normalizeBranding({logo_key:'../../secrets'}));assert.throws(()=>normalizeBranding({logo_key:'logot',accent_color:'red; background:url(x)'}));assert.throws(()=>logoUri('../otro'));});
+test('logo ausente informa el archivo faltante y no fabrica una imagen',()=>{const read=fs.existsSync;fs.existsSync=()=>false;try{assert.throws(()=>logoUri('logo3'),/No se encontró logo3/);}finally{fs.existsSync=read;}});
+// Exercise the real pool adapter with a deterministic pg driver. A failed SQL
+// transaction must still permit ROLLBACK, and jobs must clear the last actor.
+test('pool registra actor, permite rollback de una transacción fallida y limpia actor de tareas',async()=>{
+ const Module=require('module');const original=Module._load;const queries=[];const fakeClient={async query(sql,values){queries.push({sql,values});if(sql==='FAIL')throw new Error('SQL falló');return {rows:[]};},release(){}};
+ Module._load=function(request,...args){if(request==='pg')return {Pool:class{async connect(){return fakeClient;}}};return original.call(this,request,...args);};
+ const target=require.resolve('../src/db/pool');const previous=require.cache[target];delete require.cache[target];let pool;try{pool=require(target);}finally{Module._load=original;}
+ try{await withActor('11111111-1111-4111-8111-111111111111',async()=>{const client=await pool.connect();await client.query('BEGIN');await assert.rejects(client.query('FAIL'));const before=queries.length;await client.query('ROLLBACK');assert.equal(queries.length,before+1);assert.equal(queries.at(-1).sql,'ROLLBACK');client.release();});await pool.query('SELECT 1');assert.equal(queries.at(-2).values[0],'');}finally{delete require.cache[target];if(previous)require.cache[target]=previous;}
+});

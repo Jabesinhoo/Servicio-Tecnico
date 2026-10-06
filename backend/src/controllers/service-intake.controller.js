@@ -1,7 +1,11 @@
 'use strict';
 
 const pool = require('../db/pool');
+const {clientProfile}=require('../services/client-profile.service');
+const {normalizeServiceSite}=require('../domain/service-site');
+const {saveOrderSite,hydrateLocalClient}=require('../services/service-site.service');
 const { randomUUID } = require('crypto');
+const {profileFromRaw}=require('../domain/worldoffice-client-profile');
 const { normalizeEquipmentIntake, receptionDraft } = require('../domain/service-equipment-intake');
 
 const UUID_RE =
@@ -201,7 +205,7 @@ async function resolveClientForIntake(client, body) {
       .filter(Boolean);
 
   if (
-    localReferenceCandidates.length
+    origin !== 'melissa' && !body?.client_external_id && localReferenceCandidates.length
   ) {
     const uniqueReferences =
       [
@@ -292,7 +296,7 @@ async function resolveClientForIntake(client, body) {
         primer_apellido,
         segundo_apellido,
         activo,
-        datos_completos
+        datos_completos, client_profile, profile_relations
       FROM sync_clientes
       WHERE id_externo = $1::bigint
         AND activo = TRUE
@@ -355,10 +359,7 @@ async function resolveClientForIntake(client, body) {
     };
   }
 
-  const snapshot =
-    body?.client_snapshot && typeof body.client_snapshot === 'object'
-      ? body.client_snapshot
-      : {};
+  const snapshot = {...profileFromRaw(syncClient.datos_completos,syncClient.profile_relations),...(syncClient.client_profile||{})};
 
   const inferredType =
     snapshot.tipo_persona === 'natural' || snapshot.tipo_persona === 'juridica'
@@ -1267,6 +1268,16 @@ exports.create = async (req, res) => {
       result.rows[0].equipment_intake = v.equipmentIntake;
     }
 
+    const profile = resolvedClient.origin === 'melissa'
+      ? {...await clientProfile(client, resolvedClient.source_reference.split(':')[1], 'melissa'), local_client_id:resolvedClient.client_id}
+      : await clientProfile(client, resolvedClient.client_id);
+    const site = normalizeServiceSite(req.body?.service_site);
+    await hydrateLocalClient(client, resolvedClient.client_id, profile);
+    await client.query('UPDATE service_order_intakes SET client_snapshot=$1::jsonb,service_site=$2::jsonb WHERE id=$3',
+      [JSON.stringify(profile),site?JSON.stringify(site):null,id]);
+    result.rows[0].client_snapshot = profile;
+    result.rows[0].service_site = site;
+
     await saveIntakeTeam(client, id, team, req.user.id);
 
     await addEvent(client, {
@@ -1309,6 +1320,7 @@ exports.create = async (req, res) => {
       await client.query('ROLLBACK');
     } catch (_) {}
 
+    if(error.status===400){return res.status(400).json({message:error.message,code:error.code});}
     console.error('Error creating service intake:', error);
 
     if (
@@ -1532,6 +1544,12 @@ exports.update = async (req, res) => {
       result.rows[0].equipment_intake = v.equipmentIntake;
     }
 
+    if (req.body?.service_site !== undefined) {
+      const site = normalizeServiceSite(req.body.service_site);
+      await client.query('UPDATE service_order_intakes SET service_site=$1::jsonb WHERE id=$2',[site?JSON.stringify(site):null,intake.id]);
+      result.rows[0].service_site = site;
+    }
+
     await addEvent(client, {
       intakeId: intake.id,
       eventType: 'intake_updated',
@@ -1558,6 +1576,7 @@ exports.update = async (req, res) => {
       await client.query('ROLLBACK');
     } catch (_) {}
 
+    if(error.status===400){return res.status(400).json({message:error.message,code:error.code});}
     console.error('Error updating service intake:', error);
 
     if (
@@ -2094,6 +2113,8 @@ console.log('👥 Getting planned team...');
       [serviceOrderId, intake.id]
     );
     console.log('✅ Intake updated to activated');
+    await saveOrderSite(client, serviceOrderId, normalizeServiceSite(intake.service_site), req.user.id);
+    if (intake.service_site) orderResult.rows[0].service_site = intake.service_site;
 
     // 9. Financial controls
     console.log('💰 Setting up financial controls...');

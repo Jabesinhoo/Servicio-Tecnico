@@ -9,6 +9,7 @@ router.use(authRequired);
 // Rutas GET
 router.get('/clients', clientController.getAll);
 router.get('/clients/search', clientController.search);
+router.get('/clients/:id/profile', clientController.getProfile);
 router.get('/clients/:id', clientController.getById);
 router.get('/clients/:id/stats', clientController.getClientStats);
 router.get('/clients/:id/service-orders', clientController.getClientServiceOrders);

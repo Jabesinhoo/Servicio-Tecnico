@@ -43,7 +43,7 @@ export default function Servicios() {
   };
 
   return (
-    <div className="responsive-page min-w-0 space-y-4 sm:space-y-5">
+    <div className="workflow-theme responsive-page min-w-0 space-y-4 sm:space-y-5">
       <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Órdenes de Servicio</h1>
@@ -51,12 +51,12 @@ export default function Servicios() {
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="flex rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden">
-            <button onClick={() => setViewMode('table')} className={`p-2 ${viewMode === 'table' ? 'bg-blue-600 text-white' : ''}`} title="Tabla"><Table2 className="w-4 h-4" /></button>
-            <button onClick={() => setViewMode('cards')} className={`p-2 ${viewMode === 'cards' ? 'bg-blue-600 text-white' : ''}`} title="Tarjetas"><LayoutGrid className="w-4 h-4" /></button>
+            <button onClick={() => setViewMode('table')} className={`p-2 ${viewMode === 'table' ? 'accent-fill text-white' : ''}`} title="Tabla"><Table2 className="w-4 h-4" /></button>
+            <button onClick={() => setViewMode('cards')} className={`p-2 ${viewMode === 'cards' ? 'accent-fill text-white' : ''}`} title="Tarjetas"><LayoutGrid className="w-4 h-4" /></button>
           </div>
           <button onClick={() => fetchServicios()} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" />Actualizar</button>
           {isAdmin && <button onClick={() => setShowIntakes(true)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 flex items-center gap-2 text-sm"><ClipboardList className="w-4 h-4" />Solicitudes previas</button>}
-          {canCreate && <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-lg bg-blue-600 text-white flex items-center gap-2 text-sm font-medium"><Plus className="w-4 h-4" />Nueva OS</button>}
+          {canCreate && <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-lg accent-fill text-white flex items-center gap-2 text-sm font-medium"><Plus className="w-4 h-4" />Nueva OS</button>}
         </div>
       </header>
 

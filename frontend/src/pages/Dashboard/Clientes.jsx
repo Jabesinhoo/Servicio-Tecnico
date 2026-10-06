@@ -329,21 +329,7 @@ const Clientes = () => {
   };
 
   const handleViewDetail = (cliente) => {
-    /*
-     * El modal actual consulta las estadísticas
-     * de la tabla clients. Todavía no admite
-     * directamente registros de sync_clientes.
-     */
-    if (cliente.origen === 'melissa') {
-      setErrorModalMessage(
-        'Este cliente proviene de World Office. Actualmente se muestra en la lista y puede buscarse, pero el detalle ampliado todavía debe adaptarse para clientes sincronizados.'
-      );
-
-      setShowErrorModal(true);
-      return;
-    }
-
-    setSelectedClienteId(cliente.id);
+    setSelectedClienteId({id:cliente.id_externo || cliente.id,origin:cliente.origen==='melissa'||/^\d+$/.test(String(cliente.id))?'melissa':'local'});
     setShowDetailModal(true);
   };
 
@@ -492,7 +478,7 @@ const Clientes = () => {
     }
 
     return (
-      <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
+      <span className="inline-flex items-center rounded-full accent-soft px-2 py-0.5 text-[11px] font-medium accent-text dark:accent-soft dark:accent-text">
         Local
       </span>
     );
@@ -509,13 +495,13 @@ const Clientes = () => {
   ) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 accent-border" />
       </div>
     );
   }
 
   return (
-    <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
+    <div className="workflow-theme responsive-page min-w-0 space-y-4 sm:space-y-6">
       {/* Encabezado */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -537,7 +523,7 @@ const Clientes = () => {
               }
               className={`rounded-md p-2 transition-colors ${
                 viewMode === 'table'
-                  ? 'bg-white text-blue-600 shadow-sm dark:bg-gray-700'
+                  ? 'bg-white accent-text shadow-sm dark:bg-gray-700'
                   : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
               }`}
               title="Vista de tabla"
@@ -552,7 +538,7 @@ const Clientes = () => {
               }
               className={`rounded-md p-2 transition-colors ${
                 viewMode === 'cards'
-                  ? 'bg-white text-blue-600 shadow-sm dark:bg-gray-700'
+                  ? 'bg-white accent-text shadow-sm dark:bg-gray-700'
                   : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
               }`}
               title="Vista de tarjetas"
@@ -583,7 +569,7 @@ const Clientes = () => {
                 setEditingCliente(null);
                 setShowFormModal(true);
               }}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              className="flex items-center gap-2 rounded-lg accent-fill px-4 py-2 text-sm font-medium text-white transition-colors hover:accent-fill"
             >
               <Plus className="h-4 w-4" />
               Nuevo cliente
@@ -603,7 +589,7 @@ const Clientes = () => {
               value={searchTerm}
               onChange={handleSearchChange}
               placeholder="Buscar por nombre, razón social, documento, teléfono o correo..."
-              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-10 text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-10 text-gray-900 focus:outline-none focus:ring-1 focus:accent-ring dark:border-gray-700 dark:bg-gray-900 dark:text-white"
             />
 
             {searchTerm && (
@@ -621,7 +607,7 @@ const Clientes = () => {
           <select
             value={origin}
             onChange={handleOriginChange}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:accent-ring dark:border-gray-700 dark:bg-gray-900 dark:text-white"
           >
             <option value="all">
               Todos los orígenes
@@ -639,7 +625,7 @@ const Clientes = () => {
           <select
             value={limit}
             onChange={handleLimitChange}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:accent-ring dark:border-gray-700 dark:bg-gray-900 dark:text-white"
           >
             <option value={25}>
               25 por página
@@ -789,8 +775,8 @@ const Clientes = () => {
                             className={`inline-flex rounded-full px-2 py-1 text-xs ${
                               cliente.tipo_persona ===
                               'juridica'
-                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                ? 'accent-soft accent-text dark:accent-soft dark:accent-text'
+                                : 'accent-soft accent-text dark:accent-soft dark:accent-text'
                             }`}
                           >
                             {cliente.tipo_persona ===
@@ -809,7 +795,7 @@ const Clientes = () => {
                                   cliente
                                 )
                               }
-                              className="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                              className="p-1 accent-text hover:accent-text dark:accent-text"
                               title="Ver detalle"
                             >
                               <Eye className="h-4 w-4" />
@@ -824,7 +810,7 @@ const Clientes = () => {
                                       cliente
                                     )
                                   }
-                                  className="p-1 text-green-600 hover:text-green-800 dark:text-green-400"
+                                  className="p-1 accent-text hover:accent-text dark:accent-text"
                                   title="Editar"
                                 >
                                   <Edit className="h-4 w-4" />
@@ -944,7 +930,7 @@ const Clientes = () => {
                   className={`min-w-9 rounded-md border px-3 py-2 text-sm font-medium ${
                     pageNumber ===
                     currentPage
-                      ? 'border-blue-600 bg-blue-600 text-white'
+                      ? 'accent-border accent-fill text-white'
                       : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800'
                   }`}
                 >

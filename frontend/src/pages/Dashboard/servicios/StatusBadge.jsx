@@ -2,13 +2,13 @@ import React from 'react';
 
 const statusConfig = {
   pendiente: ['Pendiente', 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'],
-  aprobado: ['Aprobado', 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300'],
+  aprobado: ['Aprobado', 'accent-soft accent-text dark:accent-soft dark:accent-text'],
   rechazado: ['Rechazado', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'],
-  asignada: ['Asignada', 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'],
-  en_ejecucion: ['En ejecución', 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'],
+  asignada: ['Asignada', 'accent-soft accent-text dark:accent-soft dark:accent-text'],
+  en_ejecucion: ['En ejecución', 'accent-soft accent-text dark:accent-soft dark:accent-text'],
   en_espera: ['En espera', 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'],
   cancelado: ['Cancelada', 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-300'],
-  cerrada: ['Cerrada', 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'],
+  cerrada: ['Cerrada', 'accent-soft accent-text dark:accent-soft dark:accent-text'],
 };
 
 const StatusBadge = ({ status }) => {

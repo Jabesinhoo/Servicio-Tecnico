@@ -1679,3 +1679,19 @@ input[type="radio"]:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+@utility accent-text { color: var(--color-primary); }
+@utility accent-border { border-color: rgba(var(--color-primary-rgb), .55); }
+@utility accent-ring { --tw-ring-color: var(--color-primary); }
+@utility accent-soft { background-color: var(--color-primary-light); }
+@utility accent-fill { background-color: var(--color-primary); color: var(--color-on-primary, #fff); }
+.accent-fill { color: var(--color-on-primary, #fff) !important; }
+.accent-fill:hover { background-color: var(--color-primary-hover); }
+.workflow-theme button:not(.accent-fill):not([class~="text-red-600"]):not([class~="bg-red-600"]) { color: var(--color-primary); }
+.workflow-theme button:not(.accent-fill):not([class~="border-red-300"]) { border-color: rgba(var(--color-primary-rgb), .45); }
+.workflow-theme button:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+.workflow-theme .fc-button-primary { background: var(--color-primary) !important; border-color: var(--color-primary) !important; color: var(--color-on-primary, #fff) !important; }
+.workflow-theme .fc-event { color: var(--color-on-primary, #fff); }
+
+.service-signature { background: #fff !important; touch-action: none; }

@@ -180,11 +180,11 @@ export default function AuditTimelineModal({
   if (!service) return null;
 
   return (
-    <div className="fixed inset-0 z-[145] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[145] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-4xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide font-semibold text-violet-600">
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text">
               {service.codigo_os}
             </p>
 
@@ -253,8 +253,8 @@ export default function AuditTimelineModal({
                       key={`${item.created_at}-${item.event_type}-${index}`}
                       className="relative pl-10"
                     >
-                      <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 flex items-center justify-center">
-                        <FileText className="w-4 h-4 text-violet-600 dark:text-violet-300" />
+                      <div className="absolute left-0 top-1 w-8 h-8 rounded-full accent-soft dark:accent-soft border accent-border dark:accent-border flex items-center justify-center">
+                        <FileText className="w-4 h-4 accent-text dark:accent-text" />
                       </div>
 
                       <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-4">

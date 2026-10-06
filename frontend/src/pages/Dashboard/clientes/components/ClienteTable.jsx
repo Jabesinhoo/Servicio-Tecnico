@@ -6,7 +6,7 @@ const ClienteTable = ({ clientes, loading, onViewDetail, onEdit, onDelete }) => 
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 accent-border mx-auto"></div>
         <p className="text-sm text-gray-500 mt-2">Cargando clientes...</p>
       </div>
     );
@@ -68,14 +68,14 @@ const ClienteTable = ({ clientes, loading, onViewDetail, onEdit, onDelete }) => 
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={() => onViewDetail(cliente.id)}
-                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 transition-colors"
+                    className="accent-text hover:accent-text dark:accent-text transition-colors"
                     title="Ver detalle"
                   >
                     <Eye className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => onEdit(cliente)}
-                    className="text-green-600 hover:text-green-800 dark:text-green-400 transition-colors"
+                    className="accent-text hover:accent-text dark:accent-text transition-colors"
                     title="Editar"
                   >
                     <Edit className="w-4 h-4" />

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const {withActor}=require('../context/request-actor');
 
 const authRequired = (req, res, next) => {
     const jwtSecret = process.env.JWT_SECRET;
@@ -35,7 +36,7 @@ const authRequired = (req, res, next) => {
 
         req.user = decoded;
 
-        return next();
+        return withActor(decoded.id,()=>next());
     } catch (error) {
         console.error(
             'Error verificando token:',

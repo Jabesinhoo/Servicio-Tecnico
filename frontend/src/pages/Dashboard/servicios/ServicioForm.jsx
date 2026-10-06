@@ -383,7 +383,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
     ];
 
     return (
-        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+        <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
                 {/* Header con stepper */}
                 <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
@@ -407,14 +407,14 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                             <div key={step} className="flex items-center">
                                 <div
                                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${currentStep >= step
-                                        ? 'bg-blue-600 text-white'
+                                        ? 'accent-fill text-white'
                                         : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
                                         }`}
                                 >
                                     {step}
                                 </div>
                                 {step < 3 && (
-                                    <div className={`w-16 h-0.5 mx-2 ${currentStep > step ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                                    <div className={`w-16 h-0.5 mx-2 ${currentStep > step ? 'accent-fill' : 'bg-gray-200 dark:bg-gray-700'
                                         }`} />
                                 )}
                             </div>
@@ -439,7 +439,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                     {currentStep === 1 && (
                         <div>
                             <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                <User className="w-5 h-5 text-blue-600" />
+                                <User className="w-5 h-5 accent-text" />
                                 Seleccionar Cliente
                                 <span className="text-xs text-red-500 font-normal ml-2">* Obligatorio</span>
                             </h4>
@@ -452,11 +452,11 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                             )}
 
                             {clienteSeleccionado && (
-                                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                                <div className="mb-4 p-3 accent-soft border accent-border rounded-lg flex items-center justify-between">
                                     <div>
-                                        <p className="text-sm font-medium text-green-800">Cliente seleccionado</p>
-                                        <p className="text-sm text-green-700">{formData.cliente_nombre}</p>
-                                        <p className="text-xs text-green-600 mt-1">
+                                        <p className="text-sm font-medium accent-text">Cliente seleccionado</p>
+                                        <p className="text-sm accent-text">{formData.cliente_nombre}</p>
+                                        <p className="text-xs accent-text mt-1">
                                             Tel: {clienteSeleccionado.telefono || 'N/A'} |
                                             Doc: {clienteSeleccionado.documento || 'N/A'} |
                                             Ciudad: {clienteSeleccionado.ciudad || 'N/A'}
@@ -496,7 +496,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                                             type="button"
                                             onClick={buscarCliente}
                                             disabled={searchingClient}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                                            className="px-4 py-2 accent-fill text-white rounded-lg hover:accent-fill disabled:opacity-50 flex items-center gap-2"
                                         >
                                             {searchingClient ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                                             Buscar
@@ -544,7 +544,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                         <div className="space-y-6">
                             <div>
                                 <h4 className="text-md font-semibold mb-4 flex items-center gap-2">
-                                    <MapPin className="w-5 h-5 text-blue-600" />
+                                    <MapPin className="w-5 h-5 accent-text" />
                                     Ubicación del Servicio
                                 </h4>
                                 <div className="space-y-4">
@@ -589,7 +589,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
 
                             <div>
                                 <h4 className="text-md font-semibold mb-4 flex items-center gap-2">
-                                    <Calendar className="w-5 h-5 text-blue-600" />
+                                    <Calendar className="w-5 h-5 accent-text" />
                                     Programación
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -651,7 +651,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
 
                             <div>
                                 <h4 className="text-md font-semibold mb-4 flex items-center gap-2">
-                                    <FileText className="w-5 h-5 text-blue-600" />
+                                    <FileText className="w-5 h-5 accent-text" />
                                     Notas
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -673,10 +673,10 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                         <div>
                             <div className="flex items-center justify-between mb-4">
                                 <h4 className="text-md font-semibold flex items-center gap-2">
-                                    <Wrench className="w-5 h-5 text-blue-600" />
+                                    <Wrench className="w-5 h-5 accent-text" />
                                     Servicios a Realizar
                                 </h4>
-                                <button type="button" onClick={agregarServicio} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1">
+                                <button type="button" onClick={agregarServicio} className="px-3 py-1.5 text-sm accent-fill text-white rounded-lg hover:accent-fill flex items-center gap-1">
                                     <Plus className="w-4 h-4" /> Agregar servicio
                                 </button>
                             </div>
@@ -685,7 +685,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
 
                             {loadingTipos && (
                                 <div className="text-center py-4">
-                                    <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" />
+                                    <Loader2 className="w-6 h-6 animate-spin accent-text mx-auto" />
                                     <p className="text-sm text-gray-500 mt-2">Cargando tipos de servicio...</p>
                                 </div>
                             )}
@@ -769,7 +769,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                                                     type="checkbox"
                                                     checked={servicio.requiere_diagnostico}
                                                     onChange={(e) => handleServicioChange(idx, 'requiere_diagnostico', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600"
+                                                    className="w-4 h-4 accent-text"
                                                 />
                                                 <span className="text-sm">Requiere diagnóstico</span>
                                             </label>
@@ -778,7 +778,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                                                     type="checkbox"
                                                     checked={servicio.requiere_repuestos}
                                                     onChange={(e) => handleServicioChange(idx, 'requiere_repuestos', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600"
+                                                    className="w-4 h-4 accent-text"
                                                 />
                                                 <span className="text-sm">Requiere repuestos</span>
                                             </label>
@@ -787,7 +787,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                                         {servicio.requiere_repuestos && (
                                             <div className="md:col-span-2">
                                                 <label className="block text-sm font-medium mb-1 flex items-center gap-2">
-                                                    <Package className="w-4 h-4 text-blue-600" />
+                                                    <Package className="w-4 h-4 accent-text" />
                                                     Repuestos necesarios *
                                                 </label>
                                                 <textarea
@@ -815,11 +815,11 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                         )}
                         <div className="flex-1"></div>
                         {currentStep < 3 ? (
-                            <button type="button" onClick={nextStep} className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                            <button type="button" onClick={nextStep} className="px-4 py-2 text-white accent-fill rounded-lg hover:accent-fill">
                                 Siguiente
                             </button>
                         ) : (
-                            <button type="submit" disabled={loading} className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2">
+                            <button type="submit" disabled={loading} className="px-4 py-2 text-white accent-fill rounded-lg hover:accent-fill disabled:opacity-50 flex items-center gap-2">
                                 <Save className="w-4 h-4" />
                                 {loading ? 'Guardando...' : 'Crear Orden'}
                             </button>

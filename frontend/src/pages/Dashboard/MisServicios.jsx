@@ -1,3 +1,6 @@
+import ResponsiveSignaturePad from '../../components/ui/ResponsiveSignaturePad';
+import ServiceActivityModal from './servicios/components/ServiceActivityModal';
+import {serviceMode} from './servicios/serviceLocation';
 // frontend/src/pages/Dashboard/MisServicios.jsx
 
 import React, {
@@ -38,6 +41,9 @@ import {
 
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import ServiceSiteModal from './servicios/components/ServiceSiteModal';
+import ServiceClientSnapshot from './servicios/components/ServiceClientSnapshot';
+import { useSearchParams } from 'react-router-dom';
 import TechnicalStatisticsPanel from './reportes/TechnicalStatisticsPanel';
 import QualityDashboardPanel from './reportes/QualityDashboardPanel';
 import FinalDeliveryModal from './servicios/components/FinalDeliveryModal';
@@ -122,7 +128,7 @@ const formatDateTime = (value) => {
 };
 
 const fullClientAddress = (service) =>
-  [service?.cliente_direccion, service?.cliente_ciudad]
+  [service?.service_site?.address || service?.cliente_direccion, service?.service_site?.city || service?.cliente_ciudad]
     .filter(Boolean)
     .join(', ') || 'Dirección no registrada';
 
@@ -159,7 +165,7 @@ const integrityBadge = (tech) => {
     return { label: 'Red anónima bloqueada', cls: 'text-red-600 dark:text-red-400' };
   }
   if (device === 'pending') return { label: 'Dispositivo pendiente', cls: 'text-amber-600 dark:text-amber-400' };
-  if (status === 'trusted') return { label: 'GPS validado', cls: 'text-emerald-600 dark:text-emerald-400' };
+  if (status === 'trusted') return { label: 'GPS validado', cls: 'accent-text dark:accent-text' };
   if (status === 'suspicious') return { label: 'GPS para revisar', cls: 'text-amber-600 dark:text-amber-400' };
   if (status === 'rejected') return { label: 'GPS rechazado', cls: 'text-red-600 dark:text-red-400' };
   return { label: 'GPS sin validar', cls: 'text-slate-500' };
@@ -296,7 +302,7 @@ const ServiceCard = ({
   busyId,
   gps,
 }) => {
-  const action = isAdmin ? null : getActionState(service);
+  const action = isAdmin || service.creator_view_only ? null : getActionState(service);
   const busy = busyId === service.id;
 
   return (
@@ -317,14 +323,14 @@ const ServiceCard = ({
             </h2>
 
             {isAdmin && (
-              <p className="mt-1 text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+              <p className="mt-1 text-sm font-medium accent-text dark:accent-text flex items-center gap-1.5">
                 <UserRoundCog className="w-4 h-4 shrink-0" />
                 <span className="truncate">{technicianName(service)}</span>
               </p>
             )}
           </div>
 
-          <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+          <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold accent-soft accent-text dark:accent-soft dark:accent-text">
             {STATUS_LABELS[service.estado] || service.estado}
           </span>
         </div>
@@ -358,8 +364,8 @@ const ServiceCard = ({
           {service.team_role && (
             <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${
               service.team_role === 'primary'
-                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                ? 'accent-soft accent-text dark:accent-soft dark:accent-text'
+                : 'accent-soft accent-text dark:accent-soft dark:accent-text'
             }`}>
               <UsersRound className="w-3.5 h-3.5" />
               {service.team_role === 'primary'
@@ -369,21 +375,21 @@ const ServiceCard = ({
           )}
 
           {Number(service.team_size || 0) > 1 && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium accent-soft accent-text dark:accent-soft dark:accent-text">
               <UsersRound className="w-3.5 h-3.5" />
               {service.team_size} técnicos
             </span>
           )}
 
           {service.has_custody && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium accent-soft accent-text dark:accent-soft dark:accent-text">
               <ShieldCheck className="w-3.5 h-3.5" />
               Custodia activa
             </span>
           )}
 
           {service.reception_checklist_status && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium accent-soft accent-text dark:accent-soft dark:accent-text">
               <ClipboardCheck className="w-3.5 h-3.5" />
               {CHECKLIST_LABELS[service.reception_checklist_status] ||
                 service.reception_checklist_status}
@@ -392,21 +398,21 @@ const ServiceCard = ({
 
 
           {Number(service.reception_evidence_count || 0) > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300">
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium accent-soft accent-text dark:accent-soft dark:accent-text">
               <Camera className="w-3.5 h-3.5" />
               {service.reception_evidence_count} evidencia(s) inicial(es)
             </span>
           )}
 
           {service.reception_act_signed && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium accent-soft accent-text dark:accent-soft dark:accent-text">
               <PenLine className="w-3.5 h-3.5" />
               Acta firmada
             </span>
           )}
 
           {service.diagnosis_status && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium accent-soft accent-text dark:accent-soft dark:accent-text">
               <FileText className="w-3.5 h-3.5" />
               Diagnóstico {service.diagnosis_status === 'confirmed' ? 'confirmado' : 'en borrador'}
             </span>
@@ -415,7 +421,7 @@ const ServiceCard = ({
           {service.authorization_status && (
             <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${
               service.authorization_status === 'approved'
-                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                ? 'accent-soft accent-text dark:accent-soft dark:accent-text'
                 : service.authorization_status === 'rejected'
                   ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
                   : service.authorization_status === 'pending'
@@ -431,45 +437,45 @@ const ServiceCard = ({
 
       {isAdmin && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" onClick={() => onTeamWork(service)} className="min-h-11 rounded-xl border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onTeamWork(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <UsersRound className="w-4 h-4" /> Equipo / bitácora
           </button>
 
-          <button type="button" onClick={() => onClosure(service)} className="min-h-11 rounded-xl border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onClosure(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <PackageCheck className="w-4 h-4" /> Cierre / Dirección Técnica
           </button>
 
-          <button type="button" onClick={() => onFinalDelivery(service)} className="min-h-11 rounded-xl border border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onFinalDelivery(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <PackageCheck className="w-4 h-4" /> Entrega final
           </button>
 
-          <button type="button" onClick={() => onAudit(service)} className="min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onAudit(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <FileText className="w-4 h-4" /> Auditoría
           </button>
 
-          <button type="button" onClick={() => onDocuments(service)} className="min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onDocuments(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <FileText className="w-4 h-4" /> Documentos PDF
           </button>
-          <button type="button" onClick={() => onConfigureGeofence(service)} className="min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onConfigureGeofence(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <MapPin className="w-4 h-4" /> Punto del servicio
           </button>
           {service.reception_checklist_id && (
-            <button type="button" onClick={() => onChecklist(service)} className="min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => onChecklist(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
               <Eye className="w-4 h-4" /> Ver checklist
             </button>
           )}
           {Number(service.reception_evidence_count || 0) > 0 && (
-            <button type="button" onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border border-cyan-300 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
               <Camera className="w-4 h-4" /> Evidencias iniciales
             </button>
           )}
           {service.reception_act_signed && (
-            <button type="button" onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
               <PenLine className="w-4 h-4" /> Acta de recibo
             </button>
           )}
           {(service.diagnosis_status || Number(service.diagnosis_evidence_count || 0) > 0) && (
-            <button type="button" onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-semibold px-4 flex items-center justify-center gap-2 sm:col-span-2">
+            <button type="button" onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2 sm:col-span-2">
               <FileText className="w-4 h-4" /> Diagnóstico / resultado
             </button>
           )}
@@ -482,24 +488,26 @@ const ServiceCard = ({
         </div>
       )}
 
-      {!isAdmin && ['asignada', 'en_ejecucion', 'en_espera'].includes(service.estado) && service.assignment_status === 'aceptada' && (
+      <p className="px-4 py-2 text-sm">Modalidad: {({remote:'Remoto',local:'En el local',external:'Visita externa'})[serviceMode(service.service_site)] || 'Pendiente de configurar por administración'}</p>
+      {!service.service_site && !isAdmin && !service.creator_view_only && <p className="px-4 pb-3 text-sm text-amber-700">Solicita a administración configurar la modalidad y, si es visita externa, el punto del servicio.</p>}
+      {!isAdmin && !service.creator_view_only && serviceMode(service.service_site)==='external' && ['asignada', 'en_ejecucion', 'en_espera'].includes(service.estado) && service.assignment_status === 'aceptada' && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" disabled={busy} onClick={() => onEnRoute(service)} className="min-h-11 rounded-xl border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-semibold px-4">
+          <button type="button" disabled={busy} onClick={() => onEnRoute(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4">
             En camino
           </button>
-          <button type="button" disabled={busy} onClick={() => onArrived(service)} className="min-h-11 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-semibold px-4">
+          <button type="button" disabled={busy} onClick={() => onArrived(service)} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4">
             Llegué al sitio
           </button>
         </div>
       )}
 
 
-      {!isAdmin && ['en_ejecucion', 'en_espera'].includes(service.estado) && service.has_custody && (
+      {!isAdmin && !service.creator_view_only && ['en_ejecucion', 'en_espera'].includes(service.estado) && service.has_custody && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" disabled={busy} onClick={() => onEvidence(service, 'diagnosis')} className="min-h-11 rounded-xl border border-cyan-300 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" disabled={busy} onClick={() => onEvidence(service, 'diagnosis')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <Camera className="w-4 h-4" /> Evidencias diagnóstico
           </button>
-          <button type="button" disabled={busy} onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" disabled={busy} onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <FileText className="w-4 h-4" /> Diagnóstico / resultado
           </button>
           {service.diagnosis_status === 'confirmed' && (
@@ -510,13 +518,14 @@ const ServiceCard = ({
         </div>
       )}
 
-      {!isAdmin && (
+      {service.creator_view_only&&<div className="border-t p-3 grid grid-cols-2 gap-2"><button type="button" onClick={()=>onAudit(service)} className="rounded-xl border p-3">Historial de acciones</button><button type="button" onClick={()=>onDocuments(service)} className="rounded-xl border p-3">Documentos PDF</button></div>}
+      {!isAdmin && !service.creator_view_only && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
             <button
               type="button"
               onClick={() => onTeamWork(service)}
-              className="w-full min-h-11 rounded-xl border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
             >
               <NotebookPen className="w-4 h-4" />
               Equipo y bitácora
@@ -525,7 +534,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onClosure(service)}
-              className="w-full min-h-11 rounded-xl border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
             >
               <PackageCheck className="w-4 h-4" />
               Cierre técnico
@@ -534,7 +543,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onFinalDelivery(service)}
-              className="w-full min-h-11 rounded-xl border border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
             >
               <PackageCheck className="w-4 h-4" />
               Entrega final
@@ -543,7 +552,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onAudit(service)}
-              className="w-full min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4" />
               Auditoría
@@ -552,7 +561,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onDocuments(service)}
-              className="w-full min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4" />
               Documentos PDF
@@ -569,7 +578,7 @@ const ServiceCard = ({
                 type="button"
                 disabled={busy}
                 onClick={() => onAccept(service)}
-                className="min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+                className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Aceptar servicio
@@ -589,17 +598,17 @@ const ServiceCard = ({
 
           {action === 'take_custody' && (
             <div className="space-y-2">
-              {!gps?.valid_for_custody && (
+              {(service.custody_requires_location ?? !['remote','local'].includes(serviceMode(service.service_site))) && !gps?.valid_for_custody && (
                 <p className="text-xs text-amber-700 dark:text-amber-300">
-                  Para validar la custodia, habilita la ubicación precisa del dispositivo y espera unos segundos.
+                  Esta visita requiere una ubicación precisa. Si el equipo solo obtiene una ubicación aproximada, usa el servicio desde un celular con ubicación precisa habilitada.
                 </p>
               )}
 
               <button
                 type="button"
-                disabled={busy || !gps?.valid_for_custody}
+                disabled={busy || ((service.custody_requires_location ?? !['remote','local'].includes(serviceMode(service.service_site))) && !gps?.valid_for_custody)}
                 onClick={() => onTakeCustody(service)}
-                className="w-full min-h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+                className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
               >
                 <ShieldCheck className="w-4 h-4" />
                 Tomar custodia del equipo
@@ -612,7 +621,7 @@ const ServiceCard = ({
               type="button"
               disabled={busy}
               onClick={() => onChecklist(service)}
-              className="w-full min-h-11 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
             >
               <ClipboardCheck className="w-4 h-4" />
               Completar checklist de recepción
@@ -620,17 +629,17 @@ const ServiceCard = ({
           )}
 
           {action === 'reception_evidence' && (
-            <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="w-full min-h-11 rounded-xl bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
               <Camera className="w-4 h-4" /> Tomar evidencias iniciales
             </button>
           )}
 
           {action === 'sign_reception_act' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border border-cyan-300 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 font-semibold px-4 flex items-center justify-center gap-2">
+              <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
                 <Camera className="w-4 h-4" /> Revisar evidencias
               </button>
-              <button type="button" disabled={busy} onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
+              <button type="button" disabled={busy} onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
                 <PenLine className="w-4 h-4" /> Firmar acta de recibo
               </button>
             </div>
@@ -641,7 +650,7 @@ const ServiceCard = ({
               type="button"
               disabled={busy}
               onClick={() => onChangeStatus(service, 'en_ejecucion')}
-              className="w-full min-h-11 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
             >
               <PlayCircle className="w-4 h-4" />
               Iniciar servicio
@@ -687,7 +696,7 @@ const ServiceCard = ({
               type="button"
               disabled={busy}
               onClick={() => onChangeStatus(service, 'en_ejecucion')}
-              className="w-full min-h-11 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
             >
               <PlayCircle className="w-4 h-4" />
               Reanudar servicio
@@ -721,7 +730,7 @@ const ServiceDetailModal = ({ service, isAdmin, onClose }) => {
   if (!service) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/55 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="workflow-theme fixed inset-0 z-[80] bg-black/55 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -746,12 +755,14 @@ const ServiceDetailModal = ({ service, isAdmin, onClose }) => {
             <Info label="Checklist" value={CHECKLIST_LABELS[service.reception_checklist_status] || service.reception_checklist_status || 'Pendiente'} />
             <Info label="Fecha agendada" value={formatDateTime(service.fecha_agendada)} />
             <Info label="Custodia desde" value={formatDateTime(service.custody_since)} />
-            <Info label="Teléfono cliente" value={service.cliente_telefono || '—'} />
+            <Info label="Teléfono cliente" value={service.service_site?.contact_phone || service.cliente_telefono || '—'} />
           </div>
 
           <section className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
-            <h4 className="font-semibold text-slate-900 dark:text-white">Ubicación del cliente</h4>
+            <h4 className="font-semibold text-slate-900 dark:text-white">Lugar de atención</h4>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 break-words">{fullClientAddress(service)}</p>
+            {service.service_site && <div className="mt-2 text-sm space-y-1"><p>Contacto: {service.service_site.contact_name || '—'} · {service.service_site.contact_phone || '—'}</p><p>{service.service_site.instructions}</p>{serviceMode(service.service_site)==='external' && <a className="accent-text underline" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${service.service_site.latitude},${service.service_site.longitude}`}>Ver punto del servicio</a>}</div>}
+            <ServiceClientSnapshot serviceId={service.id} />
           </section>
 
           <section className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
@@ -788,7 +799,7 @@ const ImpedimentModal = ({ service, value, onChange, onClose, onConfirm, busy })
   if (!service) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[90] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[90dvh] sm:max-w-lg bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex justify-between gap-3">
           <div>
@@ -979,7 +990,7 @@ const ChecklistModal = ({ service, isAdmin, onClose, onRefresh }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[95] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="workflow-theme fixed inset-0 z-[95] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:max-w-4xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1003,7 +1014,7 @@ const ChecklistModal = ({ service, isAdmin, onClose, onRefresh }) => {
           ) : (
             <>
               {form.status === 'confirmed' && (
-                <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm text-emerald-700 dark:text-emerald-300 flex gap-2">
+                <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-3 text-sm accent-text dark:accent-text flex gap-2">
                   <BadgeCheck className="w-5 h-5 shrink-0" />
                   <div>
                     <p className="font-semibold">Recepción confirmada</p>
@@ -1067,8 +1078,8 @@ const ChecklistModal = ({ service, isAdmin, onClose, onRefresh }) => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button type="button" onClick={onClose} disabled={saving} className="min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 font-semibold">Cancelar</button>
-              <button type="button" onClick={saveDraft} disabled={saving || loading} className="min-h-11 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Guardar borrador</button>
-              <button type="button" onClick={confirmChecklist} disabled={saving || loading} className="min-h-11 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2"><ClipboardCheck className="w-4 h-4" /> Confirmar recepción</button>
+              <button type="button" onClick={saveDraft} disabled={saving || loading} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Guardar borrador</button>
+              <button type="button" onClick={confirmChecklist} disabled={saving || loading} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2"><ClipboardCheck className="w-4 h-4" /> Confirmar recepción</button>
             </div>
           )}
         </footer>
@@ -1085,7 +1096,7 @@ const Field = ({ label, value, onChange, disabled, placeholder = '' }) => (
 );
 
 const CheckOption = ({ label, checked, disabled, onChange }) => (
-  <label className={`min-h-11 rounded-xl border px-3 py-2 flex items-center gap-3 ${checked ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/30' : 'border-slate-200 dark:border-slate-700'} ${disabled ? 'opacity-80' : 'cursor-pointer'}`}>
+  <label className={`min-h-11 rounded-xl border px-3 py-2 flex items-center gap-3 ${checked ? 'accent-border accent-soft dark:accent-soft' : 'border-slate-200 dark:border-slate-700'} ${disabled ? 'opacity-80' : 'cursor-pointer'}`}>
     <input type="checkbox" disabled={disabled} checked={checked} onChange={onChange} className="w-4 h-4 rounded" />
     <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</span>
   </label>
@@ -1262,7 +1273,7 @@ const EvidenceModal = ({ context, isAdmin, onClose, onRefresh }) => {
   const title = stage === 'reception' ? 'Evidencias iniciales' : 'Evidencias de diagnóstico';
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="workflow-theme fixed inset-0 z-[100] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:max-w-4xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 p-4 sm:px-6 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1285,13 +1296,13 @@ const EvidenceModal = ({ context, isAdmin, onClose, onRefresh }) => {
           )}
 
           {!readOnly && (
-            <section className="rounded-2xl border border-cyan-200 dark:border-cyan-900 bg-cyan-50/60 dark:bg-cyan-950/20 p-4 space-y-3">
+            <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 space-y-3">
               <div>
                 <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Nota de la evidencia</label>
                 <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ej. Golpe en esquina izquierda, cargador recibido..." className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
               </div>
 
-              <label className={`min-h-12 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-semibold px-4 flex items-center justify-center gap-2 ${uploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}>
+              <label className={`min-h-12 rounded-xl accent-fill hover:accent-fill text-white font-semibold px-4 flex items-center justify-center gap-2 ${uploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}>
                 <Camera className="w-5 h-5" />
                 {uploading ? 'Cargando fotografía...' : 'Tomar foto / elegir imagen'}
                 <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={uploadFile} className="sr-only" disabled={uploading} />
@@ -1338,88 +1349,6 @@ const EvidenceModal = ({ context, isAdmin, onClose, onRefresh }) => {
         </footer>
       </section>
     </div>
-  );
-};
-
-const SignatureCanvas = ({ onReady, clearToken = 0 }) => {
-  const canvasRef = React.useRef(null);
-  const drawingRef = React.useRef(false);
-  const [hasInk, setHasInk] = useState(false);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      const ratio = Math.max(1, window.devicePixelRatio || 1);
-      canvas.width = Math.max(1, Math.floor(rect.width * ratio));
-      canvas.height = Math.max(1, Math.floor(rect.height * ratio));
-      const ctx = canvas.getContext('2d');
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      ctx.lineWidth = 2.4;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = '#111827';
-    };
-
-    resize();
-    onReady?.(canvas, hasInk);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasInk(false);
-  }, [clearToken]);
-
-  useEffect(() => {
-    onReady?.(canvasRef.current, hasInk);
-  }, [hasInk, onReady]);
-
-  const point = (event) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  };
-
-  const start = (event) => {
-    event.preventDefault();
-    drawingRef.current = true;
-    const ctx = canvasRef.current.getContext('2d');
-    const p = point(event);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  };
-
-  const move = (event) => {
-    if (!drawingRef.current) return;
-    event.preventDefault();
-    const ctx = canvasRef.current.getContext('2d');
-    const p = point(event);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    setHasInk(true);
-  };
-
-  const stop = (event) => {
-    if (event) event.preventDefault();
-    drawingRef.current = false;
-  };
-
-  return (
-    <canvas
-      ref={canvasRef}
-      onPointerDown={start}
-      onPointerMove={move}
-      onPointerUp={stop}
-      onPointerCancel={stop}
-      onPointerLeave={stop}
-      className="w-full h-44 sm:h-52 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white touch-none"
-      style={{ touchAction: 'none' }}
-    />
   );
 };
 
@@ -1528,7 +1457,7 @@ const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh, onDocuments }
   const canSign = !isAdmin && !act && checklist?.status === 'confirmed' && Number(data?.reception_evidence_count || 0) > 0;
 
   return (
-    <div className="fixed inset-0 z-[105] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="workflow-theme fixed inset-0 z-[105] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:max-w-3xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 p-4 sm:px-6 flex items-start justify-between gap-3">
           <div>
@@ -1544,11 +1473,11 @@ const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh, onDocuments }
             <div className="py-16 text-center text-slate-500">Cargando acta...</div>
           ) : act ? (
             <>
-              <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 p-4">
-                <p className="font-bold text-emerald-800 dark:text-emerald-300">Acta firmada y bloqueada</p><button type="button" onClick={() => onDocuments?.(service)} className="mt-3 min-h-11 rounded-xl bg-emerald-600 text-white px-4 font-semibold">Generar / enviar constancia PDF</button>
-                <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">Firmó: {act.signed_by_name}</p>
-                <p className="text-sm text-emerald-700 dark:text-emerald-300">Documento: {act.signed_by_document || 'No registrado'}</p>
-                <p className="text-sm text-emerald-700 dark:text-emerald-300">Fecha: {formatDateTime(act.signed_at)}</p>
+              <div className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
+                <p className="font-bold accent-text dark:accent-text">Acta firmada y bloqueada</p><button type="button" onClick={() => onDocuments?.(service)} className="mt-3 min-h-11 rounded-xl accent-fill text-white px-4 font-semibold">Generar / enviar constancia PDF</button>
+                <p className="mt-1 text-sm accent-text dark:accent-text">Firmó: {act.signed_by_name}</p>
+                <p className="text-sm accent-text dark:accent-text">Documento: {act.signed_by_document || 'No registrado'}</p>
+                <p className="text-sm accent-text dark:accent-text">Fecha: {formatDateTime(act.signed_at)}</p>
               </div>
               {signatureUrl && (
                 <div>
@@ -1598,9 +1527,9 @@ const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh, onDocuments }
                   <div>
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Firma en pantalla *</p>
-                      <button type="button" onClick={() => setClearToken((value) => value + 1)} className="text-xs font-semibold text-blue-600 dark:text-blue-400">Limpiar firma</button>
+                      <button type="button" onClick={() => setClearToken((value) => value + 1)} className="text-xs font-semibold accent-text dark:accent-text">Limpiar firma</button>
                     </div>
-                    <SignatureCanvas onReady={handleCanvasReady} clearToken={clearToken} />
+                    <ResponsiveSignaturePad onChange={handleCanvasReady} clearToken={clearToken} />
                   </div>
                 </>
               )}
@@ -1612,7 +1541,7 @@ const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh, onDocuments }
           {canSign ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button type="button" onClick={onClose} disabled={saving} className="min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 font-semibold">Cancelar</button>
-              <button type="button" onClick={sign} disabled={saving} className="min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2"><PenLine className="w-4 h-4" /> {saving ? 'Firmando...' : 'Confirmar y firmar acta'}</button>
+              <button type="button" onClick={sign} disabled={saving} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2"><PenLine className="w-4 h-4" /> {saving ? 'Firmando...' : 'Confirmar y firmar acta'}</button>
             </div>
           ) : (
             <button type="button" onClick={onClose} className="w-full sm:w-auto sm:min-w-36 min-h-11 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold px-4">Cerrar</button>
@@ -1717,7 +1646,7 @@ const DiagnosisModal = ({ service, isAdmin, onClose, onEvidence, onRefresh }) =>
   if (!service) return null;
 
   return (
-    <div className="fixed inset-0 z-[95] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="workflow-theme fixed inset-0 z-[95] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:max-w-3xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 p-4 sm:px-6 flex items-start justify-between gap-3">
           <div>
@@ -1735,7 +1664,7 @@ const DiagnosisModal = ({ service, isAdmin, onClose, onEvidence, onRefresh }) =>
           ) : (
             <>
               {form.status === 'confirmed' && (
-                <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+                <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-3 text-sm accent-text dark:accent-text">
                   Diagnóstico confirmado el {formatDateTime(form.confirmed_at)}. La información quedó bloqueada para mantener trazabilidad.
                 </div>
               )}
@@ -1799,7 +1728,7 @@ const DiagnosisModal = ({ service, isAdmin, onClose, onEvidence, onRefresh }) =>
                 </label>
               )}
 
-              <button type="button" onClick={() => onEvidence(service, 'diagnosis')} className="w-full min-h-12 rounded-xl border border-cyan-300 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 font-semibold flex items-center justify-center gap-2">
+              <button type="button" onClick={() => onEvidence(service, 'diagnosis')} className="w-full min-h-12 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold flex items-center justify-center gap-2">
                 <Camera className="w-5 h-5" /> Ver / cargar evidencias ({evidenceCount})
               </button>
             </>
@@ -1812,8 +1741,8 @@ const DiagnosisModal = ({ service, isAdmin, onClose, onEvidence, onRefresh }) =>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button type="button" onClick={onClose} disabled={saving} className="min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 font-semibold">Cancelar</button>
-              <button type="button" onClick={save} disabled={saving || loading} className="min-h-11 rounded-xl border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-semibold flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Guardar borrador</button>
-              <button type="button" onClick={confirm} disabled={saving || loading} className="min-h-11 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2"><CheckCircle2 className="w-4 h-4" /> Confirmar diagnóstico</button>
+              <button type="button" onClick={save} disabled={saving || loading} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Guardar borrador</button>
+              <button type="button" onClick={confirm} disabled={saving || loading} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2"><CheckCircle2 className="w-4 h-4" /> Confirmar diagnóstico</button>
             </div>
           )}
         </footer>
@@ -2081,11 +2010,11 @@ const TechnicalClosureModal = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-[125] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[125] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide font-semibold text-emerald-600 dark:text-emerald-300">
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text dark:accent-text">
               {service.codigo_os}
             </p>
             <h3 className="text-lg sm:text-xl font-bold">
@@ -2248,7 +2177,7 @@ const TechnicalClosureModal = ({
                   </div>
 
                   {editable && (
-                    <label className="min-h-11 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold px-3 flex items-center justify-center gap-2 cursor-pointer">
+                    <label className="min-h-11 rounded-xl border border-dashed accent-border dark:accent-border accent-text dark:accent-text font-semibold px-3 flex items-center justify-center gap-2 cursor-pointer">
                       <Camera className="w-4 h-4" />
                       Adjuntar evidencia
                       <input
@@ -2325,7 +2254,7 @@ const TechnicalClosureModal = ({
                           'technical-close'
                         )
                       }
-                      className="w-full min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold"
+                      className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
                     >
                       Confirmar cierre técnico
                     </button>
@@ -2345,7 +2274,7 @@ const TechnicalClosureModal = ({
                           'technical-close'
                         )
                       }
-                      className="w-full min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold"
+                      className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
                     >
                       Confirmar cierre después del reproceso
                     </button>
@@ -2363,7 +2292,7 @@ const TechnicalClosureModal = ({
                           'hand-to-direction'
                         )
                       }
-                      className="w-full min-h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold"
+                      className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
                     >
                       Entregar a Dirección Técnica
                     </button>
@@ -2380,7 +2309,7 @@ const TechnicalClosureModal = ({
                           'direction-receive'
                         )
                       }
-                      className="w-full min-h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold"
+                      className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
                     >
                       Recibir equipo en Dirección Técnica
                     </button>
@@ -2445,7 +2374,7 @@ const TechnicalClosureModal = ({
                               }
                             )
                           }
-                          className="min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold"
+                          className="min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
                         >
                           Validar cierre
                         </button>
@@ -2455,7 +2384,7 @@ const TechnicalClosureModal = ({
 
                 {closure.status ===
                   'validated' && (
-                  <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-4 text-sm text-emerald-800 dark:text-emerald-300">
+                  <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 text-sm accent-text dark:accent-text">
                     Dirección Técnica validó el cierre. La orden está lista para avanzar a la entrega final al cliente.
                   </div>
                 )}
@@ -2471,7 +2400,7 @@ const TechnicalClosureModal = ({
                 {closure.status ===
                   'direction_received' &&
                   !isAdmin && (
-                  <div className="rounded-xl bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-800 dark:text-blue-300">
+                  <div className="rounded-xl accent-soft dark:accent-soft p-3 text-sm accent-text dark:accent-text">
                     Dirección Técnica tiene la custodia y está validando el cierre.
                   </div>
                 )}
@@ -2510,11 +2439,11 @@ const TechnicalStatsModal = ({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[130] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[130] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-6xl bg-slate-50 dark:bg-slate-950 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide font-semibold text-blue-600">
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text">
               Indicadores
             </p>
             <h3 className="text-lg sm:text-xl font-bold">
@@ -2754,11 +2683,11 @@ const TeamWorkModal = ({
   if (!service) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[120] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide font-semibold text-indigo-600 dark:text-indigo-300">
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text dark:accent-text">
               {service.codigo_os}
             </p>
             <h3 className="text-lg sm:text-xl font-bold">
@@ -2815,8 +2744,8 @@ const TeamWorkModal = ({
                         </div>
                         <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${
                           member.member_role === 'primary'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-blue-100 text-blue-700'
+                            ? 'accent-soft accent-text'
+                            : 'accent-soft accent-text'
                         }`}>
                           {member.member_role === 'primary'
                             ? 'Principal'
@@ -2887,8 +2816,8 @@ const TeamWorkModal = ({
                               }}
                               className={`min-h-10 rounded-lg px-3 text-xs font-semibold ${
                                 primary
-                                  ? 'bg-emerald-600 text-white'
-                                  : 'border border-emerald-300 text-emerald-700'
+                                  ? 'accent-fill text-white'
+                                  : 'border accent-border accent-text'
                               }`}
                             >
                               Principal
@@ -2906,8 +2835,8 @@ const TeamWorkModal = ({
                               }
                               className={`min-h-10 rounded-lg px-3 text-xs font-semibold disabled:opacity-40 ${
                                 support
-                                  ? 'bg-blue-600 text-white'
-                                  : 'border border-blue-300 text-blue-700'
+                                  ? 'accent-fill text-white'
+                                  : 'border accent-border accent-text'
                               }`}
                             >
                               Apoyo
@@ -2922,7 +2851,7 @@ const TeamWorkModal = ({
                     type="button"
                     disabled={saving}
                     onClick={saveTeam}
-                    className="w-full min-h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold"
+                    className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
                   >
                     Guardar equipo
                   </button>
@@ -2931,7 +2860,7 @@ const TeamWorkModal = ({
 
               {!isAdmin &&
                 service.estado === 'en_ejecucion' && (
-                  <section className="rounded-2xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
+                  <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 space-y-3">
                     <h4 className="font-bold">
                       Registrar actividad
                     </h4>
@@ -3002,7 +2931,7 @@ const TeamWorkModal = ({
                       type="button"
                       disabled={saving}
                       onClick={addLog}
-                      className="w-full min-h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold"
+                      className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
                     >
                       Registrar actividad
                     </button>
@@ -3339,7 +3268,7 @@ const AuthorizationModal = ({
   if (!service) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="workflow-theme fixed inset-0 z-[100] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center" role="dialog" aria-modal="true">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:max-w-4xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -3371,8 +3300,8 @@ const AuthorizationModal = ({
           ) : (
             <>
               {diagnosis && (
-                <section className="rounded-2xl border border-sky-200 dark:border-sky-900 bg-sky-50/70 dark:bg-sky-950/20 p-4">
-                  <p className="text-xs uppercase tracking-wide font-semibold text-sky-700 dark:text-sky-300">
+                <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
+                  <p className="text-xs uppercase tracking-wide font-semibold accent-text dark:accent-text">
                     Diagnóstico confirmado
                   </p>
                   <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
@@ -3399,7 +3328,7 @@ const AuthorizationModal = ({
 
                     <span className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${
                       current.status === 'approved'
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        ? 'accent-soft accent-text dark:accent-soft dark:accent-text'
                         : current.status === 'rejected'
                           ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
                           : current.status === 'pending'
@@ -3528,7 +3457,7 @@ const AuthorizationModal = ({
                         <button type="button" disabled={saving} onClick={() => decide('rejected')} className="min-h-12 rounded-xl border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-semibold">
                           Rechazar trabajo adicional
                         </button>
-                        <button type="button" disabled={saving} onClick={() => decide('approved')} className="min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold">
+                        <button type="button" disabled={saving} onClick={() => decide('approved')} className="min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold">
                           Aprobar trabajo adicional
                         </button>
                       </div>
@@ -3632,6 +3561,9 @@ const AuthorizationModal = ({
 
 export default function MisServicios() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const notifiedOrderId = searchParams.get('orden');
+  const focusedOrderRef = React.useRef(null);
 
   const [services, setServices] = useState([]);
   const [technicians, setTechnicians] = useState([]);
@@ -3643,6 +3575,7 @@ export default function MisServicios() {
   const [technicianFilter, setTechnicianFilter] = useState('todos');
   const [technicianSearch, setTechnicianSearch] = useState('');
   const [selectedService, setSelectedService] = useState(null);
+  const [geofenceService,setGeofenceService]=useState(null);
   const [checklistService, setChecklistService] = useState(null);
   const [evidenceContext, setEvidenceContext] = useState(null);
   const [receptionActService, setReceptionActService] = useState(null);
@@ -3753,6 +3686,17 @@ export default function MisServicios() {
     return () => window.clearInterval(timer);
   }, [canOpenModule, load]);
 
+  useEffect(() => {
+    if (!notifiedOrderId || focusedOrderRef.current === notifiedOrderId || !services.some(service => service.id === notifiedOrderId)) return;
+    focusedOrderRef.current = notifiedOrderId;
+    setFilter('todos');
+    setTechnicianFilter('todos');
+    const timer = window.setTimeout(() => {
+      document.getElementById(`service-${notifiedOrderId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [notifiedOrderId, services]);
+
   const filteredTechnicians = useMemo(() => {
     if (!isAdmin) return [];
 
@@ -3858,23 +3802,16 @@ export default function MisServicios() {
 
   const configureGeofence = async (service) => {
     try {
-      const current = await api.get(`/api/service-orders/${service.id}/geofence`);
-      const existing = current.data?.data || {};
-      const latitude = window.prompt('Latitud del punto del servicio', existing.latitude ?? '');
-      if (latitude === null) return;
-      const longitude = window.prompt('Longitud del punto del servicio', existing.longitude ?? '');
-      if (longitude === null) return;
-      const radius = window.prompt('Radio permitido en metros (recomendado 150)', existing.radius_m ?? '150');
-      if (radius === null) return;
-      await api.put(`/api/service-orders/${service.id}/geofence`, {
-        latitude: Number(latitude),
-        longitude: Number(longitude),
-        radius_m: Number(radius),
-      });
-      window.alert('Punto del servicio guardado.');
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'No fue posible configurar el punto del servicio');
-    }
+      const current=await api.get(`/api/service-orders/${service.id}/geofence`);
+      const existing=current.data?.data||{};
+      const detail=await api.get(`/api/service-orders/${service.id}`);
+      const row=detail.data?.data||detail.data;
+      const profileResponse=await api.get(`/api/clients/${row.client_id}/profile`);
+      const profile=profileResponse.data?.data||{};
+      service={...service,service_site:row.service_site||service.service_site,cliente_direccion:profile.direccion||service.cliente_direccion,cliente_ciudad:profile.ciudad||service.cliente_ciudad,cliente_telefono:profile.telefono||service.cliente_telefono};
+      setGeofenceService({...service,service_site:{mode:'external',address:service.cliente_direccion||'',city:service.cliente_ciudad||'',contact_name:service.cliente_nombre||'',contact_phone:service.cliente_telefono||'',instructions:'',...(service.service_site||{}),
+        latitude:existing.latitude??service.service_site?.latitude??'',longitude:existing.longitude??service.service_site?.longitude??'',radius_m:existing.radius_m??service.service_site?.radius_m??150,confirmed:false}});
+    }catch(error){setError(error.response?.data?.message||'No fue posible cargar el lugar de atención');}
   };
 
   const manageTechnicianDevices = async (tech) => {
@@ -3934,11 +3871,11 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
   }
 
   return (
-    <div className="min-w-0 space-y-4 sm:space-y-6">
+    <div className="workflow-theme min-w-0 space-y-4 sm:space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Wrench className="w-6 h-6 text-blue-600" />
+            <Wrench className="w-6 h-6 accent-text" />
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
               {isAdmin ? 'Operación técnica' : 'Mis servicios'}
             </h1>
@@ -3955,7 +3892,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
             <button
               type="button"
               onClick={() => setShowTechnicalStats(true)}
-              className="w-full sm:w-auto min-h-11 rounded-xl border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 px-4 font-semibold flex items-center justify-center gap-2"
+              className="w-full sm:w-auto min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text px-4 font-semibold flex items-center justify-center gap-2"
             >
               <BarChart3 className="w-4 h-4" />
               Mis estadísticas
@@ -3995,7 +3932,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
                 <div className="px-3 py-2 bg-slate-50 dark:bg-slate-950/60 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
                   <span>{technicians.length} técnico(s) registrados en la base de datos</span>
                   {selectedTechnician && (
-                    <button type="button" onClick={() => setTechnicianFilter('todos')} className="font-semibold text-blue-600 dark:text-blue-400">
+                    <button type="button" onClick={() => setTechnicianFilter('todos')} className="font-semibold accent-text dark:accent-text">
                       Quitar filtro
                     </button>
                   )}
@@ -4005,10 +3942,10 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
                   <button
                     type="button"
                     onClick={() => setTechnicianFilter('todos')}
-                    className={`min-h-14 text-left rounded-xl border px-3 py-2 transition-colors ${technicianFilter === 'todos' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                    className={`min-h-14 text-left rounded-xl border px-3 py-2 transition-colors ${technicianFilter === 'todos' ? 'accent-border accent-soft dark:accent-soft' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                   >
                     <div className="flex items-center gap-2">
-                      <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                      <UserCheck className="w-4 h-4 accent-text shrink-0" />
                       <span className="font-semibold text-sm">Todos los técnicos</span>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">Ver toda la operación técnica</p>
@@ -4021,7 +3958,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
                     return (
                       <div
                         key={tech.id}
-                        className={`min-h-14 text-left rounded-xl border px-3 py-2 transition-colors ${selected ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-700'}`}
+                        className={`min-h-14 text-left rounded-xl border px-3 py-2 transition-colors ${selected ? 'accent-border accent-soft dark:accent-soft' : 'border-slate-200 dark:border-slate-700'}`}
                       >
                         <button type="button" onClick={() => setTechnicianFilter(tech.id)} className="w-full text-left">
                         <div className="flex items-start justify-between gap-2">
@@ -4076,6 +4013,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
           {filteredServices.map((service) => (
+            <div key={service.id} id={`service-${service.id}`} className={service.id === notifiedOrderId ? 'rounded-2xl ring-2 accent-ring ring-offset-2 dark:ring-offset-slate-950' : ''}>
             <ServiceCard
               key={service.id}
               service={service}
@@ -4104,9 +4042,13 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
               busyId={busyId}
               gps={gps}
             />
+
+            </div>
           ))}
         </div>
       )}
+
+      {geofenceService && <ServiceSiteModal service={geofenceService} onClose={()=>setGeofenceService(null)} onSaved={()=>load(true)} />}
 
       <ServiceDetailModal service={selectedService} isAdmin={isAdmin} onClose={() => setSelectedService(null)} />
 
@@ -4137,19 +4079,23 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
         onRefresh={() => load(true)}
       />
 
-      <AuditTimelineModal
+      <ServiceActivityModal
         service={auditService}
         onClose={() => setAuditService(null)}
       />
 
       <ServiceDocumentsModal
         service={documentsService}
+        onOpenClosure={(service)=>{setDocumentsService(null);setClosureService(service);}}
+        onOpenDelivery={(service)=>{setDocumentsService(null);setFinalDeliveryService(service);}}
         isAdmin={isAdmin}
         onClose={() => setDocumentsService(null)}
       />
 
       <FinalDeliveryModal
         service={finalDeliveryService}
+        onOpenClosure={(service)=>{setFinalDeliveryService(null);setClosureService(service);}}
+        onOpenAuthorization={(service)=>{setFinalDeliveryService(null);setAuthorizationService(service);}}
         isAdmin={isAdmin}
         currentUserId={user?.id}
         onClose={() => setFinalDeliveryService(null)}

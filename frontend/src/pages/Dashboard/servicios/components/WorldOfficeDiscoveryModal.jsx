@@ -532,11 +532,11 @@ export default function WorldOfficeDiscoveryModal({
   );
 
   return (
-    <div className="fixed inset-0 z-[155] bg-black/70 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[155] bg-black/70 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[96dvh] sm:max-w-7xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide font-semibold text-blue-600">
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text">
               V18 · Solo lectura
             </p>
 
@@ -571,9 +571,9 @@ export default function WorldOfficeDiscoveryModal({
             </div>
           )}
 
-          <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 p-4">
+          <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
             <div className="flex items-start gap-3">
-              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <ShieldCheck className="w-5 h-5 accent-text shrink-0 mt-0.5" />
 
               <div>
                 <p className="font-bold">
@@ -629,7 +629,7 @@ export default function WorldOfficeDiscoveryModal({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-blue-600" />
+                  <Database className="w-4 h-4 accent-text" />
                   <h4 className="font-bold">
                     1. Conexión y descubrimiento
                   </h4>
@@ -661,7 +661,7 @@ export default function WorldOfficeDiscoveryModal({
                   type="button"
                   disabled={Boolean(busy)}
                   onClick={discover}
-                  className="min-h-11 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 font-semibold flex items-center justify-center gap-2"
+                  className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white px-4 font-semibold flex items-center justify-center gap-2"
                 >
                   <Search className="w-4 h-4" />
                   Descubrir estructura
@@ -705,7 +705,7 @@ export default function WorldOfficeDiscoveryModal({
                       }
                       className={`rounded-xl border p-4 text-left ${
                         selected
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                          ? 'accent-border accent-soft dark:accent-soft'
                           : 'border-slate-200 dark:border-slate-800'
                       }`}
                     >
@@ -758,7 +758,7 @@ export default function WorldOfficeDiscoveryModal({
           </section>
 
           {selectedCandidate && (
-            <section className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50/30 dark:bg-violet-950/20 p-4 sm:p-5">
+            <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 sm:p-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h4 className="font-bold">
@@ -778,7 +778,7 @@ export default function WorldOfficeDiscoveryModal({
                   onClick={() =>
                     previewCandidate()
                   }
-                  className="w-full sm:w-auto min-h-10 rounded-xl border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 px-3 font-semibold flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto min-h-10 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text px-3 font-semibold flex items-center justify-center gap-2"
                 >
                   <Eye className="w-4 h-4" />
                   Ver muestra
@@ -850,7 +850,7 @@ export default function WorldOfficeDiscoveryModal({
           )}
 
           {selectedCandidate && (
-            <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/30 dark:bg-emerald-950/20 p-4 sm:p-5">
+            <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4 sm:p-5">
               <div>
                 <h4 className="font-bold">
                   4. Mapeo financiero
@@ -1010,7 +1010,7 @@ export default function WorldOfficeDiscoveryModal({
                 onClick={
                   saveMapping
                 }
-                className="mt-4 w-full sm:w-auto min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+                className="mt-4 w-full sm:w-auto min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
               >
                 <Save className="w-4 h-4" />
                 Guardar y validar mapeo

@@ -106,7 +106,7 @@ export default function ServicioFilters({ filters, onFilterChange, onClearFilter
           </select>
         </label>
 
-        <button type="submit" className="self-end min-h-10 rounded-lg bg-blue-600 text-white px-4 text-sm font-medium hover:bg-blue-700">
+        <button type="submit" className="self-end min-h-10 rounded-lg accent-fill text-white px-4 text-sm font-medium hover:accent-fill">
           Buscar
         </button>
 

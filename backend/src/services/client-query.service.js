@@ -50,6 +50,7 @@ const buildLocalClientsQuery = () => `
         c.telefono::text AS telefono,
         c.email::text AS email,
         c.ciudad::text AS ciudad,
+        c.direccion::text AS direccion,
 
         c.activo AS activo,
         TRUE AS editable,
@@ -127,14 +128,7 @@ const buildMelissaClientsQuery = () => `
         'melissa'::text AS origen,
         sc.id_externo::bigint AS id_externo,
 
-        CASE
-            WHEN NULLIF(
-                BTRIM(sc.razon_social),
-                ''
-            ) IS NOT NULL
-            THEN 'juridica'
-            ELSE 'natural'
-        END::text AS tipo_persona,
+        CASE WHEN NULLIF(BTRIM(sc.primer_nombre),'') IS NOT NULL OR NULLIF(BTRIM(sc.primer_apellido),'') IS NOT NULL THEN 'natural' ELSE 'juridica' END::text AS tipo_persona,
 
         sc.tipo_documento::text AS tipo_documento,
         sc.documento::text AS documento,
@@ -145,9 +139,10 @@ const buildMelissaClientsQuery = () => `
         sc.primer_apellido::text AS primer_apellido,
         sc.segundo_apellido::text AS segundo_apellido,
 
-        NULL::text AS telefono,
-        NULL::text AS email,
-        NULL::text AS ciudad,
+        COALESCE(sc.client_profile->>'telefono',sc.datos_completos::jsonb->>'Telefono',sc.datos_completos::jsonb->>'Teléfono',sc.datos_completos::jsonb->>'Celular')::text AS telefono,
+        COALESCE(sc.client_profile->>'email',sc.datos_completos::jsonb->>'Email',sc.datos_completos::jsonb->>'CorreoElectronico')::text AS email,
+        COALESCE(sc.client_profile->>'ciudad',sc.datos_completos::jsonb->>'Ciudad',sc.datos_completos::jsonb->>'Municipio')::text AS ciudad,
+        COALESCE(sc.client_profile->>'direccion',sc.datos_completos::jsonb->>'Direccion',sc.datos_completos::jsonb->>'Dirección')::text AS direccion,
 
         sc.activo AS activo,
         FALSE AS editable,
@@ -201,6 +196,8 @@ const buildMelissaClientsQuery = () => `
                 sc.segundo_apellido
             )
         ) LIKE $4
+        OR LOWER(COALESCE(sc.client_profile->>'telefono','')) LIKE $4
+        OR LOWER(COALESCE(sc.client_profile->>'email','')) LIKE $4
     )
 `;
 

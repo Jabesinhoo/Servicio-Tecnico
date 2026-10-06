@@ -1,20 +1,12 @@
 // backend/src/routes/notificaciones.routes.js
 const express = require('express');
-const { Pool } = require('pg');
+const pgPool = require('../db/pool');
 
 const router = express.Router();
 
 const {
     authRequired,
 } = require('../middlewares/auth.middleware');
-
-const pgPool = new Pool({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT || 5432),
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || '1235',
-    database: process.env.DB_NAME || 'tecnicos',
-});
 
 router.use(authRequired);
 
@@ -38,6 +30,7 @@ router.get('/notificaciones', async (req, res) => {
                 leido,
                 link,
                 solicitud_id,
+                service_order_id,
                 created_at
             FROM notificaciones
             WHERE (

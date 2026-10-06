@@ -411,10 +411,11 @@ exports.getClientStats = async (req, res) => {
     
     const datosFinancieros = await pool.query(`
       SELECT 
-        COALESCE(SUM(total_general), 0)::int as total_generado,
-        COALESCE(AVG(total_general), 0)::int as promedio,
-        COALESCE(MAX(total_general), 0)::int as maximo,
-        COALESCE(MIN(total_general), 0)::int as minimo
+        COALESCE(SUM((to_jsonb(service_orders)->>'total_general')::numeric), 0) as total_generado,
+        COALESCE(AVG((to_jsonb(service_orders)->>'total_general')::numeric), 0) as promedio,
+        COALESCE(MAX((to_jsonb(service_orders)->>'total_general')::numeric), 0) as maximo,
+        COALESCE(MIN((to_jsonb(service_orders)->>'total_general')::numeric), 0) as minimo,
+        COUNT(*)::int AS closed_count, COUNT(to_jsonb(service_orders)->>'total_general')::int AS amount_count
       FROM service_orders 
       WHERE client_id = $1 AND estado = 'cerrada'
     `, [id]);
@@ -432,7 +433,7 @@ exports.getClientStats = async (req, res) => {
     `, [id]);
     
     const ultimosServicios = await pool.query(`
-      SELECT id, codigo_os, estado, total_general, "createdAt"
+      SELECT id, codigo_os, estado, (to_jsonb(service_orders)->>'total_general')::numeric AS total_general, "createdAt"
       FROM service_orders 
       WHERE client_id = $1
       ORDER BY "createdAt" DESC
@@ -443,6 +444,7 @@ exports.getClientStats = async (req, res) => {
       ? cliente.razon_social 
       : `${cliente.primer_nombre || ''} ${cliente.primer_apellido || ''}`.trim();
     
+    const financialAvailable = datosFinancieros.rows[0]?.closed_count === datosFinancieros.rows[0]?.amount_count;
     res.json({
       cliente: {
         ...cliente,
@@ -451,12 +453,13 @@ exports.getClientStats = async (req, res) => {
       totalServicios: totalServiciosResult.rows[0]?.total || 0,
       serviciosPorEstado: serviciosPorEstado.rows,
       serviciosPorMes: serviciosPorMes.rows,
-      totalGenerado: datosFinancieros.rows[0]?.total_generado || 0,
-      promedioPorServicio: datosFinancieros.rows[0]?.promedio || 0,
-      servicioMasCaro: datosFinancieros.rows[0]?.maximo || 0,
-      servicioMasBarato: datosFinancieros.rows[0]?.minimo || 0,
+      totalGenerado: financialAvailable ? Number(datosFinancieros.rows[0]?.total_generado || 0) : null,
+      promedioPorServicio: financialAvailable ? Number(datosFinancieros.rows[0]?.promedio || 0) : null,
+      servicioMasCaro: financialAvailable ? Number(datosFinancieros.rows[0]?.maximo || 0) : null,
+      servicioMasBarato: financialAvailable ? Number(datosFinancieros.rows[0]?.minimo || 0) : null,
       serviciosPendientes: serviciosPendientes.rows[0]?.cantidad || 0,
       serviciosCompletados: serviciosCompletados.rows[0]?.cantidad || 0,
+      financial_statistics_available: financialAvailable,
       ultimosServicios: ultimosServicios.rows,
     });
     
@@ -483,4 +486,11 @@ exports.getClientServiceOrders = async (req, res) => {
     console.error('Error getting client services:', error);
     res.status(500).json({ message: 'Error al obtener servicios del cliente' });
   }
+};
+// Ficha completa, conservando los campos originales de World Office.
+exports.getProfile = async (req,res) => {
+ try {const {clientProfile}=require('../services/client-profile.service');
+  const data=await clientProfile(pool,req.params.id,req.query.origin==='melissa'?'melissa':'local');
+  res.json({success:true,data});
+ }catch(error){if(!error.status)console.error('Error loading complete client profile:',error);res.status(error.status||500).json({message:error.status?error.message:'No se pudo cargar la ficha completa del cliente'});}
 };

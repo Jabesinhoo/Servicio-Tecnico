@@ -51,7 +51,7 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+    <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Asignar Técnico</h3>
@@ -67,14 +67,14 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
             </label>
             {loading && tecnicos.length === 0 ? (
               <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 accent-border mx-auto"></div>
                 <p className="text-sm text-gray-500 mt-2">Cargando técnicos...</p>
               </div>
             ) : (
               <select
                 value={selectedTech}
                 onChange={(e) => setSelectedTech(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:accent-ring"
                 required
               >
                 <option value="">Seleccione un técnico...</option>
@@ -98,7 +98,7 @@ const AssignTechModal = ({ isOpen, onClose, onSubmit, servicioId }) => {
             <button
               type="submit"
               disabled={!selectedTech || loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 text-sm font-medium text-white accent-fill rounded-lg hover:accent-fill disabled:opacity-50 flex items-center gap-2"
             >
               <UserCheck className="w-4 h-4" />
               Asignar

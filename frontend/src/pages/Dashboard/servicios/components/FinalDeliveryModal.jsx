@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ResponsiveSignaturePad from '../../../../components/ui/ResponsiveSignaturePad';
+import React, { useCallback, useEffect,  useState } from 'react';
 import {
   Bell,
   Camera,
@@ -30,90 +31,12 @@ const escapeHtml = (value) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
 
-const SignaturePad = ({ onChange, clearToken }) => {
-  const ref = useRef(null);
-  const drawing = useRef(false);
-  const hasInk = useRef(false);
-
-  const resize = useCallback(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(rect.width * ratio));
-    canvas.height = Math.max(1, Math.floor(rect.height * ratio));
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    hasInk.current = false;
-    onChange?.(canvas, false);
-  }, [onChange]);
-
-  useEffect(() => {
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [resize]);
-
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-    hasInk.current = false;
-    onChange?.(canvas, false);
-  }, [clearToken, onChange]);
-
-  const point = (event) => {
-    const rect = ref.current.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  };
-
-  const start = (event) => {
-    event.preventDefault();
-    drawing.current = true;
-    const p = point(event);
-    const ctx = ref.current.getContext('2d');
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ref.current.setPointerCapture?.(event.pointerId);
-  };
-
-  const move = (event) => {
-    if (!drawing.current) return;
-    event.preventDefault();
-    const p = point(event);
-    const ctx = ref.current.getContext('2d');
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    hasInk.current = true;
-    onChange?.(ref.current, true);
-  };
-
-  const stop = (event) => {
-    if (!drawing.current) return;
-    drawing.current = false;
-    ref.current.releasePointerCapture?.(event.pointerId);
-    onChange?.(ref.current, hasInk.current);
-  };
-
-  return (
-    <canvas
-      ref={ref}
-      onPointerDown={start}
-      onPointerMove={move}
-      onPointerUp={stop}
-      onPointerCancel={stop}
-      className="w-full h-44 rounded-xl border border-slate-300 dark:border-slate-700 bg-white touch-none cursor-crosshair"
-    />
-  );
-};
-
 export default function FinalDeliveryModal({
   service,
   isAdmin,
   currentUserId,
+  onOpenClosure,
+  onOpenAuthorization,
   onClose,
   onRefresh,
 }) {
@@ -249,10 +172,8 @@ export default function FinalDeliveryModal({
   const thirdPartyEvidence = evidences.filter(
     (item) => item.category === 'third_party_authorization'
   );
-  const canEdit =
-    isAdmin &&
-    closure?.status === 'validated' &&
-    delivery.status !== 'delivered';
+  const canEdit = data?.permissions?.can_manage_delivery === true;
+  const canSatisfaction = data?.permissions?.can_record_satisfaction === true;
   const custodyMine = data?.current_custody_holder === currentUserId;
 
   const hasFinancialControl =
@@ -455,11 +376,11 @@ export default function FinalDeliveryModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[140] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="workflow-theme fixed inset-0 z-[140] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-6xl bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide font-semibold text-teal-600">{service.codigo_os}</p>
+            <p className="text-xs uppercase tracking-wide font-semibold accent-text">{service.codigo_os}</p>
             <h3 className="text-lg sm:text-xl font-bold">Entrega final al cliente</h3>
             <p className="text-sm text-slate-500 mt-1">
               Notificación, receptor, firma, custodia y cierre definitivo.
@@ -507,10 +428,10 @@ export default function FinalDeliveryModal({
                 </div>
               </section>
 
-              {isAdmin && closure?.status === 'validated' && delivery.status !== 'delivered' && (
-                <section className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 p-4">
+              {canEdit && (
+                <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
                   <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-blue-600"/>
+                    <Bell className="w-4 h-4 accent-text"/>
                     <h4 className="font-bold">Notificar al cliente</h4>
                   </div>
 
@@ -542,7 +463,7 @@ export default function FinalDeliveryModal({
 
                   <textarea rows={2} value={notificationNote} onChange={(e) => setNotificationNote(e.target.value)} placeholder="Observación..." className="mt-3 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2"/>
 
-                  <button type="button" disabled={saving} onClick={notifyClient} className="mt-3 w-full sm:w-auto min-h-11 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
+                  <button type="button" disabled={saving} onClick={notifyClient} className="mt-3 w-full sm:w-auto min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
                     <Send className="w-4 h-4"/> Registrar notificación
                   </button>
                 </section>
@@ -575,7 +496,7 @@ export default function FinalDeliveryModal({
                 <section
                   className={`rounded-2xl border p-4 ${
                     financialReady
-                      ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30'
+                      ? 'accent-border dark:accent-border accent-soft dark:accent-soft'
                       : financialControl?.control?.clearance_status === 'blocked'
                         ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30'
                         : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30'
@@ -599,16 +520,16 @@ export default function FinalDeliveryModal({
 
               <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
                 <div className="flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-emerald-600"/>
+                  <UserCheck className="w-4 h-4 accent-text"/>
                   <h4 className="font-bold">Receptor de la entrega</h4>
                 </div>
 
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button type="button" disabled={!canEdit} onClick={() => setReceiverType('client')} className={`min-h-20 rounded-2xl border p-4 text-left ${receiverType === 'client' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-800'} disabled:opacity-70`}>
+                  <button type="button" disabled={!canEdit} onClick={() => setReceiverType('client')} className={`min-h-20 rounded-2xl border p-4 text-left ${receiverType === 'client' ? 'accent-border accent-soft dark:accent-soft' : 'border-slate-200 dark:border-slate-800'} disabled:opacity-70`}>
                     <p className="font-bold">Cliente</p>
                     <p className="text-sm text-slate-500 mt-1">Entrega directamente al titular.</p>
                   </button>
-                  <button type="button" disabled={!canEdit} onClick={() => setReceiverType('third_party')} className={`min-h-20 rounded-2xl border p-4 text-left ${receiverType === 'third_party' ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20' : 'border-slate-200 dark:border-slate-800'} disabled:opacity-70`}>
+                  <button type="button" disabled={!canEdit} onClick={() => setReceiverType('third_party')} className={`min-h-20 rounded-2xl border p-4 text-left ${receiverType === 'third_party' ? 'accent-border accent-soft dark:accent-soft' : 'border-slate-200 dark:border-slate-800'} disabled:opacity-70`}>
                     <p className="font-bold">Tercero autorizado</p>
                     <p className="text-sm text-slate-500 mt-1">Exige soporte escrito de autorización.</p>
                   </button>
@@ -656,14 +577,14 @@ export default function FinalDeliveryModal({
                 </label>
 
                 {receiverType === 'third_party' && (
-                  <div className="mt-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 p-4">
+                  <div className="mt-4 rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
                     <label className="block">
                       <span className="text-sm font-semibold">Referencia de autorización *</span>
                       <textarea disabled={!canEdit} rows={2} value={thirdPartyAuthorizationNote} onChange={(e) => setThirdPartyAuthorizationNote(e.target.value)} placeholder="Quién autorizó, medio, fecha..." className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 disabled:opacity-70"/>
                     </label>
 
                     {canEdit && (
-                      <label className="mt-3 min-h-11 rounded-xl border border-dashed border-blue-300 text-blue-700 dark:text-blue-300 px-3 flex items-center justify-center gap-2 cursor-pointer">
+                      <label className="mt-3 min-h-11 rounded-xl border border-dashed accent-border accent-text dark:accent-text px-3 flex items-center justify-center gap-2 cursor-pointer">
                         <Camera className="w-4 h-4"/> Adjuntar autorización escrita
                         <input
                           type="file"
@@ -681,7 +602,7 @@ export default function FinalDeliveryModal({
 
                     <div className="mt-3 space-y-2">
                       {thirdPartyEvidence.map((evidence) => (
-                        <button key={evidence.id} type="button" onClick={() => openEvidence(evidence)} className="w-full min-h-11 rounded-xl border border-blue-200 dark:border-blue-900 p-3 text-left text-sm">
+                        <button key={evidence.id} type="button" onClick={() => openEvidence(evidence)} className="w-full min-h-11 rounded-xl border accent-border dark:accent-border p-3 text-left text-sm">
                           {evidence.original_name || 'Autorización'} · {fmt(evidence.created_at)}
                         </button>
                       ))}
@@ -703,7 +624,7 @@ export default function FinalDeliveryModal({
 
               <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
                 <div className="flex items-center gap-2">
-                  <FileSignature className="w-4 h-4 text-emerald-600"/>
+                  <FileSignature className="w-4 h-4 accent-text"/>
                   <h4 className="font-bold">Firma del receptor</h4>
                 </div>
 
@@ -714,7 +635,7 @@ export default function FinalDeliveryModal({
                 {canEdit && (
                   <>
                     <div className="mt-3">
-                      <SignaturePad
+                      <ResponsiveSignaturePad
                         onChange={(canvasNode, ink) => {
                           setCanvas(canvasNode);
                           setHasInk(ink);
@@ -726,7 +647,7 @@ export default function FinalDeliveryModal({
                       <button type="button" onClick={() => setClearToken((v) => v + 1)} className="min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 font-semibold">
                         Limpiar firma
                       </button>
-                      <button type="button" disabled={saving || !hasInk} onClick={saveSignature} className="min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold">
+                      <button type="button" disabled={saving || !hasInk} onClick={saveSignature} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold">
                         Guardar firma
                       </button>
                     </div>
@@ -734,14 +655,14 @@ export default function FinalDeliveryModal({
                 )}
               </section>
 
-              {isAdmin && closure?.status === 'validated' && delivery.status !== 'delivered' && (
-                <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 p-4">
+              {canEdit && (
+                <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
                   {!custodyMine && (
                     <div className="mb-3 rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-800 dark:text-amber-300">
                       La custodia actual pertenece a otro usuario. Debe confirmar la entrega quien tenga la custodia.
                     </div>
                   )}
-                  <button type="button" disabled={saving || !custodyMine} onClick={confirm} className="w-full min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2">
+                  <button type="button" disabled={saving || !custodyMine} onClick={confirm} className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2">
                     <PackageCheck className="w-5 h-5"/> Confirmar entrega final y cerrar OS
                   </button>
                 </section>
@@ -749,21 +670,21 @@ export default function FinalDeliveryModal({
 
               {delivery.status === 'delivered' && (
                 <>
-                  <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-4">
+                  <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
                     <div className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5"/>
+                      <CheckCircle2 className="w-5 h-5 accent-text shrink-0 mt-0.5"/>
                       <div>
-                        <p className="font-bold text-emerald-800 dark:text-emerald-300">Entrega final completada</p>
+                        <p className="font-bold accent-text dark:accent-text">Entrega final completada</p>
                         <p className="text-sm mt-1">{delivery.receiver_name} · {delivery.receiver_document}</p>
-                        <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">{fmt(delivery.delivered_at)}</p>
+                        <p className="text-xs accent-text dark:accent-text mt-1">{fmt(delivery.delivered_at)}</p>
                       </div>
                     </div>
-                    <button type="button" onClick={printAct} className="mt-3 w-full sm:w-auto min-h-11 rounded-xl border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-4 font-semibold flex items-center justify-center gap-2">
+                    <button type="button" onClick={printAct} className="mt-3 w-full sm:w-auto min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text px-4 font-semibold flex items-center justify-center gap-2">
                       <Printer className="w-4 h-4"/> Imprimir / guardar acta
                     </button>
                   </section>
 
-                  {isAdmin && (
+                  {canSatisfaction && (
                     <section className="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20 p-4">
                       <div className="flex items-center gap-2">
                         <Star className="w-4 h-4 text-amber-500"/>
@@ -789,9 +710,12 @@ export default function FinalDeliveryModal({
                 </>
               )}
 
-              {!isAdmin && delivery.status !== 'delivered' && (
+              {!canEdit && delivery.status !== 'delivered' && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-sm text-slate-500">
-                  La entrega final es administrada por Dirección Técnica. Puedes consultar el estado, pero no modificarlo.
+                  <p className="font-semibold">Pasos pendientes para entregar</p>
+                  {service.authorization_status==='pending'&&<p className="mt-2">Está pendiente la decisión del cliente sobre la autorización solicitada. {onOpenAuthorization&&<button type="button" onClick={()=>onOpenAuthorization(service)} className="underline">Revisar autorización</button>}</p>}
+                  {(data?.permissions?.blocking_reasons || ['Carga de nuevo la orden para consultar los pasos pendientes.']).map((reason,index)=><p key={index} className="mt-2">{reason}</p>)}
+                  {closure?.status!=='validated'&&onOpenClosure&&<button type="button" onClick={()=>onOpenClosure(service)} className="mt-3 min-h-11 rounded-xl border px-4 font-semibold">{isAdmin?'Revisar cierre / Dirección Técnica':'Abrir cierre técnico'}</button>}
                 </div>
               )}
             </>
