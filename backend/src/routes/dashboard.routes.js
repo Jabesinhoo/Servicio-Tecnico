@@ -5,6 +5,10 @@ const { authRequired } = require('../middlewares/auth.middleware');
 
 router.use(authRequired);
 
+const operations=require('../controllers/operations-dashboard.controller');
+router.get('/operations',operations.get);
+router.get('/operations/excel',operations.export);
+
 router.get('/stats', dashboardController.getDashboardStats);
 router.get('/recent-activities', dashboardController.getRecentActivities);
 router.get('/recent-sales', dashboardController.getRecentSales);

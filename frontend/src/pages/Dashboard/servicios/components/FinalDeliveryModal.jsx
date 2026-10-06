@@ -20,6 +20,7 @@ const fmt = (value) =>
     ? new Date(value).toLocaleString('es-CO', {
         dateStyle: 'medium',
         timeStyle: 'short',
+      timeZone: 'America/Bogota',
       })
     : '—';
 
@@ -40,6 +41,8 @@ export default function FinalDeliveryModal({
   onClose,
   onRefresh,
 }) {
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   const [data, setData] = useState(null);
   const [financialControl, setFinancialControl] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -147,13 +150,13 @@ export default function FinalDeliveryModal({
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     load();
-    const onKey = (event) => event.key === 'Escape' && onClose();
+    const onKey = (event) => event.key === 'Escape' && onCloseRef.current();
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = previous;
       window.removeEventListener('keydown', onKey);
     };
-  }, [service, onClose, load]);
+  }, [service, load]);
 
   useEffect(
     () => () => {
@@ -172,7 +175,7 @@ export default function FinalDeliveryModal({
   const thirdPartyEvidence = evidences.filter(
     (item) => item.category === 'third_party_authorization'
   );
-  const canEdit = data?.permissions?.can_manage_delivery === true;
+  const canEdit = data?.permissions?.can_prepare_delivery === true;
   const canSatisfaction = data?.permissions?.can_record_satisfaction === true;
   const custodyMine = data?.current_custody_holder === currentUserId;
 
@@ -662,7 +665,7 @@ export default function FinalDeliveryModal({
                       La custodia actual pertenece a otro usuario. Debe confirmar la entrega quien tenga la custodia.
                     </div>
                   )}
-                  <button type="button" disabled={saving || !custodyMine} onClick={confirm} className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2">
+                  <button type="button" disabled={saving || !custodyMine || data?.permissions?.can_manage_delivery !== true || !(hasFinancialControl ? financialReady : financialClearance)} onClick={confirm} className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2">
                     <PackageCheck className="w-5 h-5"/> Confirmar entrega final y cerrar OS
                   </button>
                 </section>
@@ -710,9 +713,9 @@ export default function FinalDeliveryModal({
                 </>
               )}
 
-              {!canEdit && delivery.status !== 'delivered' && (
+              {delivery.status !== 'delivered' && (data?.permissions?.blocking_reasons?.length > 0 || !(hasFinancialControl ? financialReady : financialClearance)) && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-sm text-slate-500">
-                  <p className="font-semibold">Pasos pendientes para entregar</p>
+                  <p className="font-semibold">Pasos pendientes para confirmar la entrega</p><p className="mt-2">Puedes guardar los datos del receptor y la firma como borrador mientras completas los pasos pendientes.</p>{!(hasFinancialControl ? financialReady : financialClearance)&&<p className="mt-2">Control financiero debe liberar la orden antes de confirmar la entrega.</p>}
                   {service.authorization_status==='pending'&&<p className="mt-2">Está pendiente la decisión del cliente sobre la autorización solicitada. {onOpenAuthorization&&<button type="button" onClick={()=>onOpenAuthorization(service)} className="underline">Revisar autorización</button>}</p>}
                   {(data?.permissions?.blocking_reasons || ['Carga de nuevo la orden para consultar los pasos pendientes.']).map((reason,index)=><p key={index} className="mt-2">{reason}</p>)}
                   {closure?.status!=='validated'&&onOpenClosure&&<button type="button" onClick={()=>onOpenClosure(service)} className="mt-3 min-h-11 rounded-xl border px-4 font-semibold">{isAdmin?'Revisar cierre / Dirección Técnica':'Abrir cierre técnico'}</button>}

@@ -225,10 +225,10 @@ async function permissionsFor(client,req,order,closure,delivery,custody) {
   custodyMine:custody?.holder_user_id===req.user.id,closureStatus:closure?.status,
   deliveryStatus:delivery?.status,deliveredBy:delivery?.delivered_by,actorId:req.user.id});
 }
-async function authorizeDelivery(client,req,order,satisfaction=false) {
+async function authorizeDelivery(client,req,order,satisfaction=false,confirmation=false) {
  const [closure,delivery,custody]=await Promise.all([getClosure(client,order.id),getDelivery(client,order.id),getCustody(client,order.id)]);
  const permissions=await permissionsFor(client,req,order,closure,delivery,custody);
- if (!(satisfaction ? permissions.can_record_satisfaction : permissions.can_manage_delivery)) {
+ if (!(satisfaction ? permissions.can_record_satisfaction : confirmation ? permissions.can_manage_delivery : permissions.can_prepare_delivery)) {
   throw Object.assign(new Error(permissions.blocking_reasons[0] || (delivery?.status==='delivered'?'La entrega ya fue confirmada':'Todavía no puedes gestionar esta entrega.')),
    {status:(await canRead(client,req,order))?409:403,code:'DELIVERY_NOT_READY'});
  }
@@ -292,11 +292,6 @@ exports.recordNotification = async (req, res) => {
     const order = await getOrder(client, req.params.id, true);
     if (!order) { await rollback(client); return res.status(404).json({ success:false, message:'Orden no encontrada' }); }
     await authorizeDelivery(client,req,order);
-    const closure = await getClosure(client, order.id);
-    if (closure?.status !== 'validated') {
-      await rollback(client);
-      return res.status(409).json({ success:false, message:'Dirección Técnica debe validar primero el cierre' });
-    }
 
     const r = await client.query(`
       INSERT INTO service_order_client_notifications
@@ -339,11 +334,6 @@ exports.saveDraft = async (req, res) => {
     const order = await getOrder(client, req.params.id, true);
     if (!order) { await rollback(client); return res.status(404).json({ success:false, message:'Orden no encontrada' }); }
     await authorizeDelivery(client,req,order);
-    const closure = await getClosure(client, order.id);
-    if (closure?.status !== 'validated') {
-      await rollback(client);
-      return res.status(409).json({ success:false, message:'Dirección Técnica debe validar primero el cierre' });
-    }
     const existing = await getDelivery(client, order.id, true);
     if (existing?.status === 'delivered') {
       await rollback(client);
@@ -554,7 +544,7 @@ exports.confirmDelivery = async (req, res) => {
 
     const order = await getOrder(client, req.params.id, true);
     if (!order) { await rollback(client); return res.status(404).json({ success:false, message:'Orden no encontrada' }); }
-    await authorizeDelivery(client,req,order);
+    await authorizeDelivery(client,req,order,false,true);
     if (order.estado === 'cerrada') { await rollback(client); return res.status(409).json({ success:false, message:'La orden ya está cerrada' }); }
 
     const closure = await getClosure(client, order.id);
@@ -567,6 +557,8 @@ exports.confirmDelivery = async (req, res) => {
     if (!delivery) { await rollback(client); return res.status(409).json({ success:false, message:'Guarda primero los datos de entrega' }); }
     if (delivery.status === 'delivered') { await rollback(client); return res.status(409).json({ success:false, message:'La entrega ya fue confirmada' }); }
 
+    const tools=await client.query('SELECT id FROM workshop_assignments WHERE service_order_id=$1 AND returned_quantity<quantity LIMIT 1',[order.id]);
+    if(tools.rows.length){await rollback(client);return res.status(409).json({message:'Devuelve los ítems de taller pendientes antes de cerrar definitivamente la orden.',code:'WORKSHOP_ITEMS_PENDING'});}
     const notifications = await getNotifications(client, order.id);
     if (!notifications.length) {
       await rollback(client);

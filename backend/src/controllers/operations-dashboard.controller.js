@@ -1,0 +1,4 @@
+'use strict';
+const {getOperations}=require('../services/operations-dashboard.service');const{exportOperations}=require('../services/operations-excel.service');
+exports.get=async(req,res)=>{try{res.json({data:await getOperations(req)});}catch(e){console.error('Operations dashboard:',e);res.status(e.status||500).json({message:e.status?e.message:'No fue posible cargar los indicadores. Revisa la instalación y vuelve a intentar.'});}};
+exports.export=async(req,res)=>{try{const data=await getOperations(req);const file=exportOperations(data);res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');res.setHeader('Content-Disposition',`attachment; filename="Dashboard-${data.range.from}-${data.range.to}.xlsx"`);res.send(file);}catch(e){console.error('Operations export:',e);res.status(e.status||500).json({message:e.status?e.message:'No fue posible exportar los indicadores'});}};

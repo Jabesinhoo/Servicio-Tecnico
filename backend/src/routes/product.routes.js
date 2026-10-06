@@ -7,6 +7,12 @@ const productController = require('../controllers/product.controller');
 
 router.use(authRequired);
 
+const workshop=require('../controllers/workshop.controller');
+router.get('/workshop',workshop.list);
+router.put('/workshop/catalog/:productId',workshop.classify);
+router.post('/workshop/assignments',workshop.assign);
+router.post('/workshop/assignments/:id/return',workshop.returnItem);
+
 // Rutas públicas (para todos los roles autenticados)
 router.get('/products', productController.getAll);
 router.get('/products/low-stock', productController.getLowStock);

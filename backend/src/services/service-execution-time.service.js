@@ -1,0 +1,5 @@
+'use strict';
+async function startSession(client,orderId,actor){await client.query(`INSERT INTO service_execution_sessions(service_order_id,actor_user_id) VALUES($1,$2) ON CONFLICT(service_order_id) WHERE ended_at IS NULL DO NOTHING`,[orderId,actor]);}
+async function stopSession(client,orderId){await client.query('UPDATE service_execution_sessions SET ended_at=now() WHERE service_order_id=$1 AND ended_at IS NULL',[orderId]);}
+async function timing(client,order){const r=await client.query(`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM(COALESCE(ended_at,now())-started_at))/60),0) AS minutes,COUNT(*)::int AS sessions,MIN(started_at) FILTER(WHERE ended_at IS NULL) AS active_since,now() AS server_time FROM service_execution_sessions WHERE service_order_id=$1`,[order.id]);const row=r.rows[0];const actual=Number(row.minutes);const duration=Number(order.duracion_estimada)||60;return{actual_minutes:actual,estimated_minutes:duration,remaining_minutes:Math.max(0,duration-actual),active_since:row.active_since,server_time:row.server_time,recorded_sessions:row.sessions};}
+module.exports={startSession,stopSession,timing};

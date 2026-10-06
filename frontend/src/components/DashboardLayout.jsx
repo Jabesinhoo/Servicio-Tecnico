@@ -97,12 +97,6 @@ const DashboardLayout = () => {
         permission: 'servicios'
       },
       { 
-        name: 'Reportes', 
-        href: '/dashboard/reportes', 
-        icon: BarChart3,
-        permission: 'reportes'
-      },
-      { 
         name: 'Agenda', 
         href: '/dashboard/agenda', 
         icon: Calendar,

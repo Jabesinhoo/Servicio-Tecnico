@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import ProductCard from './inventarios/components/ProductCard';
+import WorkshopPanel from './inventarios/WorkshopPanel';
 import ProductForm from './inventarios/ProductForm';
 import ProductDetailModal from './inventarios/components/ProductDetailModal';
 import {
@@ -21,6 +22,7 @@ import {
 
 const Inventarios = () => {
   const { user } = useAuth();
+  const [workshop,setWorkshop]=useState(false);
 
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -128,8 +130,10 @@ const Inventarios = () => {
   const canEdit = userRole === 'admin' || userRole === 'inventario';
 
   if (loading) {
-    return (
+    if(workshop)return <div className="space-y-4"><button className="border rounded-xl p-3" onClick={()=>setWorkshop(false)}>Volver a crear y editar inventario</button><WorkshopPanel/></div>;
+  return (
       <div className="flex justify-center items-center h-64">
+      <button className="border rounded-xl px-4 py-3 mb-4" onClick={()=>setWorkshop(true)}>Inventario de taller · uso e historial</button>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );

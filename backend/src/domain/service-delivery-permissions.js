@@ -9,6 +9,7 @@ function deliveryPermissions({admin,tech,assigned,custodyMine,closureStatus,deli
   else reasons.push('Dirección Técnica debe recibir y validar el cierre antes de la entrega al cliente.');
  }
  return {
+  can_prepare_delivery: (admin || (tech && assigned)) && deliveryStatus !== 'delivered',
   can_manage_delivery: allowedActor && closureStatus === 'validated' && deliveryStatus !== 'delivered',
   can_record_satisfaction: deliveryStatus === 'delivered' && (admin || (tech && assigned && deliveredBy === actorId)),
   blocking_reasons: reasons,

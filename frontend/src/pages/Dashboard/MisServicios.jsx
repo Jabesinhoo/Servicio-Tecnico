@@ -3,6 +3,7 @@ import ServiceActivityModal from './servicios/components/ServiceActivityModal';
 import {serviceMode} from './servicios/serviceLocation';
 // frontend/src/pages/Dashboard/MisServicios.jsx
 
+import WorkshopPanel from './inventarios/WorkshopPanel';
 import React, {
   useCallback,
   useEffect,
@@ -121,6 +122,7 @@ const formatDateTime = (value) => {
     return new Intl.DateTimeFormat('es-CO', {
       dateStyle: 'medium',
       timeStyle: 'short',
+      timeZone: 'America/Bogota',
     }).format(new Date(value));
   } catch {
     return String(value);
@@ -295,6 +297,7 @@ const ServiceCard = ({
   onDiagnosis,
   onAuthorization,
   onTeamWork,
+  onWorkshop,
   onClosure,
   onFinalDelivery,
   onAudit,
@@ -307,6 +310,7 @@ const ServiceCard = ({
 
   return (
     <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      {!isAdmin&&!service.creator_view_only&&<button type="button" onClick={()=>onWorkshop(service)} className="min-h-11 border rounded-xl m-3 px-4 font-semibold">Ítems de taller y materiales</button>}
       <button
         type="button"
         onClick={() => onOpen(service)}
@@ -441,6 +445,7 @@ const ServiceCard = ({
             <UsersRound className="w-4 h-4" /> Equipo / bitácora
           </button>
 
+          <button type="button" onClick={()=>onWorkshop(service)} className="min-h-11 border rounded-xl px-4 font-semibold">Ítems de taller y materiales</button>
           <button type="button" onClick={() => onClosure(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
             <PackageCheck className="w-4 h-4" /> Cierre / Dirección Técnica
           </button>
@@ -537,7 +542,7 @@ const ServiceCard = ({
               className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
             >
               <PackageCheck className="w-4 h-4" />
-              Cierre técnico
+              {service.estado === 'en_ejecucion' ? 'Finalizar trabajo' : 'Cierre técnico'}
             </button>
 
             <button
@@ -1777,7 +1782,10 @@ const TechnicalClosureModal = ({
   currentUserId,
   onClose,
   onRefresh,
+  onOpenAuthorization,
 }) => {
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   const [data, setData] = useState(null);
   const [checklist, setChecklist] = useState({
     tests_completed: false,
@@ -1788,6 +1796,7 @@ const TechnicalClosureModal = ({
     safety_checked: false,
   });
   const [finalResult, setFinalResult] = useState('');
+  const [durationNote,setDurationNote]=useState('');
   const [finalNotes, setFinalNotes] = useState('');
   const [decisionNote, setDecisionNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1847,7 +1856,7 @@ const TechnicalClosureModal = ({
     loadClosure();
 
     const onKey = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
 
     window.addEventListener('keydown', onKey);
@@ -1856,7 +1865,7 @@ const TechnicalClosureModal = ({
       document.body.style.overflow = previous;
       window.removeEventListener('keydown', onKey);
     };
-  }, [service, onClose, loadClosure]);
+  }, [service, loadClosure]);
 
   if (!service) return null;
 
@@ -1869,13 +1878,17 @@ const TechnicalClosureModal = ({
     data?.primary_technician_id ===
       currentUserId;
 
-  const editable =
-    !isAdmin &&
-    isPrimary &&
-    service.estado === 'en_ejecucion' &&
-    ['draft', 'rework_required'].includes(
-      closure.status
-    );
+  const editable = data?.permissions?.can_prepare === true;
+  const orderState = data?.order_state || service.estado;
+
+  const resumeService = async () => {
+    try {
+      setSaving(true);setError('');
+      await api.patch(`/api/service-orders/${service.id}/status`, {estado:'en_ejecucion'});
+      await loadClosure();await onRefresh?.();
+    } catch (err) {setError(err.response?.data?.message || 'No fue posible iniciar o reanudar el servicio.');}
+    finally {setSaving(false);}
+  };
 
   const saveChecklist = async () => {
     try {
@@ -2071,6 +2084,15 @@ const TechnicalClosureModal = ({
                 </div>
               )}
 
+              {['draft','rework_required'].includes(closure.status) && (
+                <section className="rounded-xl border accent-border accent-soft p-4 text-sm space-y-3">
+                  <p>Prepara el resultado, las verificaciones y las evidencias. Para confirmar el cierre, la orden debe estar en ejecución y tener diagnóstico confirmado y custodia vigente.</p>
+                  {!editable && <p>{!isPrimary && !isAdmin ? 'Esta etapa corresponde al técnico principal o a administración.' : 'No se puede preparar el cierre en el estado actual. Revisa la asignación del técnico principal.'}</p>}
+                  {editable && orderState !== 'en_ejecucion' && <button type="button" disabled={saving} onClick={resumeService} className="min-h-11 rounded-xl accent-fill px-4 font-semibold">{orderState === 'asignada' ? 'Iniciar servicio para confirmar cierre' : 'Reanudar servicio para confirmar cierre'}</button>}
+                  {service.authorization_status === 'pending' && onOpenAuthorization && <button type="button" onClick={()=>onOpenAuthorization(service)} className="min-h-11 rounded-xl border px-4 font-semibold">Revisar autorización pendiente</button>}
+                </section>
+              )}
+              {data?.timing&&<section className="accent-soft rounded-xl border p-4"><h4 className="font-bold">Duración del servicio</h4><p>Estimado por tipo: {data.timing.estimated_minutes} min · Tiempo activo registrado: {Math.round(data.timing.actual_minutes)} min · Restante estimado: {Math.ceil(data.timing.remaining_minutes)} min</p><p className="text-xs mt-1">Las pausas no cuentan como trabajo activo. La duración es una estimación; finalizar exige registrar el resultado real.</p>{editable&&data.timing.actual_minutes<data.timing.estimated_minutes&&<label className="block mt-3">Motivo si finalizas antes de lo estimado<textarea value={durationNote} onChange={e=>setDurationNote(e.target.value)} className="w-full border rounded-xl bg-transparent p-3" placeholder="Trabajo completado antes, prueba más breve, resultado sin reparación…"/></label>}</section>}
               <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
                 <h4 className="font-bold">
                   Checklist de cierre
@@ -2240,18 +2262,17 @@ const TechnicalClosureModal = ({
                   Flujo de entrega interna
                 </h4>
 
-                {!isAdmin &&
-                  isPrimary &&
+                {(isAdmin || isPrimary) &&
                   closure.status ===
                     'draft' &&
-                  service.estado ===
+                  orderState ===
                     'en_ejecucion' && (
                     <button
                       type="button"
                       disabled={saving}
                       onClick={() =>
                         run(
-                          'technical-close'
+                          'technical-close', {duration_note:durationNote}
                         )
                       }
                       className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
@@ -2260,18 +2281,17 @@ const TechnicalClosureModal = ({
                     </button>
                   )}
 
-                {!isAdmin &&
-                  isPrimary &&
+                {(isAdmin || isPrimary) &&
                   closure.status ===
                     'rework_required' &&
-                  service.estado ===
+                  orderState ===
                     'en_ejecucion' && (
                     <button
                       type="button"
                       disabled={saving}
                       onClick={() =>
                         run(
-                          'technical-close'
+                          'technical-close', {duration_note:durationNote}
                         )
                       }
                       className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold"
@@ -2280,8 +2300,7 @@ const TechnicalClosureModal = ({
                     </button>
                   )}
 
-                {!isAdmin &&
-                  isPrimary &&
+                {(isAdmin || isPrimary) &&
                   closure.status ===
                     'technical_closed' && (
                     <button
@@ -3582,6 +3601,7 @@ export default function MisServicios() {
   const [diagnosisService, setDiagnosisService] = useState(null);
   const [authorizationService, setAuthorizationService] = useState(null);
   const [teamWorkService, setTeamWorkService] = useState(null);
+  const [workshopService,setWorkshopService]=useState(null);
   const [closureService, setClosureService] = useState(null);
   const [finalDeliveryService, setFinalDeliveryService] = useState(null);
   const [auditService, setAuditService] = useState(null);
@@ -4035,6 +4055,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
               onDiagnosis={setDiagnosisService}
               onAuthorization={setAuthorizationService}
               onTeamWork={setTeamWorkService}
+              onWorkshop={setWorkshopService}
               onClosure={setClosureService}
               onFinalDelivery={setFinalDeliveryService}
               onAudit={setAuditService}
@@ -4102,7 +4123,9 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
         onRefresh={() => load(true)}
       />
 
+      {workshopService&&<div className="workflow-theme fixed inset-0 z-[130] bg-black/60 p-3 flex items-center justify-center"><section className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-6xl max-h-[94dvh] overflow-y-auto p-4"><button onClick={()=>setWorkshopService(null)} className="border rounded-xl p-3 mb-4">Cerrar · {workshopService.codigo_os}</button><WorkshopPanel service={workshopService}/></section></div>}
       <TechnicalClosureModal
+        onOpenAuthorization={(service)=>{setClosureService(null);setAuthorizationService(service);}}
         service={closureService}
         isAdmin={isAdmin}
         currentUserId={user?.id}

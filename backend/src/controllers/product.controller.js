@@ -9,7 +9,7 @@ exports.getAll = async (req, res) => {
       SELECT p.*, c.nombre as categoria_nombre
       FROM products p
       LEFT JOIN categorias_productos c ON p.categoria_id = c.id
-      WHERE 1=1
+      WHERE p.estado=TRUE
     `;
     const params = [];
     let paramIndex = 1;
@@ -152,7 +152,11 @@ exports.delete = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(`DELETE FROM products WHERE id = $1 RETURNING id`, [id]);
+    const history=await pool.query('SELECT id,quantity,returned_quantity FROM workshop_assignments WHERE product_id=$1',[id]);
+    if(history.rows.some(a=>a.quantity>a.returned_quantity))return res.status(409).json({message:'Primero registra la devolución de los ítems de taller que están en uso.'});
+    const result = history.rows.length
+      ? await pool.query('UPDATE products SET estado=false,"updatedAt"=now() WHERE id=$1 RETURNING id',[id])
+      : await pool.query(`DELETE FROM products WHERE id = $1 RETURNING id`, [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado' });

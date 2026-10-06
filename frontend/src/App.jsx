@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
 import DashboardLayout from './components/DashboardLayout';
-import MisServicios from './pages/Dashboard/MisServicios';
+const MisServicios = React.lazy(()=>import('./pages/Dashboard/MisServicios'));
 
 // ============================================================
 // AUTH
@@ -18,24 +18,24 @@ import Register from './pages/Register';
 // DASHBOARD
 // ============================================================
 
-import Dashboard from './pages/Dashboard/Dashboard';
-import Servicios from './pages/Dashboard/Servicios';
-import Inventarios from './pages/Dashboard/Inventarios';
-import Clientes from './pages/Dashboard/Clientes';
-import Tecnicos from './pages/Dashboard/Tecnicos';
-import Usuarios from './pages/Dashboard/Usuarios';
-import TiposServicio from './pages/Dashboard/TiposServicio';
-import Agenda from './pages/Dashboard/Agenda';
-import Facturas from './pages/Dashboard/Facturas';
-import Alquileres from './pages/Dashboard/Alquileres';
-import Reportes from './pages/Dashboard/Reportes';
+const Dashboard = React.lazy(()=>import('./pages/Dashboard/Dashboard'));
+const Servicios = React.lazy(()=>import('./pages/Dashboard/Servicios'));
+const Inventarios = React.lazy(()=>import('./pages/Dashboard/Inventarios'));
+const Clientes = React.lazy(()=>import('./pages/Dashboard/Clientes'));
+const Tecnicos = React.lazy(()=>import('./pages/Dashboard/Tecnicos'));
+const Usuarios = React.lazy(()=>import('./pages/Dashboard/Usuarios'));
+const TiposServicio = React.lazy(()=>import('./pages/Dashboard/TiposServicio'));
+const Agenda = React.lazy(()=>import('./pages/Dashboard/Agenda'));
+const Facturas = React.lazy(()=>import('./pages/Dashboard/Facturas'));
+const Alquileres = React.lazy(()=>import('./pages/Dashboard/Alquileres'));
+
 
 // Ventas
-import Ventas from './pages/Ventas/Ventas';
+const Ventas = React.lazy(()=>import('./pages/Ventas/Ventas'));
 
 // Roles y permisos
-import RolesManagement from './pages/RolesManagement';
-import UserRolesAssignment from './pages/UserRolesAssignment';
+const RolesManagement = React.lazy(()=>import('./pages/RolesManagement'));
+const UserRolesAssignment = React.lazy(()=>import('./pages/UserRolesAssignment'));
 
 // ============================================================
 // ERROR BOUNDARY
@@ -152,63 +152,63 @@ const App = () => {
 
                 <Route
                   path="/dashboard"
-                  element={<Dashboard />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Dashboard /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/servicios"
-                  element={<Servicios />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Servicios /></React.Suspense>}
                 />
-                <Route path="/dashboard/mis-servicios" element={<MisServicios />} />
+                <Route path="/dashboard/mis-servicios" element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><MisServicios /></React.Suspense>} />
 
                 <Route
                   path="/dashboard/inventarios"
-                  element={<Inventarios />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Inventarios /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/ventas"
-                  element={<Ventas />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Ventas /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/clientes"
-                  element={<Clientes />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Clientes /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/tecnicos"
-                  element={<Tecnicos />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Tecnicos /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/usuarios"
-                  element={<Usuarios />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Usuarios /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/tipos-servicio"
-                  element={<TiposServicio />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><TiposServicio /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/agenda"
-                  element={<Agenda />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Agenda /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/facturas"
-                  element={<Facturas />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Facturas /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/alquileres"
-                  element={<Alquileres />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><Alquileres /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/reportes"
-                  element={<Reportes />}
+                  element={<Navigate to="/dashboard" replace />}
                 />
 
                 {/* ========================================== */}
@@ -217,12 +217,12 @@ const App = () => {
 
                 <Route
                   path="/dashboard/roles"
-                  element={<RolesManagement />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><RolesManagement /></React.Suspense>}
                 />
 
                 <Route
                   path="/dashboard/usuarios/roles"
-                  element={<UserRolesAssignment />}
+                  element={<React.Suspense fallback={<div role="status" className="p-6">Cargando módulo…</div>}><UserRolesAssignment /></React.Suspense>}
                 />
 
               </Route>

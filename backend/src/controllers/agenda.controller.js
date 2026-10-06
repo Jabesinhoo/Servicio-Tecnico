@@ -67,6 +67,7 @@ exports.setHorarioTecnico = async (req, res) => {
       ? req.body.horarios
       : [];
 
+    if(horarios.some(h=>!Number.isInteger(Number(h.dia_semana))||Number(h.dia_semana)<0||Number(h.dia_semana)>6||!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(h.hora_inicio)||!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(h.hora_fin)||h.hora_fin<=h.hora_inicio))return res.status(400).json({message:'Cada turno requiere día válido y hora final posterior al inicio, en hora de Colombia.'});
     await client.query('BEGIN');
 
     await client.query(
@@ -428,6 +429,7 @@ exports.agendarServicio = async (req, res) => {
         'SCHEDULE_CONFLICT',
         'OUTSIDE_WORK_HOURS',
         'NO_COMMON_WORK_WINDOW',
+        'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS',
         'TEAM_REQUIRED_FOR_SCHEDULE',
         'INVALID_SCHEDULE_TIME',
         'INVALID_SCHEDULE_DATE',

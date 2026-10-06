@@ -615,6 +615,7 @@ exports.updateTeam = async (req, res) => {
     if (
       [
         'NO_COMMON_SLOT',
+        'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS', 'SCHEDULE_NOT_STARTED',
         'TEAM_REQUIRED_FOR_SCHEDULE',
       ].includes(error?.code)
     ) {
@@ -807,6 +808,7 @@ exports.approveAndAssign = async (req, res) => {
         if (
           [
             'NO_COMMON_SLOT',
+        'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS', 'SCHEDULE_NOT_STARTED',
             'TEAM_REQUIRED_FOR_SCHEDULE',
           ].includes(scheduleError?.code)
         ) {
@@ -874,6 +876,7 @@ exports.approveAndAssign = async (req, res) => {
     if (
       [
         'NO_COMMON_SLOT',
+        'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS', 'SCHEDULE_NOT_STARTED',
         'TEAM_REQUIRED_FOR_SCHEDULE',
       ].includes(error?.code)
     ) {
@@ -1120,6 +1123,7 @@ exports.assignPrimary = async (req, res) => {
     if (
       [
         'NO_COMMON_SLOT',
+        'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS', 'SCHEDULE_NOT_STARTED',
         'TEAM_REQUIRED_FOR_SCHEDULE',
       ].includes(error?.code)
     ) {

@@ -81,3 +81,13 @@ test('envío exige canal, destinatario y contacto', () => {
   assert.throws(() => normalizeDocumentDispatch({ channel: 'email', confirmed_sent: true, recipient_name: 'Cliente' }), /destinatario/);
 });
 module.exports = { snapshot };
+
+test('las tres actas usan tablas, Verdana y el verde solicitado por defecto',()=>{
+ for(const type of ['reception_act','technical_closure','final_delivery']){
+  const html=buildServiceDocumentHtml(type,snapshot());
+  assert.match(html,/<table class="data-table"><tbody><tr><td/);
+  assert.match(html,/font-family: Verdana, Geneva, sans-serif/);
+  assert.match(html,/#8aa645/);
+  assert.ok(!html.includes('<div class="grid">'));
+ }
+});

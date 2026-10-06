@@ -3,21 +3,23 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Clock, Calendar } from 'lucide-react';
 import api from '../../../services/api';
 
+const colombiaDate = (offsetDays = 0) => new Date(Date.now() - 5 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10);
+
 const AgendarModal = ({ isOpen, onClose, servicioId, servicioCodigo, onSave }) => {
   const [formData, setFormData] = useState({
     fecha_agendada: '',
     hora_inicio: '09:00',
     duracion_estimada: 60
   });
+  const [error,setError]=useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && servicioId) {
       // Resetear formulario
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      setError('');
       setFormData({
-        fecha_agendada: tomorrow.toISOString().split('T')[0],
+        fecha_agendada: colombiaDate(1),
         hora_inicio: '09:00',
         duracion_estimada: 60
       });
@@ -26,13 +28,13 @@ const AgendarModal = ({ isOpen, onClose, servicioId, servicioCodigo, onSave }) =
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setLoading(true);setError('');
     try {
       await api.put(`/api/agenda/servicio/${servicioId}`, formData);
       onSave();
       onClose();
     } catch (error) {
-      console.error('Error agendando servicio:', error);
+      setError(error.response?.data?.message||'No fue posible programar el servicio.');
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ const AgendarModal = ({ isOpen, onClose, servicioId, servicioCodigo, onSave }) =
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="p-4 sm:p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">{error&&<p role="alert" className="text-red-600">{error}</p>}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Fecha
@@ -64,7 +66,7 @@ const AgendarModal = ({ isOpen, onClose, servicioId, servicioCodigo, onSave }) =
                   type="date"
                   value={formData.fecha_agendada}
                   onChange={(e) => setFormData({ ...formData, fecha_agendada: e.target.value })}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={colombiaDate()}
                   className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-900"
                   required
                 />
@@ -91,18 +93,7 @@ const AgendarModal = ({ isOpen, onClose, servicioId, servicioCodigo, onSave }) =
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Duración Estimada (minutos)
               </label>
-              <select
-                value={formData.duracion_estimada}
-                onChange={(e) => setFormData({ ...formData, duracion_estimada: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900"
-              >
-                <option value={30}>30 minutos</option>
-                <option value={60}>1 hora</option>
-                <option value={90}>1.5 horas</option>
-                <option value={120}>2 horas</option>
-                <option value={180}>3 horas</option>
-                <option value={240}>4 horas</option>
-              </select>
+              <p className="text-sm">La agenda utiliza la duración configurada en el tipo de servicio y valida los horarios laborales de todo el equipo, en hora de Colombia.</p>
             </div>
           </div>
 

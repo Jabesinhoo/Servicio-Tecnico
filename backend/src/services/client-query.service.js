@@ -255,7 +255,7 @@ const listClients = async ({
     }
 
     const query = `
-        WITH clientes_unificados AS (
+        WITH clientes_unificados AS NOT MATERIALIZED (
             ${sources.join('\nUNION ALL\n')}
         ),
 

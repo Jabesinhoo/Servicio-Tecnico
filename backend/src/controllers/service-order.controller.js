@@ -3,6 +3,8 @@ const {custodyRequiresLocation}=require('../domain/service-site');
 
 // backend/src/controllers/service-order.controller.js
 const pool = require('../db/pool');
+const {assertExecutionWindow}=require('../services/service-scheduling.service');
+const {startSession,stopSession}=require('../services/service-execution-time.service');
 const {normalizeServiceSite}=require('../domain/service-site');
 const {saveOrderSite}=require('../services/service-site.service');
 const {clientProfile}=require('../services/client-profile.service');
@@ -1127,6 +1129,14 @@ exports.changeStatus = async (req, res) => {
       });
     }
 
+    if (estado === SERVICE_ORDER_STATES.EN_EJECUCION) {
+      const pending = await client.query(`SELECT id FROM service_order_authorizations WHERE service_order_id=$1 AND status='pending' LIMIT 1`, [currentOrder.id]);
+      if (pending.rows.length) {
+        await safeRollback(client);
+        return res.status(409).json({code:'CLIENT_AUTHORIZATION_PENDING', message:'Registra la decisión del cliente en Autorización antes de reanudar el servicio.'});
+      }
+    }
+
     /*
      * P2:
      * El técnico no puede iniciar/reanudar el trabajo sin:
@@ -1223,6 +1233,17 @@ exports.changeStatus = async (req, res) => {
       }
     }
 
+    if (estado === SERVICE_ORDER_STATES.CERRADA) {
+      await safeRollback(client);
+      return res.status(409).json({message:'Usa Finalizar trabajo para confirmar el cierre técnico y Entrega final para cerrar la orden.'});
+    }
+    if (estado === SERVICE_ORDER_STATES.EN_EJECUCION) {
+      await assertExecutionWindow(client,id);
+      await startSession(client,id,userId);
+    } else if(currentOrder.estado === SERVICE_ORDER_STATES.EN_EJECUCION) {
+      await stopSession(client,id);
+    }
+
     const result = await client.query(
       `
         UPDATE service_orders
@@ -1251,6 +1272,7 @@ exports.changeStatus = async (req, res) => {
   } catch (error) {
     await safeRollback(client);
 
+    if(error.status || ['WORK_HOURS_REQUIRED','OUTSIDE_WORK_HOURS','SCHEDULE_NOT_STARTED','SCHEDULE_CONFLICT'].includes(error.code))return res.status(error.status||409).json({message:error.message,code:error.code});
     console.error('Error changing service order status:', error);
 
     return res.status(500).json({

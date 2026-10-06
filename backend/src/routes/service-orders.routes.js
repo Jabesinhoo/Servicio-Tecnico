@@ -399,13 +399,13 @@ router.get(
 
 router.put(
   '/service-orders/:id/closure/checklist',
-  allowRoles('tecnico'),
+  allowRoles('admin', 'tecnico'),
   serviceClosureController.saveChecklist
 );
 
 router.post(
   '/service-orders/:id/closure/evidences',
-  allowRoles('tecnico'),
+  allowRoles('admin', 'tecnico'),
   serviceClosureController.uploadEvidence
 );
 
@@ -417,13 +417,13 @@ router.get(
 
 router.post(
   '/service-orders/:id/closure/technical-close',
-  allowRoles('tecnico'),
+  allowRoles('admin', 'tecnico'),
   serviceClosureController.technicalClose
 );
 
 router.post(
   '/service-orders/:id/closure/hand-to-direction',
-  allowRoles('tecnico'),
+  allowRoles('admin', 'tecnico'),
   serviceClosureController.handToDirection
 );
 

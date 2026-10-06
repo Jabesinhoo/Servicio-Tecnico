@@ -1,3 +1,4 @@
+import bogotaTimeZone from './agenda/bogotaTimeZone';
 import {useTheme} from '../../context/ThemeContext';
 import ServicioDetail from './servicios/ServicioDetail';
 import React, {
@@ -434,11 +435,13 @@ const Agenda = () => {
                 <FullCalendar
                   ref={calendarRef}
                   plugins={[
+                    bogotaTimeZone,
                     dayGridPlugin,
                     timeGridPlugin,
                     interactionPlugin,
                     multimonthPlugin,
                   ]}
+                  timeZone="America/Bogota"
                   initialView={getView()}
                   initialDate={selectedDate}
                   events={eventos.map(event=>({...event,backgroundColor:primaryColor,borderColor:primaryColor,textColor:'var(--color-on-primary)'}))}

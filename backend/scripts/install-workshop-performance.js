@@ -1,0 +1,2 @@
+'use strict';const path=require('path');process.chdir(path.resolve(__dirname,'..'));require('dotenv').config();const fs=require('fs');const pool=require('../src/db/pool');
+(async()=>{const client=await pool.connect();try{await client.query(fs.readFileSync('sql/20261006-workshop-performance.sql','utf8'));console.log('OK SQL: taller, tiempos e indicadores');}catch(e){await client.query('ROLLBACK').catch(()=>{});console.error(e.message);process.exitCode=1;}finally{client.release();await pool.end();}})();

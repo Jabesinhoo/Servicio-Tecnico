@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../db/pool');
+const {timing,stopSession}=require('../services/service-execution-time.service');
 const { randomUUID } = require('crypto');
 const fsp = require('fs/promises');
 const path = require('path');
@@ -98,6 +99,7 @@ async function getOrder(
         estado::text AS estado,
         tecnico_id,
         fecha_inicio,
+        duracion_estimada,
         fecha_fin
       FROM service_orders
       WHERE id = $1
@@ -187,6 +189,12 @@ async function assertPrimary(
   req,
   order
 ) {
+  if (isAdmin(req)) {
+    const primary = await getPrimary(client, order);
+    if (!primary) throw Object.assign(new Error('Asigna un técnico principal antes de completar el cierre.'), {code:'PRIMARY_REQUIRED'});
+    return primary;
+  }
+
   if (!isTechnician(req)) {
     const error = new Error(
       'Esta acción corresponde al técnico responsable'
@@ -467,6 +475,12 @@ exports.getClosure = async (req, res) => {
           final_notes: null,
         },
         evidences,
+        timing: await timing(client,order),
+        permissions: {
+          can_prepare: Boolean(primary) && (isAdmin(req) || primary === req.user.id) && ['asignada','en_espera','en_ejecucion'].includes(order.estado) && ['draft','rework_required'].includes(closure?.status || 'draft'),
+          can_confirm: Boolean(primary) && (isAdmin(req) || primary === req.user.id) && order.estado === 'en_ejecucion' && ['draft','rework_required'].includes(closure?.status || 'draft'),
+          can_hand_to_direction: (isAdmin(req) || primary === req.user.id) && closure?.status === 'technical_closed',
+        },
       },
     });
   } catch (error) {
@@ -533,13 +547,13 @@ exports.saveChecklist = async (req, res) => {
       order
     );
 
-    if (order.estado !== 'en_ejecucion') {
+    if (!['asignada','en_espera','en_ejecucion'].includes(order.estado)) {
       await rollback(client);
       return res.status(409).json({
         success: false,
         code: 'SERVICE_NOT_IN_EXECUTION',
         message:
-          'El checklist de cierre solo se edita mientras el servicio está en ejecución',
+          'El cierre se prepara mientras la orden está asignada, en espera o en ejecución',
       });
     }
 
@@ -694,11 +708,11 @@ exports.uploadEvidence = async (req, res) => {
       order
     );
 
-    if (order.estado !== 'en_ejecucion') {
+    if (!['asignada','en_espera','en_ejecucion'].includes(order.estado)) {
       return res.status(409).json({
         success: false,
         message:
-          'Las evidencias finales solo se cargan durante la ejecución',
+          'Las evidencias finales se cargan mientras la orden está asignada, en espera o en ejecución',
       });
     }
 
@@ -1190,8 +1204,8 @@ exports.technicalClose = async (
 
     if (
       !custody ||
-      custody.holder_user_id !==
-        req.user.id
+      (!isAdmin(req) && custody.holder_user_id !== req.user.id) ||
+      (isAdmin(req) && custody && ![req.user.id, await getPrimary(client, order)].includes(custody.holder_user_id))
     ) {
       await rollback(client);
       return res.status(409).json({
@@ -1203,6 +1217,13 @@ exports.technicalClose = async (
       });
     }
 
+    const elapsed=await timing(client,order);
+    const durationNote=cleanText(req.body?.duration_note,2000);
+    if(elapsed.recorded_sessions>0 && elapsed.actual_minutes<elapsed.estimated_minutes && !durationNote){
+      await rollback(client);return res.status(409).json({code:'EARLY_FINISH_REASON_REQUIRED',message:'Terminaste antes de la duración estimada. Indica el motivo para registrar el tiempo real.'});
+    }
+    await stopSession(client,order.id);
+
     const result = await client.query(
       `
         UPDATE service_order_closures
@@ -1210,6 +1231,7 @@ exports.technicalClose = async (
               'technical_closed',
             technical_closed_by = $1,
             technical_closed_at = NOW(),
+            actual_minutes = $3, estimated_minutes = $4, duration_note = $5,
             updated_at = NOW()
         WHERE service_order_id = $2
         RETURNING *
@@ -1217,6 +1239,7 @@ exports.technicalClose = async (
       [
         req.user.id,
         order.id,
+        elapsed.recorded_sessions>0 ? elapsed.actual_minutes : null, elapsed.estimated_minutes, durationNote,
       ]
     );
 
@@ -1262,6 +1285,7 @@ exports.technicalClose = async (
         metadata: {
           actual_finish:
             new Date().toISOString(),
+          timing:elapsed,duration_note:durationNote,
         },
       }
     );

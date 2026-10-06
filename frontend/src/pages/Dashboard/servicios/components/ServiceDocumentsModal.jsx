@@ -75,7 +75,7 @@ export default function ServiceDocumentsModal({
   onOpenClosure,
   onOpenDelivery,
 }) {
-  const [branding,setBranding]=useState(()=>({logo_key:'logot',accent_color:getComputedStyle(document.documentElement).getPropertyValue('--color-primary-hex').trim()||'#3b82f6',background_color:'#f3f4f6'}));
+  const [branding,setBranding]=useState(()=>({logo_key:'logot',accent_color:'#8aa645',background_color:'#f3f6eb'}));
   const [preview,setPreview]=useState('');
   const previewRef = useRef(null);
   useEffect(() => { if (preview) previewRef.current?.scrollIntoView({behavior:'smooth',block:'start'}); }, [preview]);

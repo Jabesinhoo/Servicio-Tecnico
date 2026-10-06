@@ -6,7 +6,7 @@ function normalizeBranding(input){
  if(input===undefined||input===null)return null;
  const fail=()=>{throw Object.assign(new Error('Logo o colores del documento no válidos'),{status:400});};
  if(!choices[input.logo_key])fail();
- const result={logo_key:input.logo_key};for(const [key,value]of Object.entries({accent_color:input.accent_color??'#1e7d47',background_color:input.background_color??'#eaf7ef'})){if(!/^#[0-9a-f]{6}$/i.test(value))fail();result[key]=value;}
+ const result={logo_key:input.logo_key};for(const [key,value]of Object.entries({accent_color:input.accent_color??'#8aa645',background_color:input.background_color??'#f3f6eb'})){if(!/^#[0-9a-f]{6}$/i.test(value))fail();result[key]=value;}
  return result;
 }
 function logoUri(key){

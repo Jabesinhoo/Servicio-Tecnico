@@ -125,22 +125,18 @@ function signatureHtml(
 }
 
 function row(label, value) {
-  return `
-    <div class="field">
-      <div class="field-label">
-        ${escapeHtml(label)}
-      </div>
-      <div class="field-value">
-        ${escapeHtml(
-          value === null ||
-          value === undefined ||
-          value === ''
-            ? '—'
-            : value
-        )}
-      </div>
-    </div>
-  `;
+  const labels = {asignada:'Asignada',en_ejecucion:'En ejecución',en_espera:'En espera',cerrada:'Cerrada',draft:'Borrador',confirmed:'Confirmado',technical_closed:'Cierre técnico confirmado',handed_to_direction:'Entregado a Dirección Técnica',direction_received:'Recibido por Dirección Técnica',validated:'Validado por Dirección Técnica',rework_required:'Reproceso requerido'};
+  if (['Estado','Estado cierre','Estado diagnóstico'].includes(label)) value = labels[value] || value;
+  return `<td class="field"><span class="field-label">${escapeHtml(label)}</span><span class="field-value">${escapeHtml(value === null || value === undefined || value === '' ? '—' : value)}</span></td>`;
+}
+
+function fieldTables(body) {
+  return body.replace(/<div class="grid">([\s\S]*?)<\/div>/g, (_, fields) => {
+    const cells = fields.match(/<td class="field">[\s\S]*?<\/td>/g) || [];
+    const rows = [];
+    for (let i=0;i<cells.length;i+=2) rows.push(`<tr>${cells[i]}${cells[i+1] || '<td class="field field-empty"></td>'}</tr>`);
+    return `<table class="data-table"><tbody>${rows.join('')}</tbody></table>`;
+  });
 }
 
 function yesNo(value) {
@@ -150,6 +146,9 @@ function yesNo(value) {
 }
 
 const FIELD_LABELS = {
+  tests_completed: 'Pruebas finales realizadas', functional_verified: 'Funcionamiento final verificado',
+  accessories_checked: 'Accesorios / piezas verificados', cleaning_done: 'Limpieza realizada',
+  protective_packaging: 'Equipo protegido / empacado', safety_checked: 'Seguridad verificada',
   good: 'Buen estado', scratches: 'Rayones', dents: 'Golpes / abolladuras',
   broken: 'Partes rotas', humidity: 'Señales de humedad', tampered: 'Manipulado / abierto',
   other: 'Otra novedad', charger: 'Cargador / adaptador recibido', battery: 'Batería recibida',
@@ -260,7 +259,7 @@ function baseHtml({
 
   body {
     margin: 0;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: Verdana, Geneva, sans-serif;
     color: #172033;
     font-size: 10.5pt;
     line-height: 1.42;
@@ -274,7 +273,7 @@ function baseHtml({
     justify-content: space-between;
     gap: 14px;
     padding-bottom: 10px;
-    border-bottom: 2px solid ${order.document_branding?.accent_color||'#1e7d47'};
+    border-bottom: 2px solid ${order.document_branding?.accent_color||'#8aa645'};
   }
 
   .brand {
@@ -319,7 +318,7 @@ function baseHtml({
   h2 {
     margin: 18px 0 8px;
     font-size: 12.5pt;
-    border-left: 4px solid ${order.document_branding?.accent_color||'#1e7d47'};
+    border-left: 4px solid ${order.document_branding?.accent_color||'#8aa645'};
     padding-left: 8px;
   }
 
@@ -391,7 +390,7 @@ function baseHtml({
   .check {
     width: 18px;
     font-weight: 800;
-    color: ${order.document_branding?.accent_color||'#1e7d47'};
+    color: ${order.document_branding?.accent_color||'#8aa645'};
   }
 
   .signature-grid {
@@ -445,7 +444,7 @@ function baseHtml({
     padding: 4px 8px;
     font-size: 8.5pt;
     font-weight: 700;
-    background: ${order.document_branding?.background_color||'#eaf7ef'};
+    background: ${order.document_branding?.background_color||'#f3f6eb'};
     color: #17643a;
   }
 
@@ -469,6 +468,35 @@ function baseHtml({
   .page-break {
     break-before: page;
   }
+
+
+  :root { --accent: ${order.document_branding?.accent_color||'#8aa645'}; --tint: ${order.document_branding?.background_color||'#f3f6eb'}; }
+  body { font-size: 9pt; line-height: 1.5; color: #263126; }
+  .header { border-bottom: 4px solid var(--accent); padding: 2mm 0 4mm; }
+  .brand img { width: 155px; max-height: 62px; }
+  .doc-meta { border-left: 1px solid var(--accent); padding-left: 16px; font-size: 8pt; }
+  .doc-meta strong { color: #354327; font-size: 11pt; margin-bottom: 3px; }
+  .title { margin: 5mm 0 2mm; font-size: 19pt; letter-spacing: -.5px; color: #29351e; }
+  .subtitle { font-size: 8.5pt; color: #55634b; padding-bottom: 3mm; border-bottom: 1px solid #dce4d0; }
+  h2 { margin: 5mm 0 0; background: var(--accent); color: #182211; border: 0; padding: 7px 10px; font-size: 10pt; letter-spacing: .2px; break-after: avoid; }
+  h3 { color: #3d4d2e; font-size: 9pt; margin: 4mm 0 2mm; break-after: avoid; }
+  .data-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 0 0 3mm; }
+  .data-table tr { break-inside: avoid; }
+  .data-table .field { width: 50%; border: 1px solid #d3ddc3; border-radius: 0; vertical-align: top; padding: 7px 10px; }
+  .data-table tr:nth-child(odd) .field { background: var(--tint); }
+  .field-label { display: block; color: #59664a; font-size: 7pt; letter-spacing: .25px; margin-bottom: 3px; }
+  .field-value { display: block; font-size: 9pt; font-weight: bold; }
+  .field-empty { background: #fff !important; }
+  .note { border: 1px solid #d3ddc3; border-left: 3px solid var(--accent); border-radius: 0; background: var(--tint); padding: 8px 10px; min-height: 0; }
+  .checklist { border-color: #d3ddc3; border-radius: 0; }
+  .check-row { justify-content: space-between; border-bottom-color: #d3ddc3; padding: 6px 10px; break-inside: avoid; }
+  .check-row:nth-child(odd) { background: var(--tint); }
+  .photo-card { border-color: #d3ddc3; border-radius: 0; padding: 8px; }
+  .photo-card img { height: 165px; }
+  .photo-card figcaption { color: #59664a; font-size: 7pt; }
+  .signature-box, .signature-empty { border-color: #d3ddc3; border-radius: 0; height: 90px; }
+  .signature-label { padding-top: 5px; border-top: 2px solid var(--accent); color: #3d4d2e; }
+  .footer { border-top: 2px solid var(--accent); color: #59664a; margin-top: 6mm; }
 
   @media print {
     .avoid-break {
@@ -517,7 +545,7 @@ function baseHtml({
     ${escapeHtml(subtitle || '')}
   </div>
 
-  ${body}
+  ${fieldTables(body)}
 
   <footer class="footer">
     ${
@@ -733,6 +761,8 @@ function buildTechnicalClosure(snapshot) {
       )}
     </div>
 
+    <h3>Duración del trabajo</h3><div class="grid">${row('Duración estimada', closure.estimated_minutes == null ? 'Sin registro' : closure.estimated_minutes + ' min')}${row('Tiempo activo registrado', closure.actual_minutes == null ? 'Sin medición' : Number(closure.actual_minutes).toFixed(1) + ' min')}</div>
+    ${closure.duration_note ? `<div class="note">${escapeHtml(closure.duration_note)}</div>` : ''}
     <h3>Checklist final</h3>
     <div class="checklist">
       ${checklistRows(

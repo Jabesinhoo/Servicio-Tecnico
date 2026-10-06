@@ -91,8 +91,12 @@ const Clientes = () => {
    * los resultados de una búsqueda más reciente.
    */
   const requestIdRef = useRef(0);
+  const abortRef=useRef(null);
+  useEffect(()=>()=>abortRef.current?.abort(),[]);
 
   const fetchClientes = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller=new AbortController();abortRef.current=controller;
     const requestId = ++requestIdRef.current;
 
     try {
@@ -100,6 +104,7 @@ const Clientes = () => {
       setFetchError('');
 
       const response = await api.get('/api/clients', {
+        signal:controller.signal,
         params: {
           page,
           limit,
@@ -142,6 +147,7 @@ const Clientes = () => {
       setClientes(nextClientes);
       setPagination(nextPagination);
     } catch (error) {
+      if(error.code==='ERR_CANCELED')return;
       if (requestId !== requestIdRef.current) {
         return;
       }

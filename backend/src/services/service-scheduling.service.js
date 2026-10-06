@@ -5,6 +5,7 @@ const { randomUUID } = require('crypto');
 const TZ = 'America/Bogota';
 const SEARCH_DAYS = 45;
 const SLOT_MINUTES = 15;
+const {chooseSlot,fitsHours}=require('../domain/service-work-calendar');
 
 function normalizeDuration(value, fallback = 60) {
   const n = Number(value);
@@ -24,7 +25,7 @@ function validDate(value) {
 
 function validTime(value) {
   const s = String(value || '').trim();
-  if (!/^\d{2}:\d{2}(?::\d{2})?$/.test(s)) {
+  if (!/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(s)) {
     const e = new Error('Hora programada no válida');
     e.code = 'INVALID_SCHEDULE';
     throw e;
@@ -35,7 +36,7 @@ function validTime(value) {
 async function getOrderAndTeam(client, orderId) {
   const orderResult = await client.query(
     `SELECT id, codigo_os, estado, tecnico_id,
-            duracion_estimada, fecha_agendada, hora_inicio_agendada
+            duracion_estimada, fecha_agendada::text AS fecha_agendada, hora_inicio_agendada
      FROM service_orders
      WHERE id = $1
      FOR UPDATE`,
@@ -49,6 +50,9 @@ async function getOrderAndTeam(client, orderId) {
   }
 
   const order = orderResult.rows[0];
+  const typed = await client.query(`SELECT SUM(ts.duracion_estimada)::int AS minutes FROM service_order_services ss JOIN tipos_servicio ts ON ts.id=ss.tipo_servicio_id WHERE ss.service_order_id=$1`,[orderId]);
+  if(Number(typed.rows[0]?.minutes)>0) order.duracion_estimada=Number(typed.rows[0].minutes);
+
 
   const teamResult = await client.query(
     `SELECT technician_id, member_role
@@ -71,7 +75,9 @@ async function getOrderAndTeam(client, orderId) {
     throw e;
   }
 
+  for(const id of [...new Set(team.map(m=>m.technician_id))].sort()) await client.query('SELECT pg_advisory_xact_lock(hashtext($1::text))',['schedule:'+id]);
   return { order, team };
+
 }
 
 async function bogotaTimestamp(client, dateText, timeText) {
@@ -123,53 +129,14 @@ async function conflicts(client, technicianIds, startAt, endAt, orderId) {
   return r.rows;
 }
 
-async function findCommonSlot(
-  client,
-  technicianIds,
-  initialStart,
-  durationMinutes,
-  orderId
-) {
-  let cursor = new Date(initialStart);
-  const limit = Date.now() + SEARCH_DAYS * 86400000;
-
-  while (cursor.getTime() < limit) {
-    const end = new Date(
-      cursor.getTime() + durationMinutes * 60000
-    );
-
-    const busy = await conflicts(
-      client,
-      technicianIds,
-      cursor.toISOString(),
-      end.toISOString(),
-      orderId
-    );
-
-    if (!busy.length) {
-      return {
-        startAt: cursor.toISOString(),
-        endAt: end.toISOString(),
-      };
-    }
-
-    const latestEnd = Math.max(
-      ...busy.map((row) => new Date(row.end_at).getTime())
-    );
-
-    cursor = new Date(
-      Math.ceil(latestEnd / (SLOT_MINUTES * 60000)) *
-        SLOT_MINUTES *
-        60000
-    );
-  }
-
-  const e = new Error(
-    `No encontré un espacio común disponible para los ${technicianIds.length} técnico(s) en los próximos ${SEARCH_DAYS} días.`
-  );
-  e.code = 'NO_COMMON_SLOT';
-  throw e;
+async function workingHours(client, ids) {
+ const r=await client.query('SELECT tecnico_id,dia_semana,hora_inicio,hora_fin,activo FROM tecnicos_horarios WHERE tecnico_id=ANY($1::uuid[]) AND activo=TRUE',[ids]);
+ for(const id of ids) if(!r.rows.some(h=>h.tecnico_id===id)) throw Object.assign(new Error('Configura el horario laboral de todos los técnicos asignados antes de programar.'),{code:'WORK_HOURS_REQUIRED',status:409});
+ return r.rows;
 }
+async function assertHours(client,ids,start,end){const rows=await workingHours(client,ids);if(!fitsHours(new Date(start).getTime(),new Date(end).getTime(),ids,rows))throw Object.assign(new Error('El servicio completo debe caber en el horario laboral de todos los técnicos, en hora de Colombia.'),{code:'OUTSIDE_WORK_HOURS',status:409});}
+async function findCommonSlot(client,ids,start,duration,orderId){const rows=await workingHours(client,ids);const r=await client.query(`SELECT technician_id,start_at,end_at FROM service_order_schedule_blocks WHERE technician_id=ANY($1::uuid[]) AND status='active' AND service_order_id<>$2 AND end_at>$3::timestamptz AND start_at<$3::timestamptz+interval '45 days'`,[ids,orderId,start]);const slot=chooseSlot({start,duration,ids,rows,busy:r.rows});if(!slot)throw Object.assign(new Error('No hay un turno común que permita completar la duración del servicio en los próximos 45 días.'),{code:'NO_COMMON_SLOT',status:409});return slot;}
+async function assertExecutionWindow(client,orderId){const {order,team}=await getOrderAndTeam(client,orderId);const ids=team.map(m=>m.technician_id);const r=await client.query(`SELECT now() AS start_at, COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at,now())-started_at))/60),0) AS elapsed FROM service_execution_sessions WHERE service_order_id=$1`,[orderId]);const duration=normalizeDuration(order.duracion_estimada);const remaining=Math.max(1,duration-Number(r.rows[0].elapsed));const start=r.rows[0].start_at;const end=new Date(new Date(start).getTime()+remaining*60000).toISOString();await assertHours(client,ids,start,end);const planned=await client.query(`SELECT MIN(start_at) AS start_at FROM service_order_schedule_blocks WHERE service_order_id=$1 AND status='active'`,[orderId]);if(!planned.rows[0].start_at)throw Object.assign(new Error('Programa el servicio en Agenda antes de iniciarlo.'),{code:'SCHEDULE_REQUIRED',status:409});if(planned.rows[0].start_at && new Date(start)<new Date(planned.rows[0].start_at))throw Object.assign(new Error('El turno programado todavía no ha comenzado. Revisa la agenda en hora de Colombia.'),{code:'SCHEDULE_NOT_STARTED',status:409});if((await conflicts(client,ids,start,end,orderId)).length)throw Object.assign(new Error('El tiempo restante se cruza con otro servicio; reprograma la orden.'),{code:'SCHEDULE_CONFLICT',status:409});await client.query(`UPDATE service_order_schedule_blocks SET start_at=LEAST(start_at,$2::timestamptz),end_at=$3::timestamptz,updated_at=now() WHERE service_order_id=$1 AND status='active'`,[orderId,start,end]);return{duration_minutes:duration,remaining_minutes:remaining};}
 
 async function persistSchedule(
   client,
@@ -184,6 +151,7 @@ async function persistSchedule(
   }
 ) {
   const technicianIds = team.map((m) => m.technician_id);
+  await assertHours(client,technicianIds,startAt,endAt);
 
   await client.query(
     `UPDATE service_order_schedule_blocks
@@ -293,8 +261,8 @@ async function scheduleOrderAutomatically(
     );
     const todayText = today.rows[0].today;
 
-    if (dateText > todayText) {
-      const ts = await bogotaTimestamp(client, dateText, '08:00:00');
+    if (dateText >= todayText) {
+      const ts = await bogotaTimestamp(client, dateText, order.hora_inicio_agendada || '08:00:00');
       initialMs = Math.max(initialMs, new Date(ts).getTime());
     }
   }
@@ -349,8 +317,8 @@ async function rescheduleOrderAt(
     actorUserId = null,
   }
 ) {
-  const { team } = await getOrderAndTeam(client, orderId);
-  const duration = normalizeDuration(durationMinutes, 60);
+  const { order, team } = await getOrderAndTeam(client, orderId);
+  const duration = normalizeDuration(order.duracion_estimada, 60);
   const startAt = await bogotaTimestamp(client, dateText, timeText);
 
   await ensureFuture(client, startAt);
@@ -391,4 +359,5 @@ async function rescheduleOrderAt(
 module.exports = {
   scheduleOrderAutomatically,
   rescheduleOrderAt,
+  assertExecutionWindow,
 };
