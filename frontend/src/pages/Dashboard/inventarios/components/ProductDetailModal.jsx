@@ -167,36 +167,6 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
             </div>
           </div>
 
-          {/* Precios */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-green-600" />
-              Información de Precios
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500">Precio de Venta</p>
-                <p className="text-xl font-bold text-green-600">
-                  ${Number(product.precio_venta).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Costo</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  ${Number(product.costo).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Margen de Ganancia</p>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {product.precio_venta > 0 
-                    ? Math.round(((product.precio_venta - product.costo) / product.precio_venta) * 100) 
-                    : 0}%
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* Stock */}
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">

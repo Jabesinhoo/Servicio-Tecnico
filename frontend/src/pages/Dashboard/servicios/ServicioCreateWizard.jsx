@@ -17,12 +17,14 @@ import {
 } from 'lucide-react';
 import api from '../../../services/api';
 import ServiceTypePicker from './components/ServiceTypePicker';
+import InvoiceRecord from './components/InvoiceRecord';
 import IntakeInvoicePicker from './components/IntakeInvoicePicker';
 import {IntakePhotos,IntakeAcceptance} from './components/IntakeCreationDocuments';
 import {uploadIntakeFiles} from './intakeCreationFiles';
 import ServiceSiteFields from './components/ServiceSiteFields';
 import {emptyServiceSite,serviceSiteError} from './serviceLocation';
-import AcceptanceEvidenceFiles, {uploadAcceptanceFiles} from './components/AcceptanceEvidenceFiles';
+import AcceptanceEvidenceFiles from './components/AcceptanceEvidenceFiles';
+import {uploadAcceptanceFiles} from './acceptanceFiles';
 import { bogotaDateInput } from './serviceFormatters';
 import EquipmentIntakeFields, { emptyEquipmentIntake, equipmentIntakeError } from './components/EquipmentIntakeFields';
 
@@ -82,6 +84,7 @@ export default function ServicioCreateWizard({
   const [profileRetry,setProfileRetry]=useState(0);
   const [ingressPhotos,setIngressPhotos]=useState([]),[savedPhotos,setSavedPhotos]=useState([]);
   const [invoiceFile,setInvoiceFile]=useState(null);
+  const [invoiceLinked,setInvoiceLinked]=useState(null);
   const [acceptanceSignature,setAcceptanceSignature]=useState(''),[signedRevision,setSignedRevision]=useState(''),[acceptanceAct,setAcceptanceAct]=useState(null);
   const profileCache=useRef(new Map());
 
@@ -244,6 +247,9 @@ export default function ServicioCreateWizard({
         if (!active || !row) return;
 
         const intake = row.intake || {};
+        const documents=await api.get(`/api/service-orders/${targetServiceId}/creation-documents`);
+        if(!active)return;
+        setInvoiceLinked(documents.data?.invoice?{reference:documents.data.invoice.invoice_reference,record:documents.data.invoice.record}:null);
         const currentTeam = Array.isArray(row.equipo) ? row.equipo : [];
 
         const client = {
@@ -742,6 +748,7 @@ export default function ServicioCreateWizard({
             client_acceptance_reference: form.client_acceptance_reference,
             billing_mode: form.billing_mode,
             invoice_reference: form.invoice_reference,
+            ...(invoiceLinked?.record?.source_company&&invoiceLinked?.record?.source_id?{worldoffice_invoice:{reference:invoiceLinked.reference,source_company:invoiceLinked.record.source_company,source_id:invoiceLinked.record.source_id}}:{}),
             postpaid_reason: form.postpaid_reason,
             priority: form.priority,
             estimated_duration: form.estimated_duration
@@ -1003,7 +1010,7 @@ export default function ServicioCreateWizard({
                         key={client.id}
                         type="button"
                         onClick={() => {
-                          setSelectedClient(client);setCompleteProfile(client);setProfileRetry(0);
+                          setSelectedClient(client);setCompleteProfile(client);setProfileRetry(0);setInvoiceLinked(null);setInvoiceFile(null);update('invoice_reference','');
                           setForm(previous=>({...previous,equipment_intake:{...previous.equipment_intake,received_from_name:clientName(client),received_from_document:client.documento||''},service_site:{...emptyServiceSite(),mode:previous.service_site.mode,address:client.direccion||'',city:client.ciudad||'',contact_name:client.contacto||clientName(client),contact_phone:client.telefono||client.telefono_2||''}}));
                           setSignedRevision('');setAcceptanceAct(null);setAcceptanceSignature('');setSavedPhotos([]);createdIntakeRef.current=null;
 
@@ -1470,7 +1477,7 @@ export default function ServicioCreateWizard({
                   <div className="mt-3 p-3 accent-soft dark:accent-soft rounded-lg border accent-border dark:accent-border">
                     <p className="text-xs accent-text dark:accent-text flex items-start gap-2">
                       <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-                      El sistema buscará desde el próximo bloque de 15 minutos el primer intervalo libre para todo el equipo. Los técnicos no tienen jornada fija: solo se consideran ocupados los bloques ya registrados en Agenda.
+                      El sistema buscará desde el próximo bloque de 15 minutos el primer intervalo libre para todo el equipo. Se respetan los horarios laborales configurados y los bloques ocupados en Agenda, durante toda la duración del servicio.
                     </p>
                   </div>
                 )}
@@ -1750,8 +1757,9 @@ export default function ServicioCreateWizard({
 
           {step === 6 && (
             <div className="space-y-5">
-              {!isEdit&&selectedClient&&<IntakeInvoicePicker client={selectedClient} ensureDraft={ensureDraft} onLinked={ref=>update('invoice_reference',ref)} file={invoiceFile} onFile={setInvoiceFile} admin={isAdmin}/>}
+              {selectedClient&&<IntakeInvoicePicker edit={isEdit} initialReference={form.invoice_reference} selectedInvoice={invoiceLinked} key={selectedClient.id} client={selectedClient} ensureDraft={ensureDraft} onLinked={record=>{setInvoiceLinked(record);setInvoiceFile(null);update('invoice_reference',record.reference);}} file={invoiceFile} onFile={setInvoiceFile} admin={isAdmin}/>}
 
+              <details className="rounded-xl border p-3"><summary className="cursor-pointer font-semibold">Control de pago</summary><div className="mt-3 space-y-3">
               {isAdmin && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
@@ -1794,20 +1802,6 @@ export default function ServicioCreateWizard({
 
               {form.billing_mode === 'prepaid' && (
                 <>
-                  <label className="block">
-                    <span className="text-sm font-semibold">
-                      Número de factura (se completa al vincular) *
-                    </span>
-                    <input
-                      value={form.invoice_reference}
-                      onChange={(event) =>
-                        update('invoice_reference', event.target.value)
-                      }
-                      placeholder="Número o referencia de factura"
-                      className="mt-1 w-full min-h-12 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
-                    />
-                  </label>
-
                   {isAdmin && (
                     <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
                       <label className="flex items-center gap-3">
@@ -1883,8 +1877,10 @@ export default function ServicioCreateWizard({
                 </label>
               )}
 
+              </div></details>
               <div className="rounded-2xl bg-gray-50 dark:bg-gray-950/40 p-4">
                 <p className="font-bold">Resumen</p>
+                {invoiceLinked?.record?<div className="mt-3"><InvoiceRecord record={invoiceLinked.record} reference={invoiceLinked.reference}/></div>:<p className="mt-3 text-sm">{form.invoice_reference?`Referencia guardada: ${form.invoice_reference}. Busca y selecciona la factura para cargar sus datos.`:'No se ha seleccionado una factura.'}</p>}
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-gray-500">Cliente</p>

@@ -153,8 +153,9 @@ function configStatus() {
   };
 }
 
-function getConfig() {
-  assertEnabled();
+function getConfig(invoiceLookup = false) {
+  if (!invoiceLookup) assertEnabled();
+  else if (String(process.env.WORLDOFFICE_INVOICE_LOOKUP_ENABLED || 'true').toLowerCase() === 'false') throw Object.assign(new Error('La consulta de facturas World Office está deshabilitada.'), {code:'WORLDOFFICE_INVOICE_LOOKUP_DISABLED',status:409});
 
   const status =
     configStatus();
@@ -229,11 +230,11 @@ function getConfig() {
 }
 
 async function withConnection(
-  fn
+  fn, invoiceLookup = false
 ) {
   const connection =
     new sql.ConnectionPool(
-      getConfig()
+      getConfig(invoiceLookup)
     );
 
   try {
@@ -1508,22 +1509,28 @@ function summarizeLiveResult(
   };
 }
 
+function matchingSql(column){return `UPPER(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CONVERT(nvarchar(255),${safeIdentifier(column)}))),' ',''),'.',''),'-',''),'/',''))`;}
+function matchingValue(value){return String(value).trim().toUpperCase().replace(/[ .\-/]/g,'');}
 async function listMappedInvoices({mapping,clientDocument,clientExternalId,search=''}) {
- assertEnabled();const{mapping:m}=await validateMapping(mapping);
+ assertEnabled();const{mapping:m,metadata}=await validateMapping(mapping);
+ const pdfColumn=metadata.columns.find(c=>['pdf','archivopdf','pdfactura','pdffactura','documentopdf','facturapdf'].includes(String(c.name).toLowerCase().replace(/[^a-z]/g,''))&&['varbinary','image','binary'].includes(c.data_type));
+ const pdfSelect=pdfColumn?`CASE WHEN DATALENGTH(${safeIdentifier(pdfColumn.name)})>0 THEN 1 ELSE 0 END AS pdf_available`:'0 AS pdf_available';
  const identities=[];if(m.client_document_column&&clientDocument)identities.push([m.client_document_column,String(clientDocument)]);if(m.client_external_id_column&&clientExternalId)identities.push([m.client_external_id_column,String(clientExternalId)]);
  if(!identities.length)throw Object.assign(new Error('El mapeo financiero necesita una columna de identificación del cliente.'),{status:409});
- return withConnection(async connection=>{const r=connection.request();const predicates=identities.map(([col,value],idx)=>{r.input('identity'+idx,sql.NVarChar(255),value);return `LTRIM(RTRIM(CONVERT(nvarchar(255),${safeIdentifier(col)})))=@identity${idx}`;});r.input('filter',sql.NVarChar(255),String(search).slice(0,100));
- const columns=[['invoice_reference_column','invoice_reference'],['total_amount_column','total_amount'],['balance_amount_column','balance_amount'],['status_column','status']].map(([field,label])=>selectAlias(m[field],label)).join(',');
- const result=await r.query(`SELECT TOP (30) ${columns} FROM ${qualifiedObject(m.source_schema,m.source_object)} WHERE (${predicates.join(' AND ')}) AND (@filter='' OR CONVERT(nvarchar(255),${safeIdentifier(m.invoice_reference_column)}) LIKE '%'+@filter+'%') ORDER BY ${safeIdentifier(m.invoice_reference_column)} DESC`);return result.recordset||[];});
+ return withConnection(async connection=>{const r=connection.request();const predicates=identities.map(([col,value],idx)=>{r.input('identity'+idx,sql.NVarChar(255),matchingValue(value));return `${matchingSql(col)}=@identity${idx}`;});r.input('filter',sql.NVarChar(255),matchingValue(String(search).slice(0,100)));
+ const columns=[['invoice_reference_column','invoice_reference'],['total_amount_column','total_amount'],['paid_amount_column','paid_amount'],['balance_amount_column','balance_amount'],['status_column','status'],['due_date_column','due_date'],['currency_column','currency']].map(([field,label])=>selectAlias(m[field],label)).join(',');
+ const result=await r.query(`SELECT TOP (30) ${columns},${pdfSelect} FROM ${qualifiedObject(m.source_schema,m.source_object)} WHERE (${predicates.join(' AND ')}) AND (@filter='' OR ${matchingSql(m.invoice_reference_column)} LIKE '%'+@filter+'%') ORDER BY ${safeIdentifier(m.invoice_reference_column)} DESC`);return(result.recordset||[]).map(row=>{const total=asMoney(row.total_amount),paid=asMoney(row.paid_amount),balance=asMoney(row.balance_amount);return{...row,pdf_available:row.pdf_available===true||row.pdf_available===1,total_amount:total,paid_amount:paid,balance_amount:balance===null&&total!==null&&paid!==null?total-paid:balance};});});
 }
+
 async function mappedInvoicePdf({mapping,invoiceReference,clientDocument,clientExternalId}){
  assertEnabled();const{mapping:m,metadata}=await validateMapping(mapping);const binary=metadata.columns.find(c=>['pdf','archivopdf','pdfactura','pdffactura','documentopdf','facturapdf'].includes(String(c.name||c.column_name).toLowerCase().replace(/[^a-z]/g,''))&&['varbinary','image','binary'].includes(c.data_type));if(!binary)return null;
  const identities=[];if(m.client_document_column&&clientDocument)identities.push([m.client_document_column,String(clientDocument)]);if(m.client_external_id_column&&clientExternalId)identities.push([m.client_external_id_column,String(clientExternalId)]);if(!identities.length)return null;
- return withConnection(async connection=>{const r=connection.request();r.input('ref',sql.NVarChar(255),String(invoiceReference));const predicates=identities.map(([col,value],idx)=>{r.input('identity'+idx,sql.NVarChar(255),value);return `LTRIM(RTRIM(CONVERT(nvarchar(255),${safeIdentifier(col)})))=@identity${idx}`;});const result=await r.query(`SELECT TOP (2) ${safeIdentifier(binary.name||binary.column_name)} AS pdf FROM ${qualifiedObject(m.source_schema,m.source_object)} WHERE CONVERT(nvarchar(255),${safeIdentifier(m.invoice_reference_column)})=@ref AND ${predicates.join(' AND ')}`);if(result.recordset?.length!==1)return null;const bytes=result.recordset[0].pdf;if(!Buffer.isBuffer(bytes)||bytes.length>8388608||!bytes.subarray(0,5).equals(Buffer.from('%PDF-')))return null;return bytes;});
+ return withConnection(async connection=>{const r=connection.request();r.input('ref',sql.NVarChar(255),String(invoiceReference));const predicates=identities.map(([col,value],idx)=>{r.input('identity'+idx,sql.NVarChar(255),matchingValue(value));return `${matchingSql(col)}=@identity${idx}`;});const result=await r.query(`SELECT TOP (2) ${safeIdentifier(binary.name||binary.column_name)} AS pdf FROM ${qualifiedObject(m.source_schema,m.source_object)} WHERE CONVERT(nvarchar(255),${safeIdentifier(m.invoice_reference_column)})=@ref AND ${predicates.join(' AND ')}`);if(result.recordset?.length!==1)return null;const bytes=result.recordset[0].pdf;if(!Buffer.isBuffer(bytes)||bytes.length>8388608||!bytes.subarray(0,5).equals(Buffer.from('%PDF-')))return null;return bytes;});
 }
 
 module.exports = {
   enabled,
+  withInvoiceConnection: fn => withConnection(fn, true),
   listMappedInvoices,
   mappedInvoicePdf,
   configStatus,

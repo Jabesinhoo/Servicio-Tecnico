@@ -762,7 +762,7 @@ function evaluateReadiness(intake) {
   };
 }
 
-async function validateIntakeTeam(client, req, rawMembers) {
+async function validateIntakeTeam(client, req, rawMembers, {allowEmptyDraft=false}={}) {
   if (isTechnician(req)) {
     return [
       {
@@ -800,6 +800,8 @@ async function validateIntakeTeam(client, req, rawMembers) {
     error.code = 'TEAM_TOO_LARGE';
     throw error;
   }
+
+  if (allowEmptyDraft && Array.isArray(rawMembers) && rawMembers.length === 0) return [];
 
   if (primaryCount !== 1) {
     const error = new Error(
@@ -1119,7 +1121,7 @@ exports.create = async (req, res) => {
 
     const resolvedClient = await resolveClientForIntake(client, req.body || {});
 
-    const team = await validateIntakeTeam(client, req, req.body?.team || []);
+    const team = await validateIntakeTeam(client, req, req.body?.team || [], {allowEmptyDraft:true});
 
     if (v.clientAcceptance) {
       const acceptance =
@@ -1328,6 +1330,9 @@ exports.create = async (req, res) => {
 
     if (
       [
+        'PRIMARY_REQUIRED',
+        'TEAM_TOO_LARGE',
+        'INVALID_TECHNICIAN',
         'CLIENT_REFERENCE_INVALID',
         'SYNC_CLIENT_NOT_FOUND',
         'ACCEPTANCE_CLIENT_INVALID',
@@ -1551,6 +1556,13 @@ exports.update = async (req, res) => {
       const site = normalizeServiceSite(req.body.service_site);
       await client.query('UPDATE service_order_intakes SET service_site=$1::jsonb WHERE id=$2',[site?JSON.stringify(site):null,intake.id]);
       result.rows[0].service_site = site;
+    }
+
+    if(req.body?.team !== undefined){
+      const team=await validateIntakeTeam(client,req,req.body.team,{allowEmptyDraft:true});
+      await saveIntakeTeam(client,intake.id,team,req.user.id);
+      result.rows[0].primary_technician_id=team.find(m=>m.member_role==='primary')?.technician_id||null;
+      result.rows[0].team=team;
     }
 
     await addEvent(client, {

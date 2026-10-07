@@ -65,6 +65,8 @@ const acceptanceEvidence = require('../controllers/service-acceptance-evidence.c
 const creationDocs=require('../controllers/service-creation.controller');
 router.post('/service-orders/creation-availability',allowRoles('admin'),async(req,res)=>{try{const{creationAvailability}=require('../services/creation-availability.service');res.json(await creationAvailability(require('../db/pool'),req.body));}catch(e){res.status(e.status||500).json({message:e.status?e.message:'No se pudo comprobar la disponibilidad.'});}});
 router.get('/service-orders/worldoffice-invoices',creationDocs.invoices);
+router.get('/service-orders/worldoffice-invoice-details',creationDocs.invoiceDetails);
+router.get('/service-orders/worldoffice-invoice-pdf',creationDocs.invoicePdf);
 router.post('/service-orders/intakes/:intakeId/link-invoice',creationDocs.linkInvoice);
 router.get('/service-orders/intakes/:intakeId/creation-documents',creationDocs.list);
 router.post('/service-orders/intakes/:intakeId/creation-documents',creationDocs.upload);

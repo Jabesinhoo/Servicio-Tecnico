@@ -59,7 +59,9 @@ export default function ResponsiveSignaturePad({ onChange, clearToken = 0 }) {
   };
   const move = e => {
     if (pointer.current !== e.pointerId) return;
-    e.preventDefault(); strokes.current.at(-1).push(point(e)); redraw();
+    e.preventDefault(); const samples=e.nativeEvent?.getCoalescedEvents?.()||[];
+    for(const sample of samples)strokes.current.at(-1).push(point(sample));
+    strokes.current.at(-1).push(point(e)); redraw();
   };
   const stop = e => {
     if (pointer.current !== e.pointerId) return;

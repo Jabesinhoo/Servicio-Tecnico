@@ -3736,6 +3736,23 @@ exports.update = async (req, res) => {
       await client.query('UPDATE service_order_intakes SET client_snapshot=$1::jsonb WHERE id=$2',[JSON.stringify(profile),intake.id]);
     }
 
+    if (body.worldoffice_invoice) {
+      if (!isAdmin || !intake) throw Object.assign(new Error('Administración vincula facturas a órdenes con solicitud de origen.'), {status:403});
+      const selected=body.worldoffice_invoice;
+      const customer=(await client.query('SELECT documento,codigo_worldoffice FROM clients WHERE id=$1',[body.client_id||current.client_id])).rows[0];
+      if(!customer)throw Object.assign(new Error('Cliente no encontrado'),{status:404});
+      const source=await require('./service-creation.controller').invoiceSource();
+      const result=await source.query({invoiceReference:selected.reference,sourceCompany:selected.source_company,sourceId:selected.source_id,clientDocument:customer.documento,clientExternalId:customer.codigo_worldoffice});
+      if(result.client_match_count!==1)throw Object.assign(new Error('La factura no corresponde inequívocamente al cliente de esta orden.'),{status:409});
+      const record=result.rows[0];const reference=record.invoice_reference;
+      const previous=(await client.query('SELECT record FROM service_intake_worldoffice_invoices WHERE intake_id=$1',[intake.id])).rows[0];
+      if(previous?.record?.source_company!==record.source_company||previous?.record?.source_id!==record.source_id)await client.query("DELETE FROM service_intake_creation_files WHERE intake_id=$1 AND kind='invoice_support'",[intake.id]);
+      await client.query(`INSERT INTO service_intake_worldoffice_invoices(intake_id,mapping_id,invoice_reference,record,linked_by) VALUES($1,$2,$3,$4::jsonb,$5)
+       ON CONFLICT(intake_id) DO UPDATE SET mapping_id=EXCLUDED.mapping_id,invoice_reference=EXCLUDED.invoice_reference,record=EXCLUDED.record,linked_by=EXCLUDED.linked_by,linked_at=now()`,[intake.id,source.id,reference,JSON.stringify(record),userId]);
+      await client.query('UPDATE service_order_intakes SET invoice_reference=$1 WHERE id=$2',[reference,intake.id]);
+      changedFields.push('worldoffice_invoice');
+    }
+
     if (intake) {
       const refreshedIntake = await client.query(
         `SELECT billing_mode, invoice_reference, base_value, payment_status
@@ -3807,7 +3824,7 @@ exports.update = async (req, res) => {
     });
   } catch (error) {
     await safeRollback(client);
-    if(error.status===400)return res.status(400).json({message:error.message,code:error.code});
+    if([400,403,404,409,503].includes(error.status))return res.status(error.status).json({message:error.message,code:error.code});
     console.error('Error updating service order:', error);
 
     if (
