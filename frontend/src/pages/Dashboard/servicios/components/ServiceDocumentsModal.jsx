@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import api from '../../../../services/api';
 import ClientSignatureHistory from './ClientSignatureHistory';
+import CreationOrderDocuments from './CreationOrderDocuments';
 
 const TYPE_LABELS = {
   reception_act:
@@ -420,7 +421,7 @@ export default function ServiceDocumentsModal({
           {notice && <div role="status" className="rounded-xl border accent-border p-3 text-sm accent-text dark:accent-text">{notice}</div>}
           <section className="rounded-xl border p-3 space-y-3"><h4 className="font-semibold">Logo y colores del acta</h4><div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><label>Logo<select value={branding.logo_key} onChange={e=>{setBranding({...branding,logo_key:e.target.value});setPreview('');}} className="block w-full rounded-lg border bg-transparent p-2">{(data?.branding_options||[{key:'logot',label:'logot.png'},{key:'logo3',label:'logo3.jpeg'}]).map(option=><option key={option.key} value={option.key}>{option.label}{option.available===false?' · archivo pendiente':''}</option>)}</select></label><label>Color principal<input aria-label="Color principal del acta" type="color" value={branding.accent_color} onChange={e=>{setBranding({...branding,accent_color:e.target.value});setPreview('');}} className="block w-full"/></label><label>Color de fondo<input aria-label="Color de fondo del acta" type="color" value={branding.background_color} onChange={e=>{setBranding({...branding,background_color:e.target.value});setPreview('');}} className="block w-full"/></label></div>{data?.branding_options?.find(o=>o.key===branding.logo_key)?.data_uri&&<img src={data.branding_options.find(o=>o.key===branding.logo_key).data_uri} alt="Logo seleccionado" className="max-h-20 bg-white p-2 rounded"/>}<p className="text-xs text-gray-500">La vista previa muestra los datos actuales. Emitir un acta formal requiere confirmar el paso correspondiente.</p></section>
           {preview&&<section ref={previewRef} className="rounded-xl border p-2"><div className="flex justify-between mb-2"><h4 className="font-semibold">Vista previa del documento</h4><button onClick={()=>setPreview('')}>Cerrar vista previa</button></div><iframe title="Vista previa del acta" sandbox="" srcDoc={preview} className="w-full h-[65vh] bg-white rounded"/></section>}
-          <ClientSignatureHistory service={service}/>
+          <CreationOrderDocuments serviceId={service.id}/><ClientSignatureHistory service={service}/>
           {!deliveryReady&&<div className="rounded-xl border p-3 text-sm">El acta de entrega se emite después de registrar al receptor, su firma y confirmar la entrega. {onOpenDelivery&&<button type="button" onClick={()=>onOpenDelivery(service)} className="underline font-semibold">Abrir entrega final</button>}</div>}
           {!closureReady&&<div className="rounded-xl border border-amber-300 p-3 text-sm">El técnico asignado debe registrar el resultado y confirmar el cierre antes de emitir el acta de cierre técnico. {!isAdmin&&!service.creator_view_only&&onOpenClosure&&<button onClick={()=>onOpenClosure(service)} className="underline font-semibold">Abrir cierre técnico</button>}</div>}
           {prepared && (

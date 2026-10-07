@@ -1,7 +1,7 @@
 "use strict";
 const normalizeKey = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const ALIASES = {
- telefono:['Telefono','Telefono1','Teléfono','Tel','Celular','Movil','TelefonoPrincipal'],
+ telefono:['Telefono','Telefono1','Teléfono','Tel','Celular','Movil','TelefonoPrincipal','Telefonos','TelefonoContacto','TelefonoDelContacto','CelularContacto','MovilContacto','Tel1','TelContacto','NumeroTelefono'],
  telefono_2:['Telefono2','Telefono_2','Celular2','Movil2'],
  email:['Email','Correo','CorreoElectronico','EMail','Email1'], email_2:['Email2','Correo2','CorreoElectronico2'],
  direccion:['Direccion','Dirección','Direccion1','DireccionPrincipal','Domicilio'], direccion_2:['Direccion2','Direccion_2'],

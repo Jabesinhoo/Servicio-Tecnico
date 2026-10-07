@@ -2,6 +2,8 @@
 
 const pool = require('../db/pool');
 const {clientProfile}=require('../services/client-profile.service');
+const{currentAcceptance}=require('../domain/intake-acceptance');
+const{copyIntakePhotos}=require('../services/intake-photo-copy.service');
 const {normalizeServiceSite}=require('../domain/service-site');
 const {saveOrderSite,hydrateLocalClient}=require('../services/service-site.service');
 const { randomUUID } = require('crypto');
@@ -1268,6 +1270,7 @@ exports.create = async (req, res) => {
       result.rows[0].equipment_intake = v.equipmentIntake;
     }
 
+    await client.query('UPDATE service_order_intakes SET acceptance_signature_required=true WHERE id=$1',[id]);
     const profile = resolvedClient.origin === 'melissa'
       ? {...await clientProfile(client, resolvedClient.source_reference.split(':')[1], 'melissa'), local_client_id:resolvedClient.client_id}
       : await clientProfile(client, resolvedClient.client_id);
@@ -1864,6 +1867,7 @@ exports.activate = async (req, res) => {
     console.log('📊 Evaluating readiness...');
     const readiness = evaluateReadiness(intake);
 
+    if(!(await currentAcceptance(client,intake)))readiness.missing.push('acta_aceptacion_firmada_vigente');readiness.ready=readiness.missing.length===0;
     if (!readiness.ready) {
       await client.query('ROLLBACK');
       console.log('❌ Intake not ready, rolled back. Missing:', readiness.missing);
@@ -2285,6 +2289,7 @@ console.log('👥 Getting planned team...');
       throw eventError;
     }
 
+    await copyIntakePhotos(client,intake.id,serviceOrderId);
     // 11. Commit transaction
     console.log('✅ Committing transaction...');
     await client.query('COMMIT');

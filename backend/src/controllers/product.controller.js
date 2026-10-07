@@ -61,7 +61,7 @@ exports.getById = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const {
-      codigo, nombre, descripcion, tipo, precio_venta, costo,
+      codigo, nombre, descripcion, tipo, precio_venta, costo, tipo_descripcion,
       stock_actual, stock_minimo, proveedor, categoria_id, imagenes
     } = req.body;
 
@@ -83,13 +83,13 @@ exports.create = async (req, res) => {
       INSERT INTO products (
         id, codigo, nombre, descripcion, tipo, precio_venta, costo,
         stock_actual, stock_minimo, proveedor, categoria_id, imagenes,
-        estado, "createdAt", "updatedAt"
+        estado, tipo_descripcion, "createdAt", "updatedAt"
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, NOW(), NOW()
+        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, NOW(), NOW()
       )
       RETURNING *
     `, [codigo, nombre, descripcion, tipo, precio_venta || 0, costo || 0,
-        stock_actual || 0, stock_minimo || 0, proveedor || null, categoriaIdValue, JSON.stringify(imagenesLimpias)]);
+        stock_actual || 0, stock_minimo || 0, proveedor || null, categoriaIdValue, JSON.stringify(imagenesLimpias), typeof tipo_descripcion==='string'?tipo_descripcion.trim().slice(0,120):null]);
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -104,7 +104,7 @@ exports.update = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      codigo, nombre, descripcion, tipo, precio_venta, costo,
+      codigo, nombre, descripcion, tipo, precio_venta, costo, tipo_descripcion,
       stock_actual, stock_minimo, proveedor, categoria_id, imagenes, estado
     } = req.body;
 
@@ -129,11 +129,12 @@ exports.update = async (req, res) => {
           categoria_id = $10,
           imagenes = $11,
           estado = COALESCE($12, estado),
+          tipo_descripcion = COALESCE($14,tipo_descripcion),
           "updatedAt" = NOW()
       WHERE id = $13
       RETURNING *
     `, [codigo, nombre, descripcion, tipo, precio_venta, costo,
-        stock_actual, stock_minimo, proveedor, categoria_id, JSON.stringify(imagenesLimpias), estado, id]);
+        stock_actual, stock_minimo, proveedor, categoria_id, JSON.stringify(imagenesLimpias), estado, id, typeof tipo_descripcion==='string'?tipo_descripcion.trim().slice(0,120):null]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado' });

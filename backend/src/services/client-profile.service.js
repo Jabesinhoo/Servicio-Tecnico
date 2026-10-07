@@ -6,15 +6,16 @@ async function clientProfile(db,id,origin='local'){
  if(origin==='melissa'){
   if(!/^\d+$/.test(String(id)))throw Object.assign(new Error('Referencia World Office no válida'),{status:400});
   if(!(await db.query("SELECT to_regclass('public.sync_clientes') AS table_name")).rows[0]?.table_name)throw Object.assign(new Error('Todavía no hay clientes sincronizados desde World Office. Ejecuta la sincronización de clientes.'),{status:409});
-  sync=(await db.query('SELECT * FROM sync_clientes WHERE id_externo::text=$1',[String(id)])).rows[0];
+  sync=(await db.query('SELECT * FROM sync_clientes WHERE id_externo=$1',[String(id)])).rows[0];
  }else{
   if(!UUID.test(String(id)))throw Object.assign(new Error('Referencia de cliente no válida'),{status:400});
   local=(await db.query('SELECT * FROM clients WHERE id=$1',[id])).rows[0];
-  if(local&&(await db.query("SELECT to_regclass('public.sync_clientes') AS table_name")).rows[0]?.table_name)sync=(await db.query(`SELECT * FROM sync_clientes WHERE id_externo::text=$1 OR (NULLIF($2,'') IS NOT NULL AND documento::text=$2)
-   ORDER BY CASE WHEN id_externo::text=$1 THEN 0 ELSE 1 END,id_externo LIMIT 1`,[String(local.codigo_worldoffice||''),String(local.documento||'')])).rows[0];
+  if(local&&(await db.query("SELECT to_regclass('public.sync_clientes') AS table_name")).rows[0]?.table_name)sync=(await db.query(`SELECT * FROM sync_clientes WHERE id_externo=$1 OR (NULLIF($2,'') IS NOT NULL AND documento::text=$2)
+   ORDER BY CASE WHEN id_externo=$1 THEN 0 ELSE 1 END,id_externo LIMIT 1`,[local.codigo_worldoffice?String(local.codigo_worldoffice):null,String(local.documento||'')])).rows[0];
  }
  if(!local&&!sync)throw Object.assign(new Error('Cliente no encontrado'),{status:404});
- const normalized=sync?{...profileFromRaw(sync.datos_completos,sync.profile_relations),...object(sync.client_profile)}:{};
+ const normalized=sync?profileFromRaw(sync.datos_completos,sync.profile_relations):{};
+ for(const[key,value]of Object.entries(object(sync?.client_profile)))if(value!==null&&value!==undefined&&String(value).trim()!=='')normalized[key]=value;
  const result={...normalized,...(local||{})};
  // Prefer nonempty local data and fill absent fields from the current World Office mirror.
  for(const [key,value] of Object.entries(normalized))if(result[key]===null||result[key]===undefined||result[key]==='')result[key]=value;

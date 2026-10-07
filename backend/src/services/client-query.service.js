@@ -139,7 +139,7 @@ const buildMelissaClientsQuery = () => `
         sc.primer_apellido::text AS primer_apellido,
         sc.segundo_apellido::text AS segundo_apellido,
 
-        COALESCE(sc.client_profile->>'telefono',sc.datos_completos::jsonb->>'Telefono',sc.datos_completos::jsonb->>'Teléfono',sc.datos_completos::jsonb->>'Celular')::text AS telefono,
+        COALESCE(NULLIF(sc.client_profile->>'telefono',''),sc.datos_completos::jsonb->>'Telefono',sc.datos_completos::jsonb->>'Teléfono',sc.datos_completos::jsonb->>'TelefonoContacto',sc.datos_completos::jsonb->>'Celular',sc.client_profile->>'telefono_2')::text AS telefono,
         COALESCE(sc.client_profile->>'email',sc.datos_completos::jsonb->>'Email',sc.datos_completos::jsonb->>'CorreoElectronico')::text AS email,
         COALESCE(sc.client_profile->>'ciudad',sc.datos_completos::jsonb->>'Ciudad',sc.datos_completos::jsonb->>'Municipio')::text AS ciudad,
         COALESCE(sc.client_profile->>'direccion',sc.datos_completos::jsonb->>'Direccion',sc.datos_completos::jsonb->>'Dirección')::text AS direccion,
@@ -206,6 +206,7 @@ const listClients = async ({
     limit = DEFAULT_LIMIT,
     search = '',
     origin = 'all',
+    includeCount = true,
 } = {}) => {
     const safePage = parsePositiveInteger(
         page,
@@ -313,10 +314,7 @@ const listClients = async ({
                 '[]'::json
             ) AS data,
 
-            (
-                SELECT COUNT(*)::int
-                FROM clientes_unificados
-            ) AS total
+            ${includeCount ? '(SELECT COUNT(*)::int FROM clientes_unificados)' : '0'} AS total
 
         FROM clientes_paginados;
     `;
@@ -379,6 +377,7 @@ const searchClients = async ({
         limit,
         search,
         origin,
+        includeCount: false,
     });
 };
 

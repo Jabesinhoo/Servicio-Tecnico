@@ -1,0 +1,3 @@
+import api from '../../../services/api';
+export async function openIntakeDocument(path,name){const r=await api.get(path,{responseType:'blob'});const u=URL.createObjectURL(r.data);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);}
+export async function uploadIntakeFiles(id,files,kind,onDone){for(const entry of files){await api.post(`/api/service-orders/intakes/${id}/creation-documents`,entry.file,{params:{kind,name:entry.file.name,upload_key:entry.key},headers:{'Content-Type':'application/octet-stream'},transformRequest:x=>x});onDone(entry.key);}}

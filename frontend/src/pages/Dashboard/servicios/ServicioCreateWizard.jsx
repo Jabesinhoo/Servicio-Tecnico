@@ -16,7 +16,10 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import api from '../../../services/api';
-import ClientProfilePanel from './components/ClientProfilePanel';
+import ServiceTypePicker from './components/ServiceTypePicker';
+import IntakeInvoicePicker from './components/IntakeInvoicePicker';
+import {IntakePhotos,IntakeAcceptance} from './components/IntakeCreationDocuments';
+import {uploadIntakeFiles} from './intakeCreationFiles';
 import ServiceSiteFields from './components/ServiceSiteFields';
 import {emptyServiceSite,serviceSiteError} from './serviceLocation';
 import AcceptanceEvidenceFiles, {uploadAcceptanceFiles} from './components/AcceptanceEvidenceFiles';
@@ -77,6 +80,11 @@ export default function ServicioCreateWizard({
   const [profileLoading,setProfileLoading]=useState(false);
   const [profileError,setProfileError]=useState('');
   const [profileRetry,setProfileRetry]=useState(0);
+  const [ingressPhotos,setIngressPhotos]=useState([]),[savedPhotos,setSavedPhotos]=useState([]);
+  const [invoiceFile,setInvoiceFile]=useState(null);
+  const [acceptanceSignature,setAcceptanceSignature]=useState(''),[signedRevision,setSignedRevision]=useState(''),[acceptanceAct,setAcceptanceAct]=useState(null);
+  const profileCache=useRef(new Map());
+
   // V7_CLIENT_SWITCH
   const isEditMode = mode === 'edit';
   const canChangeClient = isAdmin && isEditMode;
@@ -135,24 +143,21 @@ export default function ServicioCreateWizard({
   });
 
   useEffect(() => {
-    if (!isOpen) { createdIntakeRef.current = null; setAcceptanceFiles([]); }
+    if (!isOpen) { createdIntakeRef.current = null; setAcceptanceFiles([]);setIngressPhotos([]);setSavedPhotos([]);setInvoiceFile(null);setAcceptanceSignature('');setSignedRevision('');setAcceptanceAct(null); }
   }, [isOpen]);
 
+  const selectedClientId=selectedClient?.id, selectedClientOrigin=selectedClient?.origen;
   useEffect(() => {
-    let active=true;setCompleteProfile(null);setProfileError('');
-    if(!isOpen||!selectedClient?.id){setProfileLoading(false);return;}
+    if(!isOpen||!selectedClientId){setProfileLoading(false);return;}
+    const controller=new AbortController();let active=true;
+    const key=(selectedClientOrigin||'local')+':'+selectedClientId;
+    const apply=profile=>{if(!active)return;setCompleteProfile(profile);setSelectedClient(previous=>previous?.id===profile.id?{...previous,...profile}:previous);if(!isEdit)setForm(previous=>({...previous,service_site:{...previous.service_site,address:previous.service_site.address||profile.direccion||'',city:previous.service_site.city||profile.ciudad||'',contact_name:previous.service_site.contact_name||profile.contacto||clientName(profile),contact_phone:previous.service_site.contact_phone||profile.telefono||profile.telefono_2||''}}));};
+    setProfileError('');
+    if(profileCache.current.has(key)&&profileRetry===0){apply(profileCache.current.get(key));setProfileLoading(false);return()=>{active=false;};}
     setProfileLoading(true);
-    api.get(`/api/clients/${selectedClient.id}/profile`,{params:{origin:selectedClient.origen||'local'}}).then(response=>{
-      if(!active)return;
-      const profile=response.data?.data;setCompleteProfile(profile);setSelectedClient(previous=>({...previous,...profile}));
-      if(!isEdit)setForm(previous=>({...previous,service_site:['customer','external'].includes(previous.service_site?.mode)?{
-        ...emptyServiceSite(),address:profile.direccion||'',city:profile.ciudad||'',contact_name:profile.contacto||clientName(profile),contact_phone:profile.telefono||'',
-        latitude:profile.latitude??'',longitude:profile.longitude??'',confirmed:false,
-      }:previous.service_site}));
-    }).catch(error=>{if(active)setProfileError(error.response?.data?.message||'No se pudo cargar la ficha completa del cliente.');})
-      .finally(()=>{if(active)setProfileLoading(false);});
-    return()=>{active=false;};
-  },[isOpen,selectedClient?.id,selectedClient?.origen,profileRetry,isEdit]);
+    api.get(`/api/clients/${selectedClientId}/summary`,{signal:controller.signal,params:{origin:selectedClientOrigin||'local'}}).then(response=>{const profile=response.data?.data;profileCache.current.set(key,profile);apply(profile);}).catch(e=>{if(active&&e.code!=='ERR_CANCELED')setProfileError(e.response?.data?.message||'No se pudo actualizar el contacto. Puedes completar los datos de atención.');}).finally(()=>{if(active)setProfileLoading(false);});
+    return()=>{active=false;controller.abort();};
+  },[isOpen,selectedClientId,selectedClientOrigin,profileRetry,isEdit]);
 
   useEffect(() => {
     if (!isOpen || !isEditMode || selectedClient || !service?.client_id) return;
@@ -360,6 +365,7 @@ export default function ServicioCreateWizard({
   useEffect(() => {
     if (!isOpen) return;
 
+    const controller=new AbortController();
     const timer = window.setTimeout(async () => {
       const q = clientQuery.trim();
       if (selectedClient && q === clientName(selectedClient)) {
@@ -374,22 +380,23 @@ export default function ServicioCreateWizard({
       try {
         setLoadingClients(true);
         const response = await api.get('/api/clients/search', {
-          params: { q },
+          params: { q },signal:controller.signal,
         });
-        setClients(Array.isArray(response.data) ? response.data : []);
+        if(!controller.signal.aborted)setClients(Array.isArray(response.data) ? response.data : []);
       } catch {
-        setClients([]);
+        if(!controller.signal.aborted)setClients([]);
       } finally {
-        setLoadingClients(false);
+        if(!controller.signal.aborted)setLoadingClients(false);
       }
     }, 250);
 
-    return () => window.clearTimeout(timer);
+    return () => {window.clearTimeout(timer);controller.abort();};
   }, [clientQuery, isOpen, selectedClient]);
 
   useEffect(() => {
     if (!isOpen || !form.client_acceptance) return undefined;
 
+    const controller=new AbortController();
     const timer = window.setTimeout(async () => {
       const q = acceptanceClientQuery.trim();
 
@@ -410,7 +417,7 @@ export default function ServicioCreateWizard({
         setLoadingAcceptanceClients(true);
 
         const response = await api.get('/api/clients/search', {
-          params: { q },
+          params: { q },signal:controller.signal,
         });
 
         setAcceptanceClients(
@@ -425,7 +432,7 @@ export default function ServicioCreateWizard({
       }
     }, 250);
 
-    return () => window.clearTimeout(timer);
+    return () => {window.clearTimeout(timer);controller.abort();};
   }, [
     acceptanceClientQuery,
     form.client_acceptance,
@@ -463,13 +470,16 @@ export default function ServicioCreateWizard({
     [technicians, primaryTechnicianId]
   );
 
-  const update = (key, value) =>
+  const update = (key, value) => {
+    if(['request_description','classification','base_value','estimated_minutes','estimated_duration','scope_text','conditions_text','additional_costs_notice','service_site','client_acceptance_name','client_acceptance_document','client_acceptance'].includes(key)&&form[key]!==value){setAcceptanceSignature('');setSignedRevision('');setAcceptanceAct(null);}
     setForm((previous) => ({ ...previous, [key]: value }));
+  };
 
   const chooseAcceptanceClient = (
     client,
     { manual = true } = {}
   ) => {
+    if(manual){setAcceptanceSignature('');setSignedRevision('');setAcceptanceAct(null);}
     if (!client) {
       setSelectedAcceptanceClient(null);
       setAcceptanceClientQuery('');
@@ -550,6 +560,7 @@ export default function ServicioCreateWizard({
   };
 
   const chooseType = (id) => {
+    setAcceptanceSignature('');setSignedRevision('');setAcceptanceAct(null);
     const type = types.find((item) => String(item.id) === String(id));
     setForm((previous) => ({
       ...previous,
@@ -564,39 +575,52 @@ export default function ServicioCreateWizard({
     }));
   };
 
-  const validateStep = () => {
+  const acceptanceRevision=JSON.stringify([selectedClient?.id,form.request_description,form.classification,form.service_type_name,form.base_value,form.estimated_minutes,form.scope_text,form.conditions_text,form.additional_costs_notice,form.service_site,form.client_acceptance_name,form.client_acceptance_document]);
+  const ensureDraft=async()=>{
+    if(!selectedClient)throw new Error('Selecciona el cliente.');
+    for(const n of [0,1,2,3]){const issue=validateStep(n);if(issue)throw new Error(issue);}
+    const payload={...form,client_id:selectedClient.id,client_origin:selectedClient.origen||'local',client_external_id:selectedClient.id_externo||null,source_type:isAdmin?'customer':'technician',scheduling_mode:'auto',team:[],base_value:form.base_value===''?null:Number(form.base_value),estimated_minutes:Number(form.estimated_minutes||60),estimated_duration:Number(form.estimated_duration||60)};
+    let intake=createdIntakeRef.current;
+    if(!intake){const r=await api.post('/api/service-orders/intakes',payload);intake=r.data.data;createdIntakeRef.current=intake;}else if(intake.status!=='activated'){await api.put(`/api/service-orders/intakes/${intake.id}`,payload);}
+    if(!intake?.id)throw new Error('No se recibió la solicitud.');
+    return intake;
+  };
+  const removeSavedPhoto=async id=>{try{await api.delete(`/api/service-orders/intakes/${createdIntakeRef.current.id}/creation-documents/${id}`);setSavedPhotos(p=>p.filter(f=>f.id!==id));}catch(e){setError(e.response?.data?.message||'No se pudo quitar la foto.');}};
+  const uploadCreationFiles=async id=>{await uploadIntakeFiles(id,ingressPhotos,'reception_photo',key=>setIngressPhotos(p=>p.filter(f=>f.key!==key)));if(invoiceFile){await uploadIntakeFiles(id,[invoiceFile],'invoice_support',()=>setInvoiceFile(null));}const r=await api.get(`/api/service-orders/intakes/${id}/creation-documents`);setSavedPhotos((r.data.files||[]).filter(f=>f.kind==='reception_photo').map(f=>({...f,intake_id:id})));};
+
+  const validateStep = (targetStep=step) => {
     setError('');
 
-    if (step === 0) {
+    if (targetStep === 0) {
       if (!selectedClient) return 'Selecciona el cliente.';
-      if (profileLoading) return 'Espera a que cargue la ficha del cliente.';
-      if (profileError) return 'Carga la ficha completa del cliente antes de continuar.';
+
       const siteError=serviceSiteError(form.service_site);if(siteError)return siteError;
       if (!form.request_description.trim()) {
         return 'Describe la necesidad o solicitud del cliente.';
       }
     }
 
-    if (step === 1 && !isEdit) {
+    if (targetStep === 1 && !isEdit) {
       const equipmentError = equipmentIntakeError(form.equipment_intake);
       if (equipmentError) return equipmentError;
     }
 
-    if (step === 2) {
+    if (targetStep === 2) {
       if (!form.classification) return 'Selecciona la clasificación.';
       if (!form.service_type_name.trim()) {
         return 'Selecciona un tipo de servicio.';
       }
     }
 
-    if (step === 3) {
+    if (targetStep === 3) {
       if (!form.scope_text.trim()) return 'Define el alcance inicial.';
       if (!form.conditions_text.trim()) {
         return 'Registra las condiciones informadas al cliente.';
       }
     }
 
-    if (step === 4) {
+    if (targetStep === 4) {
+      if(!isEdit&&signedRevision!==acceptanceRevision)return 'Firma y genera el acta de aceptación con las condiciones vigentes.';
       if (!form.client_acceptance) {
         return 'Debes registrar la aceptación inicial del cliente.';
       }
@@ -612,7 +636,7 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 5) {
+    if (targetStep === 5) {
       if (isAdmin && !primaryTechnicianId) {
         return 'Selecciona el técnico responsable principal.';
       }
@@ -624,7 +648,7 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 6 && form.billing_mode === 'prepaid') {
+    if (targetStep === 6 && form.billing_mode === 'prepaid') {
       if (!form.invoice_reference.trim()) {
         return 'Registra la referencia de factura.';
       }
@@ -633,7 +657,7 @@ export default function ServicioCreateWizard({
       }
     }
 
-    if (step === 6 && form.billing_mode === 'postpaid') {
+    if (targetStep === 6 && form.billing_mode === 'postpaid') {
       if (!isAdmin) return 'Solo administración puede autorizar pospago.';
       if (!form.postpaid_reason.trim()) {
         return 'Indica por qué este servicio se manejará como pospago.';
@@ -653,7 +677,7 @@ export default function ServicioCreateWizard({
   };
 
   const submit = async () => {
-    const message = validateStep() || serviceSiteError(form.service_site) || (!isEdit && equipmentIntakeError(form.equipment_intake));
+    const message = [0,1,2,3,4,5,6].map(n=>validateStep(n)).find(Boolean) || serviceSiteError(form.service_site) || (!isEdit && equipmentIntakeError(form.equipment_intake));
     if (message) {
       setError(message);
       return;
@@ -662,6 +686,10 @@ export default function ServicioCreateWizard({
     try {
       setSaving(true);
       setError('');
+      if(isAdmin&&schedulingMode==='manual'){
+        const r=await api.post('/api/service-orders/creation-availability',{date:form.scheduled_date,time:form.scheduled_time,typeId:form.service_type_id,technicians:[primaryTechnicianId,...supportTechnicianIds],excludeOrder:isEdit?targetServiceId:null});
+        if(!r.data.available)throw new Error(r.data.technicians.filter(t=>!t.available).map(t=>{const tech=technicians.find(x=>x.id===t.technician_id);return [tech?.nombre1,tech?.apellidos].filter(Boolean).join(' ')+': '+t.reason;}).join(' '));
+      }
 
       const teamPayload = isAdmin
         ? [
@@ -792,6 +820,7 @@ export default function ServicioCreateWizard({
       }
 
       await uploadEvidence(intake.id);
+      await uploadCreationFiles(intake.id);
 
       if (isAdmin && form.billing_mode === 'prepaid' && paymentVerified) {
         await api.post(`/api/service-orders/intakes/${intake.id}/verify-payment`, {
@@ -889,7 +918,8 @@ export default function ServicioCreateWizard({
         <div className="shrink-0 border-b border-gray-100 dark:border-gray-800 overflow-x-auto">
           <div className="min-w-max px-4 sm:px-6 py-3 flex gap-2">
             {steps.map(([label, Icon], index) => (
-              <div
+              <button
+                type="button" onClick={()=>{setError('');setStep(index);}} disabled={saving}
                 key={label}
                 className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold ${
                   index === step
@@ -899,9 +929,9 @@ export default function ServicioCreateWizard({
                       : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                {React.createElement(Icon,{className:"w-4 h-4"})}
                 {label}
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -973,7 +1003,10 @@ export default function ServicioCreateWizard({
                         key={client.id}
                         type="button"
                         onClick={() => {
-                          setSelectedClient(client);
+                          setSelectedClient(client);setCompleteProfile(client);setProfileRetry(0);
+                          setForm(previous=>({...previous,equipment_intake:{...previous.equipment_intake,received_from_name:clientName(client),received_from_document:client.documento||''},service_site:{...emptyServiceSite(),mode:previous.service_site.mode,address:client.direccion||'',city:client.ciudad||'',contact_name:client.contacto||clientName(client),contact_phone:client.telefono||client.telefono_2||''}}));
+                          setSignedRevision('');setAcceptanceAct(null);setAcceptanceSignature('');setSavedPhotos([]);createdIntakeRef.current=null;
+
                           setClientQuery(clientName(client));
                           setClients([]);
 
@@ -1002,8 +1035,8 @@ export default function ServicioCreateWizard({
                 )}
               </div>
 
-              {selectedClient && <ClientProfilePanel profile={completeProfile} loading={profileLoading} error={profileError} onRetry={()=>setProfileRetry(value=>value+1)} />}
-              {selectedClient && <ServiceSiteFields value={form.service_site} onChange={value=>update('service_site',value)} disabled={saving||profileLoading} />}
+              {selectedClient && <section className="rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm" aria-label="Datos del cliente">{[['Cliente',clientName(completeProfile||selectedClient)],['Identificación',(completeProfile||selectedClient).documento],['Teléfono',(completeProfile||selectedClient).telefono||(completeProfile||selectedClient).telefono_2],['Correo',(completeProfile||selectedClient).email],['Dirección',(completeProfile||selectedClient).direccion],['Ciudad',(completeProfile||selectedClient).ciudad]].map(([label,value])=><p key={label}><span className="text-gray-500">{label}: </span>{value||'Sin dato'}</p>)}{profileLoading&&<p className="text-xs">Actualizando contacto…</p>}{profileError&&<p className="text-xs sm:col-span-2">{profileError} <button type="button" className="underline" onClick={()=>setProfileRetry(x=>x+1)}>Reintentar</button></p>}</section>}
+              {selectedClient && <ServiceSiteFields value={form.service_site} onChange={value=>update('service_site',value)} disabled={saving} />}
 
               <label className="block">
                 <span className="text-sm font-semibold">
@@ -1035,14 +1068,7 @@ export default function ServicioCreateWizard({
                   </select>
                 </label>
 
-                <div className="rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-3">
-                  <p className="text-sm font-semibold accent-text dark:accent-text">
-                    Fecha y hora automáticas
-                  </p>
-                  <p className="text-xs accent-text dark:accent-text mt-1">
-                    El sistema buscará el primer espacio común disponible de todos los técnicos seleccionados y bloqueará la agenda por la duración estimada.
-                  </p>
-                </div>
+
               </div>
             </div>
           )}
@@ -1050,7 +1076,7 @@ export default function ServicioCreateWizard({
           {step === 1 && (
             isEdit && !form.equipment_intake ? (
               <p className="text-sm text-gray-500">Este servicio se creó antes del registro de equipo en la solicitud. Consulta su checklist de recepción.</p>
-            ) : <EquipmentIntakeFields value={form.equipment_intake} onChange={(value) => update('equipment_intake', value)} readOnly={isEdit} />
+            ) : <><EquipmentIntakeFields value={form.equipment_intake} onChange={(value) => update('equipment_intake', value)} readOnly={isEdit} />{form.equipment_intake.equipment_received&&<IntakePhotos files={ingressPhotos} onChange={setIngressPhotos} existing={savedPhotos} onRemoveExisting={removeSavedPhoto}/>}</>
           )}
 
           {step === 2 && (
@@ -1088,27 +1114,7 @@ export default function ServicioCreateWizard({
                 </button>
               </div>
 
-              <label className="block">
-                <span className="text-sm font-semibold">Tipo de servicio *</span>
-                <select
-                  value={form.service_type_id}
-                  onChange={(event) => chooseType(event.target.value)}
-                  className="mt-1 w-full min-h-12 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
-                >
-                  <option value="">Seleccionar...</option>
-                  {isEdit && form.service_type_id && !selectedType && (
-                    <option value={form.service_type_id}>
-                      {form.service_type_name || 'Tipo de servicio actual'}
-                    </option>
-                  )}
-                  {types.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.nombre}
-                      {type.valor_base ? ` · $${money(type.valor_base)}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ServiceTypePicker types={types} value={form.service_type_id} onSelect={chooseType} canCreate={isAdmin} onCreated={type=>{setAcceptanceSignature('');setSignedRevision('');setAcceptanceAct(null);setTypes(previous=>[...previous,type]);setForm(previous=>({...previous,service_type_id:type.id,service_type_name:type.nombre,service_type_category:type.categoria||'',estimated_minutes:type.duracion_estimada,estimated_duration:type.duracion_estimada,base_value:type.valor_base,scope_text:previous.scope_text||type.descripcion||''}));}} />
 
               {selectedType && (
                 <div className="rounded-xl bg-gray-50 dark:bg-gray-950/40 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1396,6 +1402,7 @@ export default function ServicioCreateWizard({
                   />
                 </label>
               </div>
+              <IntakeAcceptance client={selectedClient} ensureDraft={ensureDraft} revision={acceptanceRevision} signedRevision={signedRevision} onSigned={(rev,act)=>{setSignedRevision(rev);setAcceptanceAct(act);}} act={acceptanceAct} signature={acceptanceSignature} onSignature={setAcceptanceSignature} isEdit={isEdit} scope={form.scope_text} conditions={[form.conditions_text,form.additional_costs_notice].filter(Boolean).join('\n\n')} />
               {(!isEdit || editDetail?.intake?.id) && <AcceptanceEvidenceFiles intakeId={isEdit ? editDetail?.intake?.id : createdIntakeRef.current?.id} pending={acceptanceFiles} onChange={setAcceptanceFiles} disabled={saving} />}
             </div>
           )}
@@ -1743,6 +1750,8 @@ export default function ServicioCreateWizard({
 
           {step === 6 && (
             <div className="space-y-5">
+              {!isEdit&&selectedClient&&<IntakeInvoicePicker client={selectedClient} ensureDraft={ensureDraft} onLinked={ref=>update('invoice_reference',ref)} file={invoiceFile} onFile={setInvoiceFile} admin={isAdmin}/>}
+
               {isAdmin && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
@@ -1787,7 +1796,7 @@ export default function ServicioCreateWizard({
                 <>
                   <label className="block">
                     <span className="text-sm font-semibold">
-                      Referencia de factura *
+                      Número de factura (se completa al vincular) *
                     </span>
                     <input
                       value={form.invoice_reference}

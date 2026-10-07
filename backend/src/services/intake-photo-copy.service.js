@@ -1,0 +1,5 @@
+'use strict';
+const fs=require('fs/promises'),path=require('path');
+const ROOT=path.resolve(process.env.SERVICE_EVIDENCE_DIR||path.resolve(__dirname,'../../uploads/service-orders'));
+async function copyIntakePhotos(db,intakeId,orderId){const rows=(await db.query("SELECT * FROM service_intake_creation_files WHERE intake_id=$1 AND kind='reception_photo' ORDER BY created_at",[intakeId])).rows;for(const f of rows){const ext={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[f.mime];if(!ext)throw new Error('Formato de foto de ingreso inválido');const relative=path.join(orderId,'reception',f.id+ext);const file=path.join(ROOT,relative);await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,Buffer.from(f.content));await db.query(`INSERT INTO service_order_evidences(id,service_order_id,technician_id,stage,category,original_name,mime_type,size_bytes,storage_path,note,captured_at) VALUES($1,$2,NULL,'reception','intake',$3,$4,$5,$6,'Foto registrada al ingresar el equipo',$7) ON CONFLICT(id) DO NOTHING`,[f.id,orderId,f.name,f.mime,Buffer.from(f.content).length,relative,f.created_at]);}}
+module.exports={copyIntakePhotos};

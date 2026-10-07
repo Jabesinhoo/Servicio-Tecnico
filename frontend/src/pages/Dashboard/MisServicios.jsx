@@ -501,7 +501,7 @@ const ServiceCard = ({
             En camino
           </button>
           <button type="button" disabled={busy} onClick={() => onArrived(service)} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4">
-            Llegué al sitio
+            {service.service_site?.confirmed ? 'Llegué al sitio' : 'Registrar llegada (sin validación GPS)'}
           </button>
         </div>
       )}

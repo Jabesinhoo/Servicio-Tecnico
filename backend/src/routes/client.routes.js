@@ -9,6 +9,8 @@ router.use(authRequired);
 // Rutas GET
 router.get('/clients', clientController.getAll);
 router.get('/clients/search', clientController.search);
+router.get('/clients/:id/acceptance-history',require('../controllers/service-creation.controller').history);
+router.get('/clients/:id/summary', clientController.getSummary);
 router.get('/clients/:id/profile', clientController.getProfile);
 router.get('/clients/:id', clientController.getById);
 router.get('/clients/:id/stats', clientController.getClientStats);

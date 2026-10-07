@@ -60,6 +60,7 @@ exports.create = async (req, res) => {
       return res.status(400).json({ message: 'El nombre es requerido' });
     }
     
+    if(!Number.isInteger(Number(duracion_estimada||60))||Number(duracion_estimada||60)<1||Number(duracion_estimada||60)>1440||!Number.isFinite(Number(valor_base||0))||Number(valor_base||0)<0)return res.status(400).json({message:'Indica una duración entera entre 1 y 1440 minutos y un valor no negativo.'});
     const result = await pool.query(`
       INSERT INTO tipos_servicio (
         id, nombre, descripcion, valor_base, duracion_estimada,

@@ -494,3 +494,5 @@ exports.getProfile = async (req,res) => {
   res.json({success:true,data});
  }catch(error){if(!error.status)console.error('Error loading complete client profile:',error);res.status(error.status||500).json({message:error.status?error.message:'No se pudo cargar la ficha completa del cliente'});}
 };
+
+exports.getSummary=async(req,res)=>{try{const{clientSummary}=require('../services/client-summary.service');res.json({data:await clientSummary(pool,req.params.id,req.query.origin==='melissa'?'melissa':'local')});}catch(e){res.status(e.status||500).json({message:e.status?e.message:'No se pudo cargar el contacto del cliente'});}};

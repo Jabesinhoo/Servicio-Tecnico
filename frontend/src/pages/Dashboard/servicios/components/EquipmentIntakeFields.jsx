@@ -38,7 +38,6 @@ export default function EquipmentIntakeFields({ value, onChange, readOnly = fals
     <div className="space-y-5">
       <p className="text-sm text-gray-600 dark:text-gray-300">Registra las condiciones en las que ingresa el equipo. El técnico verificará estos datos al recibirlo.</p>
       {readOnly && <p className="text-sm text-gray-500">Datos registrados al crear el servicio. Las verificaciones posteriores se realizan en el checklist de recepción.</p>}
-      {field('worldoffice_order_reference', 'Número de pedido de World Office (si existe)', 180)}
       <label className="flex items-center gap-3 text-sm font-semibold">
         <input type="checkbox" checked={Boolean(data.equipment_received)} disabled={readOnly} onChange={(e) => update('equipment_received', e.target.checked)} />
         El cliente entrega un equipo para recibirlo en taller

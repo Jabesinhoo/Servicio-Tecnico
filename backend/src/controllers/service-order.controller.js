@@ -4104,7 +4104,10 @@ exports.markArrived = async (req, res) => {
     if(mode!=='external') { await safeRollback(client); return res.status(409).json({success:false,code:'VISIT_MODE_REQUIRED',message:mode?'La llegada GPS solo aplica a visitas externas.':'Administración debe configurar la modalidad y el punto del servicio.'}); }
     const fenceResult = await client.query(`SELECT * FROM service_order_geofences WHERE service_order_id=$1 LIMIT 1`, [id]);
     const fence = fenceResult.rows[0];
-    if (!fence) { await safeRollback(client); return res.status(409).json({ success: false, code: 'GEOFENCE_NOT_CONFIGURED', message: 'Administración debe confirmar el punto de esta visita en Mis servicios > Punto del servicio.' }); }
+    if (!fence) {
+      await client.query(`INSERT INTO service_order_visit_events(id,service_order_id,tecnico_id,event_type,created_at) VALUES($1,$2,$3,'llegada_declarada',NOW())`,[randomUUID(),id,req.user.id]);
+      await client.query('COMMIT');return res.json({success:true,gps_verified:false,message:'Llegada registrada por el técnico. Esta visita no tiene un punto confirmado para validar distancia.'});
+    }
 
     const location = await getRecentPreciseLocation(client, req.user.id);
     if (!location) { await safeRollback(client); return res.status(409).json({ success: false, code: 'TRUSTED_PRECISE_LOCATION_REQUIRED', message: 'No fue posible validar una ubicación precisa y confiable para confirmar la llegada' }); }

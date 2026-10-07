@@ -7,7 +7,9 @@ export function serviceSiteError(site){
  if(mode!=='external')return null;
  if(!site.address?.trim())return 'Registra la dirección del lugar de atención.';
  const valid=(v,min,max)=>v!==null&&v!==undefined&&String(v).trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=min&&Number(v)<=max;
- if(!valid(site.latitude,-90,90)||!valid(site.longitude,-180,180))return 'Registra las coordenadas del lugar de atención.';
+ const hasPoint=String(site.latitude??'').trim()!==''||String(site.longitude??'').trim()!=='';
+ if(!hasPoint)return null;
+ if(!valid(site.latitude,-90,90)||!valid(site.longitude,-180,180))return 'Selecciona un punto completo en el mapa.';
  if(!valid(site.radius_m,25,2000))return 'El radio permitido debe estar entre 25 y 2000 metros.';
  if(site.confirmed!==true)return 'Confirma que el punto corresponde al lugar del servicio.';
  return null;

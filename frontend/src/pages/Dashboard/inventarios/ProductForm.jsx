@@ -1,14 +1,15 @@
 // src/pages/Dashboard/inventarios/ProductForm.jsx
 import React, { useState, useEffect } from 'react';
-import { X, Save, Package, DollarSign, AlertCircle, Tag } from 'lucide-react';
+import { X, Save, Package, AlertCircle } from 'lucide-react';
 import ProductImageUpload from './components/ProductImageUpload';
 
-const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }) => {
+const ProductForm = ({ isOpen, onClose, onSubmit, initialData }) => {
     const [formData, setFormData] = useState({
         codigo: '',
         nombre: '',
         descripcion: '',
-        tipo: 'producto_venta',
+        tipo: 'herramienta',
+        tipo_descripcion: '',
         precio_venta: 0,
         costo: 0,
         stock_actual: 0,
@@ -27,7 +28,8 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
                 codigo: initialData.codigo || '',
                 nombre: initialData.nombre || '',
                 descripcion: initialData.descripcion || '',
-                tipo: initialData.tipo || 'producto_venta',
+                tipo: initialData.tipo || 'herramienta',
+                tipo_descripcion: initialData.tipo_descripcion || '',
                 precio_venta: initialData.precio_venta || 0,
                 costo: initialData.costo || 0,
                 stock_actual: initialData.stock_actual || 0,
@@ -48,7 +50,8 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
             codigo: '',
             nombre: '',
             descripcion: '',
-            tipo: 'producto_venta',
+            tipo: 'herramienta',
+            tipo_descripcion: '',
             precio_venta: 0,
             costo: 0,
             stock_actual: 0,
@@ -64,7 +67,6 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
         const newErrors = {};
         if (!formData.codigo.trim()) newErrors.codigo = 'El código es requerido';
         if (!formData.nombre.trim()) newErrors.nombre = 'El nombre es requerido';
-        if (formData.precio_venta < 0) newErrors.precio_venta = 'El precio no puede ser negativo';
         if (formData.stock_actual < 0) newErrors.stock_actual = 'El stock no puede ser negativo';
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -99,14 +101,6 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
             setErrors(prev => ({ ...prev, [name]: '' }));
         }
     };
-
-    const tipos = [
-        { value: 'producto_venta', label: 'Producto de Venta' },
-        { value: 'repuesto', label: 'Repuesto' },
-        { value: 'servicio', label: 'Servicio' },
-        { value: 'herramienta', label: 'Herramienta' }, 
-
-    ];
 
     if (!isOpen) return null;
 
@@ -143,18 +137,9 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Tipo *
+                                    Tipo (opcional)
                                 </label>
-                                <select
-                                    name="tipo"
-                                    value={formData.tipo}
-                                    onChange={handleChange}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                >
-                                    {tipos.map(t => (
-                                        <option key={t.value} value={t.value}>{t.label}</option>
-                                    ))}
-                                </select>
+                                <input name="tipo_descripcion" value={formData.tipo_descripcion} onChange={handleChange} maxLength={120} placeholder="Ej: Herramienta de medición" className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-900" />
                             </div>
 
                             <div className="md:col-span-2">
@@ -185,40 +170,9 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Precio de Venta
-                                </label>
-                                <div className="relative">
-                                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input
-                                        type="number"
-                                        name="precio_venta"
-                                        value={formData.precio_venta}
-                                        onChange={handleChange}
-                                        step="0.01"
-                                        className={`w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white ${errors.precio_venta ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'
-                                            }`}
-                                    />
-                                </div>
-                            </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Costo
-                                </label>
-                                <div className="relative">
-                                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input
-                                        type="number"
-                                        name="costo"
-                                        value={formData.costo}
-                                        onChange={handleChange}
-                                        step="0.01"
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                    />
-                                </div>
-                            </div>
+
+
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -247,26 +201,11 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
                                 />
                             </div>
 
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Categoría
-                                </label>
-                                <select
-                                    name="categoria_id"
-                                    value={formData.categoria_id}
-                                    onChange={handleChange}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                >
-                                    <option value="">Sin categoría</option>
-                                    {categorias.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                                    ))}
-                                </select>
-                            </div>
+
 
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Proveedor
+                                    Proveedor (opcional)
                                 </label>
                                 <input
                                     type="text"
@@ -300,7 +239,7 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData, categorias = [] }
                         <button
                             type="submit"
                             disabled={loading}
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                            className="px-4 py-2 text-sm font-medium text-white accent-fill rounded-lg disabled:opacity-50 flex items-center gap-2"
                         >
                             <Save className="w-4 h-4" />
                             {loading ? 'Guardando...' : (initialData ? 'Actualizar' : 'Crear')}

@@ -1,3 +1,40 @@
+# Creación de servicios e inventario simplificado — 7 de octubre de 2026
+
+Actualización acumulativa: incluye las mejoras anteriores y los ajustes solicitados para crear servicios e items de inventario.
+
+## Instalar
+
+Detén backend y frontend con Ctrl+C. Extrae el ZIP completo en una carpeta separada y ejecuta desde esa carpeta:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
+```
+
+La ruta predeterminada es `C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico`. Para otra ruta usa `-ProjectPath "C:\ruta\Servicio-Tecnico"`. El instalador respalda los archivos existentes, aplica las migraciones, ejecuta 61 pruebas y compila el frontend. Conserva `.env`, dependencias, fotos y logos. Reinicia ambos servidores después del mensaje OK. No pegues el SQL directamente en PowerShell.
+
+## Validar la creación
+
+1. **Solicitud:** busca un cliente y comprueba su ficha resumida: nombre, documento, teléfono, correo y dirección. Se consulta un resumen específico en vez del perfil completo; el teléfono admite los nombres alternativos de contacto del espejo World Office. Si el origen no tiene teléfono, no se inventa; puedes completar el contacto de atención. No se muestra el bloque de fecha automática.
+2. **Atención:** elige Remoto, En el local o Visita externa. En visita basta la dirección. Indicaciones son opcionales. **Buscar dirección en OpenStreetMap** ofrece puntos que debes revisar y seleccionar; no escribe coordenadas manualmente. **Continuar solo con dirección** elimina el punto. Un resultado ambiguo o sin coincidencias permite continuar con la dirección. Sin punto confirmado, el técnico registra una **llegada declarada**, identificada como tal en el historial; no se presenta como validación GPS. Con punto confirmado se conserva la verificación GPS de distancia/dispositivo. La custodia en visitas mantiene su validación de ubicación.
+3. **Equipo recibido:** nombre y documento de quien entrega se completan desde el cliente y se pueden cambiar para un tercero. Ya no se pide número de pedido World Office. Adjunta hasta **3 fotos**, JPG/PNG/WEBP, máximo 8 MB cada una. Al activar la orden pasan a las evidencias iniciales de recepción.
+4. **Clasificación:** busca un tipo de servicio. Administración puede crear uno desde el mismo formulario con duración, valor y alcance; se conserva la solicitud en curso.
+5. **Condiciones y aceptación:** revisa alcance, valor, duración y condiciones; identifica a la persona que acepta, marca la aceptación y dibuja la firma. Pulsa **Firmar y generar acta de aceptación**. Se guarda una versión PDF con Verdana, tablas y verde `#8aa645`. La firma queda vinculada al cliente y a la identificación del firmante. La nueva orden exige esta aceptación; cambiar los datos firmados requiere volver a firmar y conserva el acta anterior como historial. Una firma archivada no implica que el cliente aceptó automáticamente nuevas condiciones. Los servicios anteriores conservan compatibilidad.
+6. **Equipo técnico:** asigna técnicos. En programación manual se verifica el horario colombiano y la duración del tipo; un técnico con un bloque activo superpuesto no puede programarse de nuevo. La reserva efectiva ocurre al programar/aprobar, no al marcar un técnico provisionalmente en el formulario. La validación del servidor protege también solicitudes simultáneas. El cierre técnico confirmado libera los bloques.
+7. **Facturación:** Administración puede buscar facturas de ese cliente en World Office y vincular una. Requiere el mapeo financiero V18 y acceso de lectura configurados. Si la tabla expone el PDF original como dato binario, se adjunta; si no existe, adjunta manualmente el PDF original, máximo 8 MB. Vincular una factura no confirma por sí solo el pago ni libera controles financieros. Prepago exige la verificación administrativa del pago; pospago conserva su flujo de control financiero. El número de factura puede completarse manualmente cuando no está disponible la consulta.
+8. Pulsa **Guardar y crear OS**. En Documentos PDF de la orden consulta el acta inicial, las fotos y la factura adjunta. Las etapas superiores son botones: permiten volver o saltar entre secciones, y la validación final revisa los campos requeridos.
+
+## Inventario
+
+El formulario de crear/editar ya no muestra **Precio de Venta, Costo ni Categoría**. **Proveedor y Tipo** son texto libre opcional, sin selectores. Se conservan nombre, código, descripción, fotos y cantidades. Los valores comerciales históricos se conservan al editar. El tipo visible es una descripción; la clasificación operativa herramienta/insumo del panel de taller permanece para distinguir retiros/devoluciones de consumos.
+
+## Alcance de las comprobaciones
+
+61 pruebas de backend y compilación de producción aprobadas. Se verificaron con PostgreSQL las migraciones repetibles, el límite de fotos, los permisos de documentos, las versiones firmadas, la transferencia de fotos, los cruces de técnicos y la edición de inventario. Se recorrió en navegador móvil la creación, búsqueda de dirección, firma, cambio de condiciones, vinculación y activación, y el formulario de inventario. Se generó y revisó el PDF real con una firma dibujada. La consulta SQL de facturas se comprobó con datos simulados; no se ha consultado la base World Office de tu equipo ni se ha instalado esta actualización allí.
+
+El buscador de dirección usa Photon sobre OpenStreetMap con peticiones limitadas y caché; puedes cambiar el proveedor mediante `SERVICE_GEOCODER_URL` (respuesta compatible con Photon). El servicio público tiene límites y no garantiza disponibilidad: https://github.com/komoot/photon. La dirección sigue siendo utilizable sin ese buscador. Las solicitudes no envían nombres ni teléfonos al geocodificador.
+
+---
+
 # Dashboard, taller y finalización del técnico — 6 de octubre de 2026
 
 Esta es una actualización acumulativa. Conserva las correcciones anteriores de clientes, notificaciones, firmas, cierre, entrega y actas. No es un proyecto nuevo ni una base de datos de reemplazo.
@@ -13,7 +50,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
 ```
 
 Si el proyecto está en otra ruta, añade `-ProjectPath "C:\ruta\Servicio-Tecnico"`.
-El instalador valida los archivos, respalda los existentes, aplica SQL y ejecuta 56 pruebas y la compilación. No reinstala dependencias ni reemplaza `.env`, fotos o logos. Reinicia ambos servidores después del mensaje OK.
+El instalador valida los archivos, respalda los existentes, aplica SQL y ejecuta 61 pruebas y la compilación. No reinstala dependencias ni reemplaza `.env`, fotos o logos. Reinicia ambos servidores después del mensaje OK.
 
 ## Cómo usar los cambios
 
@@ -31,7 +68,7 @@ Los servicios anteriores sin sesiones medidas no reciben tiempos ficticios ni cu
 
 ## Verificaciones de esta versión
 
-56 pruebas del backend aprobadas y frontend compilado. Pruebas con PostgreSQL local verificaron stock, permisos, reversión, devoluciones parciales, horarios, duración por tipo, sesiones, finanzas y alcance del dashboard. Pruebas de navegador verificaron el dashboard móvil, la descarga Excel, herramientas con foto, cantidades, custodia, devolución e historial y la hora de Colombia en el calendario. El Excel se abrió con sus cuatro gráficas nativas y referencias a celdas. No se ejecutó esta instalación en tu computador.
+61 pruebas del backend aprobadas y frontend compilado. Pruebas con PostgreSQL local verificaron stock, permisos, reversión, devoluciones parciales, horarios, duración por tipo, sesiones, finanzas y alcance del dashboard. Pruebas de navegador verificaron el dashboard móvil, la descarga Excel, herramientas con foto, cantidades, custodia, devolución e historial y la hora de Colombia en el calendario. El Excel se abrió con sus cuatro gráficas nativas y referencias a celdas. No se ejecutó esta instalación en tu computador.
 
 ---
 
@@ -46,7 +83,7 @@ Los servicios anteriores sin sesiones medidas no reciben tiempos ficticios ni cu
 
 ## Verificación de esta corrección
 
-56 pruebas de backend aprobadas; compilación frontend correcta. Pruebas reales sobre PostgreSQL local verificaron borradores, permisos, confirmación del cierre, recepción/validación de Dirección y entrega final con bloqueo financiero. Pruebas de navegador verificaron los formularios del administrador y del técnico, actualización del estado y borrador de entrega. Se generaron los tres tipos de PDF en A4 y se revisó el diseño.
+61 pruebas de backend aprobadas; compilación frontend correcta. Pruebas reales sobre PostgreSQL local verificaron borradores, permisos, confirmación del cierre, recepción/validación de Dirección y entrega final con bloqueo financiero. Pruebas de navegador verificaron los formularios del administrador y del técnico, actualización del estado y borrador de entrega. Se generaron los tres tipos de PDF en A4 y se revisó el diseño.
 
 # Actualización final: clientes, colores, agenda y entrega
 
@@ -69,7 +106,7 @@ La captura mostraba autorización pendiente y la orden en espera. Instalar esta 
 
 ## Comprobaciones adicionales
 
-56 pruebas de backend aprobadas. Pruebas sobre PostgreSQL local verificaron permisos de entrega, bloqueo financiero, reversión, cierre y liberación de custodia, además de perfiles y estadísticas de clientes. Las pruebas de navegador verificaron detalle de clientes, entrega del técnico, conservación de firma, requisitos del acta, cambio de color y apertura desde agenda. Frontend compilado. La base de datos y los servidores de tu computador no se modificaron durante estas comprobaciones.
+61 pruebas de backend aprobadas. Pruebas sobre PostgreSQL local verificaron permisos de entrega, bloqueo financiero, reversión, cierre y liberación de custodia, además de perfiles y estadísticas de clientes. Las pruebas de navegador verificaron detalle de clientes, entrega del técnico, conservación de firma, requisitos del acta, cambio de color y apertura desde agenda. Frontend compilado. La base de datos y los servidores de tu computador no se modificaron durante estas comprobaciones.
 
 Corrección adicional — 6 de octubre de 2026
 
@@ -93,7 +130,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
 
 Destino predeterminado: `C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico`. Para otro destino agrega `-ProjectPath "C:\ruta\Servicio-Tecnico"`.
 
-El instalador valida cada archivo, respalda los existentes antes de copiarlos, aplica las migraciones repetibles, ejecuta 56 pruebas y compila frontend. Conserva .env, node_modules y los logos. No vuelve a sincronizar World Office; si aún no actualizaste la extracción completa de clientes, ejecuta después desde backend `node scripts/sync-client-profiles.js`.
+El instalador valida cada archivo, respalda los existentes antes de copiarlos, aplica las migraciones repetibles, ejecuta 61 pruebas y compila frontend. Conserva .env, node_modules y los logos. No vuelve a sincronizar World Office; si aún no actualizaste la extracción completa de clientes, ejecuta después desde backend `node scripts/sync-client-profiles.js`.
 
 Reinicia backend y frontend y recarga la página.
 
@@ -137,4 +174,4 @@ El acta formal de cierre se habilita cuando el cierre está confirmado. Document
 
 ## Validación
 
-56 pruebas de backend, compilación frontend, pruebas SQL/API de avisos agrupados, actor correcto, reversión, histórico, firmas de cliente/tercero y permisos. Pruebas de navegador móvil para logos, colores, borrador, cierre pendiente, firmas e historial. Generación de PDF con imágenes de prueba; los archivos originales logot.png y logo3.jpeg de tu computador se verifican al usar la actualización allí.
+61 pruebas de backend, compilación frontend, pruebas SQL/API de avisos agrupados, actor correcto, reversión, histórico, firmas de cliente/tercero y permisos. Pruebas de navegador móvil para logos, colores, borrador, cierre pendiente, firmas e historial. Generación de PDF con imágenes de prueba; los archivos originales logot.png y logo3.jpeg de tu computador se verifican al usar la actualización allí.

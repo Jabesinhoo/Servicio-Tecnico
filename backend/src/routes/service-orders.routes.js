@@ -60,7 +60,20 @@ const {
 } = require('../middlewares/service-authorization-guard.middleware');
 
 router.use(authRequired);
+router.get('/service-orders/location-search',async(req,res)=>{try{const{searchAddress}=require('../services/service-geocoding.service');res.json({data:await searchAddress(req.query.q)});}catch(e){res.status(e.status||500).json({message:e.message});}});
 const acceptanceEvidence = require('../controllers/service-acceptance-evidence.controller');
+const creationDocs=require('../controllers/service-creation.controller');
+router.post('/service-orders/creation-availability',allowRoles('admin'),async(req,res)=>{try{const{creationAvailability}=require('../services/creation-availability.service');res.json(await creationAvailability(require('../db/pool'),req.body));}catch(e){res.status(e.status||500).json({message:e.status?e.message:'No se pudo comprobar la disponibilidad.'});}});
+router.get('/service-orders/worldoffice-invoices',creationDocs.invoices);
+router.post('/service-orders/intakes/:intakeId/link-invoice',creationDocs.linkInvoice);
+router.get('/service-orders/intakes/:intakeId/creation-documents',creationDocs.list);
+router.post('/service-orders/intakes/:intakeId/creation-documents',creationDocs.upload);
+router.get('/service-orders/intakes/:intakeId/creation-documents/:fileId',creationDocs.file);
+router.delete('/service-orders/intakes/:intakeId/creation-documents/:fileId',creationDocs.remove);
+router.post('/service-orders/intakes/:intakeId/sign-acceptance',creationDocs.sign);
+router.get('/service-orders/intakes/:intakeId/acceptance-acts/:actId',creationDocs.act);
+router.get('/service-orders/:id/creation-documents',creationDocs.orderList);
+
 router.get('/service-orders/intakes/:intakeId/acceptance-evidences', allowRoles('admin','tecnico'), acceptanceEvidence.list);
 router.post('/service-orders/intakes/:intakeId/acceptance-evidences', allowRoles('admin','tecnico'), acceptanceEvidence.upload);
 router.get('/service-orders/intakes/:intakeId/acceptance-evidences/:evidenceId/download', allowRoles('admin','tecnico'), acceptanceEvidence.download);
