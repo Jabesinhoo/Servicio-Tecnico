@@ -1,7 +1,7 @@
 import React from 'react';
 import { Eye, Edit, Trash2, UserCheck } from 'lucide-react';
 import StatusBadge from './StatusBadge';
-import { formatDateOnly, formatDateTime, formatTime, money } from './serviceFormatters';
+import { formatDateOnly, formatDateTime, formatTime, money, serviceSchedule } from './serviceFormatters';
 
 const priorityClass = {
   baja: 'accent-soft accent-text',
@@ -79,9 +79,9 @@ export default function ServicioTable({
               <td data-label="Estado" className="px-4 py-4"><StatusBadge status={servicio.estado} /></td>
 
               <td data-label="Agenda" className="px-4 py-4 text-sm">
-                <div>{servicio.fecha_agendada ? formatDateOnly(servicio.fecha_agendada) : 'Sin agendar'}</div>
+                <div>{serviceSchedule(servicio).date ? formatDateOnly(serviceSchedule(servicio).date) : 'Sin agendar'}</div>
                 <div className="text-xs text-gray-500">
-                  {servicio.hora_inicio_agendada ? `${formatTime(servicio.hora_inicio_agendada)} · ${servicio.duracion_estimada || 60} min` : '—'}
+                  {servicio.hora_inicio_agendada ? `${formatTime(serviceSchedule(servicio).time)} · ${servicio.duracion_estimada || 60} min` : '—'}
                 </div>
               </td>
 

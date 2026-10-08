@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, Clock, Edit, Eye, Trash2, UserRound, UsersRound, Wrench } from 'lucide-react';
 import StatusBadge from '../StatusBadge';
-import { formatDateOnly, formatTime } from '../serviceFormatters';
+import { formatDateOnly, serviceSchedule, formatTime } from '../serviceFormatters';
 
 export default function ServiceCard({ servicio, onViewDetail, onEdit, onDelete, canEdit }) {
   return (
@@ -28,7 +28,7 @@ export default function ServiceCard({ servicio, onViewDetail, onEdit, onDelete, 
         <div className="flex gap-2"><UserRound className="w-4 h-4" /><span>{servicio.cliente_nombre || '—'} · {servicio.cliente_documento || 'sin documento'}</span></div>
         <div className="flex gap-2"><Wrench className="w-4 h-4" /><span>{servicio.service_type_name || 'Tipo no registrado'}</span></div>
         <div className="flex gap-2"><UsersRound className="w-4 h-4" /><span>{servicio.tecnico_nombre || 'Sin técnico'} {servicio.team_size ? `· equipo ${servicio.team_size}` : ''}</span></div>
-        <div className="flex gap-2"><Calendar className="w-4 h-4" /><span>{servicio.fecha_agendada ? formatDateOnly(servicio.fecha_agendada) : 'Sin agenda'}</span></div>
+        <div className="flex gap-2"><Calendar className="w-4 h-4" /><span>{serviceSchedule(servicio).date ? formatDateOnly(serviceSchedule(servicio).date) : 'Sin agenda'}</span></div>
         <div className="flex gap-2"><Clock className="w-4 h-4" /><span>{servicio.hora_inicio_agendada ? `${formatTime(servicio.hora_inicio_agendada)} · ${servicio.duracion_estimada || 60} min` : '—'}</span></div>
       </div>
 

@@ -1510,6 +1510,9 @@ exports.myWork = async (req, res) => {
       `
         SELECT
           so.*,
+          EXISTS(SELECT 1 FROM service_order_visit_events v WHERE v.service_order_id=so.id AND v.tecnico_id=$1 AND v.event_type='en_camino') AS visit_en_route_recorded,
+          EXISTS(SELECT 1 FROM service_order_visit_events v WHERE v.service_order_id=so.id AND v.tecnico_id=$1 AND v.event_type IN ('llegada_declarada','llegada_validada')) AS visit_arrival_recorded,
+          (SELECT MIN(start_at) FROM service_order_schedule_blocks b WHERE b.service_order_id=so.id AND b.status='active') AS agenda_inicio,
           CASE
             WHEN c.tipo_persona = 'juridica'
               THEN c.razon_social
@@ -1677,7 +1680,7 @@ exports.myWork = async (req, res) => {
 
     return res.json({
       success: true,
-      data: result.rows.map(order=>({...order,creator_view_only:order.tecnico_id!==userId&&!order.team_role,custody_requires_location:custodyRequiresLocation(order.service_site,CUSTODY_REQUIRE_PRECISE_LOCATION)})),
+      data: result.rows.map(order=>({...order,creator_view_only:order.tecnico_id!==userId&&!order.team_role,custody_requires_location:false})),
       gps,
     });
   } catch (error) {
@@ -2462,24 +2465,7 @@ exports.takeCustody = async (req, res) => {
       });
     }
 
-    const location = custodyRequiresLocation(order.service_site,CUSTODY_REQUIRE_PRECISE_LOCATION)
-      ? await getRecentPreciseLocation(client,userId) : null;
-
-    if (
-      custodyRequiresLocation(order.service_site,CUSTODY_REQUIRE_PRECISE_LOCATION) &&
-      !location
-    ) {
-      await safeRollback(client);
-
-      return res.status(409).json({
-        success: false,
-        code: 'PRECISE_LOCATION_REQUIRED',
-        message:
-          `Para tomar custodia necesitamos una ubicación reciente ` +
-          `con precisión de ±${CUSTODY_MAX_ACCURACY_M} m o mejor. ` +
-          `Activa la ubicación precisa y espera unos segundos.`,
-      });
-    }
+    const location = await getRecentPreciseLocation(client,userId);
 
     const custodyResult = await client.query(
       `
@@ -4120,24 +4106,20 @@ exports.setServiceGeofence = async (req, res) => {
 // ============================================================
 // V6 · VISITA TÉCNICA: EN CAMINO / LLEGADA VALIDADA
 // ============================================================
-exports.markEnRoute = async (req, res) => {
-  try {
-    if (!isTechnicianRole(req)) return res.status(403).json({ success: false, message: 'Solo técnico' });
-    const { id } = req.params;
-    const own = await pool.query(`SELECT id, service_site FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1`, [id, req.user.id]);
-    if (!own.rows[0]) return res.status(404).json({ success: false, message: 'Servicio no asignado a este técnico' });
-    const mode=({customer:'external',other:'external',workshop:'local'})[own.rows[0].service_site?.mode]||own.rows[0].service_site?.mode;
-    if(mode!=='external') return res.status(409).json({success:false,code:'VISIT_MODE_REQUIRED',message:mode?'La llegada GPS solo aplica a visitas externas.':'Administración debe configurar la modalidad y el punto del servicio.'});
-    await pool.query(
-      `INSERT INTO service_order_visit_events (id, service_order_id, tecnico_id, event_type, created_at)
-       VALUES ($1,$2,$3,'en_camino',NOW())`,
-      [randomUUID(), id, req.user.id]
-    );
-    return res.json({ success: true, message: 'Estado de visita actualizado' });
-  } catch (error) {
-    console.error('Error marking en route:', error);
-    return res.status(500).json({ success: false, message: 'Error al actualizar visita' });
-  }
+exports.markEnRoute = async (req,res) => {
+ const client=await pool.connect();try{
+  if(!isTechnicianRole(req))return res.status(403).json({success:false,message:'Solo técnico'});
+  const {id}=req.params;if(!isUuid(id))return res.status(400).json({message:'Orden no válida'});
+  await client.query('BEGIN');
+  const own=await client.query('SELECT id,service_site FROM service_orders WHERE id=$1 AND tecnico_id=$2 LIMIT 1 FOR UPDATE',[id,req.user.id]);
+  if(!own.rows[0]){await safeRollback(client);return res.status(404).json({message:'Servicio no asignado a este técnico'});}
+  const mode=({customer:'external',other:'external',workshop:'local'})[own.rows[0].service_site?.mode]||own.rows[0].service_site?.mode;
+  if(mode!=='external'){await safeRollback(client);return res.status(409).json({message:'En camino solo aplica a visitas externas.'});}
+  const previous=await client.query("SELECT event_type FROM service_order_visit_events WHERE service_order_id=$1 AND tecnico_id=$2 AND event_type IN ('en_camino','llegada_declarada','llegada_validada') LIMIT 1",[id,req.user.id]);
+  if(previous.rows.length){await client.query('COMMIT');return res.json({success:true,already_recorded:true,message:'La visita ya tiene registrada esta acción.'});}
+  await client.query("INSERT INTO service_order_visit_events(id,service_order_id,tecnico_id,event_type,created_at) VALUES($1,$2,$3,'en_camino',NOW())",[randomUUID(),id,req.user.id]);
+  await client.query('COMMIT');return res.json({success:true,message:'En camino registrado.'});
+ }catch(error){await safeRollback(client);console.error('Error marking en route:',error);return res.status(500).json({message:'No se pudo registrar En camino'});}finally{client.release();}
 };
 
 exports.markArrived = async (req, res) => {
@@ -4151,6 +4133,8 @@ exports.markArrived = async (req, res) => {
 
     const mode=({customer:'external',other:'external',workshop:'local'})[own.rows[0].service_site?.mode]||own.rows[0].service_site?.mode;
     if(mode!=='external') { await safeRollback(client); return res.status(409).json({success:false,code:'VISIT_MODE_REQUIRED',message:mode?'La llegada GPS solo aplica a visitas externas.':'Administración debe configurar la modalidad y el punto del servicio.'}); }
+    const previous=await client.query("SELECT event_type FROM service_order_visit_events WHERE service_order_id=$1 AND tecnico_id=$2 AND event_type IN ('llegada_declarada','llegada_validada') ORDER BY created_at DESC LIMIT 1",[id,req.user.id]);
+    if(previous.rows.length){await client.query('COMMIT');return res.json({success:true,already_recorded:true,gps_verified:previous.rows[0].event_type==='llegada_validada',message:'La llegada ya está registrada.'});}
     const fenceResult = await client.query(`SELECT * FROM service_order_geofences WHERE service_order_id=$1 LIMIT 1`, [id]);
     const fence = fenceResult.rows[0];
     if (!fence) {
@@ -4159,7 +4143,7 @@ exports.markArrived = async (req, res) => {
     }
 
     const location = await getRecentPreciseLocation(client, req.user.id);
-    if (!location) { await safeRollback(client); return res.status(409).json({ success: false, code: 'TRUSTED_PRECISE_LOCATION_REQUIRED', message: 'No fue posible validar una ubicación precisa y confiable para confirmar la llegada' }); }
+    if (!location) {await client.query(`INSERT INTO service_order_visit_events(id,service_order_id,tecnico_id,event_type,created_at) VALUES($1,$2,$3,'llegada_declarada',NOW())`,[randomUUID(),id,req.user.id]);await client.query('COMMIT');return res.json({success:true,gps_verified:false,message:'Llegada registrada por el técnico; GPS no disponible.'});}
 
     const distance = haversineMeters(
       location.latitude,
@@ -4168,14 +4152,7 @@ exports.markArrived = async (req, res) => {
       Number(fence.longitude)
     );
 
-    if (distance > Number(fence.radius_m)) {
-      await safeRollback(client);
-      return res.status(409).json({
-        success: false,
-        code: 'OUTSIDE_SERVICE_GEOFENCE',
-        message: 'No fue posible validar la llegada en el punto del servicio',
-      });
-    }
+    if (distance > Number(fence.radius_m)) {await client.query(`INSERT INTO service_order_visit_events(id,service_order_id,tecnico_id,event_type,latitude,longitude,accuracy_m,distance_to_target_m,created_at) VALUES($1,$2,$3,'llegada_declarada',$4,$5,$6,$7,NOW())`,[randomUUID(),id,req.user.id,location.latitude,location.longitude,location.accuracy_m,distance]);await client.query('COMMIT');return res.json({success:true,gps_verified:false,message:'Llegada registrada por el técnico; no se confirmó la distancia por GPS.'});}
 
     await client.query(
       `INSERT INTO service_order_visit_events
@@ -4184,7 +4161,7 @@ exports.markArrived = async (req, res) => {
       [randomUUID(), id, req.user.id, location.latitude, location.longitude, location.accuracy_m, distance, location.network_trust_status, location.device_trust_status]
     );
     await client.query('COMMIT');
-    return res.json({ success: true, message: 'Llegada validada correctamente' });
+    return res.json({ success: true, gps_verified: true, message: 'Llegada validada correctamente' });
   } catch (error) {
     await safeRollback(client);
     console.error('Error marking arrival:', error);

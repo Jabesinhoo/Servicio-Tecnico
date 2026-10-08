@@ -14,6 +14,8 @@ const diasSemana = [
 ];
 
 const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave }) => {
+  const [error,setError]=useState('');
+  const [loaded,setLoaded]=useState(false);
   const [horarios, setHorarios] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -24,11 +26,13 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
   }, [isOpen, tecnicoId]);
 
   const fetchHorarios = async () => {
+    setLoaded(false);setError('');
     try {
       const res = await api.get(`/api/agenda/horario/${tecnicoId}`);
-      setHorarios(res.data || []);
+      if(!Array.isArray(res.data))throw new Error('Respuesta de horarios no válida');
+      setHorarios(res.data);setLoaded(true);
     } catch (error) {
-      console.error('Error fetching horarios:', error);
+      setError(error.response?.data?.message||'No fue posible cargar los horarios.');
     }
   };
 
@@ -55,13 +59,14 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    if(!loaded)return;
+    setLoading(true);setError('');
     try {
       await api.put(`/api/agenda/horario/${tecnicoId}`, { horarios });
-      onSave();
+      await onSave?.();
       onClose();
     } catch (error) {
-      console.error('Error saving horarios:', error);
+      setError(error.response?.data?.message||'No fue posible guardar los horarios.');
     } finally {
       setLoading(false);
     }
@@ -70,7 +75,7 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
   if (!isOpen) return null;
 
   return (
-    <div className="workflow-theme fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
+    <div className="workflow-theme fixed inset-0 z-[180] flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -82,9 +87,11 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
         </div>
 
         <form onSubmit={handleSubmit}>
+          <p className="px-4 pt-3 text-sm">Define los días y turnos reales en hora de Colombia. El servicio completo debe caber en un turno compartido por el equipo. Guardar intenta programar las órdenes asignadas que siguen sin reserva.</p>
+          {error&&<p role="alert" className="p-4 text-sm text-red-600">{error}</p>}
           <div className="p-4 sm:p-6 space-y-4">
             {horarios.map((horario, idx) => (
-              <div key={idx} className="flex gap-3 items-end p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div key={idx} className="flex flex-wrap gap-3 items-end p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Día</label>
                   <select
@@ -145,7 +152,7 @@ const HorarioConfigModal = ({ isOpen, onClose, tecnicoId, tecnicoNombre, onSave 
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading||!loaded}
               className="px-4 py-2 text-white accent-fill rounded-lg hover:accent-fill disabled:opacity-50 flex items-center gap-2"
             >
               <Save className="w-4 h-4" />

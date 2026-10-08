@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../db/pool');
+const {validEvidenceBytes,finalPhotoCount}=require('../domain/final-photo-evidence');
 const {timing,stopSession}=require('../services/service-execution-time.service');
 const { randomUUID } = require('crypto');
 const fsp = require('fs/promises');
@@ -475,6 +476,7 @@ exports.getClosure = async (req, res) => {
           final_notes: null,
         },
         evidences,
+        final_photo_count:finalPhotoCount(evidences,closure),
         timing: await timing(client,order),
         permissions: {
           can_prepare: Boolean(primary) && (isAdmin(req) || primary === req.user.id) && ['asignada','en_espera','en_ejecucion'].includes(order.estado) && ['draft','rework_required'].includes(closure?.status || 'draft'),
@@ -762,6 +764,8 @@ exports.uploadEvidence = async (req, res) => {
         message: 'El archivo está vacío',
       });
     }
+
+    if(!validEvidenceBytes(mimeType,buffer))return res.status(415).json({success:false,message:'El contenido del archivo no corresponde al formato indicado. Adjunta una foto JPG, PNG o WEBP válida.'});
 
     const evidenceId = randomUUID();
 
@@ -1138,6 +1142,7 @@ exports.technicalClose = async (
           SELECT COUNT(*)::int AS total
           FROM service_order_final_evidences
           WHERE service_order_id = $1
+            AND mime_type IN ('image/jpeg','image/png','image/webp')
             AND (
               $2::timestamptz IS NULL
               OR created_at > $2
@@ -1166,8 +1171,8 @@ exports.technicalClose = async (
         message:
           closure.status ===
           'rework_required'
-            ? 'Después del reproceso debes cargar una nueva evidencia final'
-            : 'Debes cargar al menos una evidencia final',
+            ? 'Después del reproceso debes cargar una nueva fotografía del trabajo terminado'
+            : 'Adjunta al menos una fotografía del trabajo terminado para finalizar el servicio. Puedes tomarla con la cámara o elegirla de tus archivos.',
       });
     }
 

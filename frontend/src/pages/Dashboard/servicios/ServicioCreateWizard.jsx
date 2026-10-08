@@ -1,3 +1,5 @@
+import {createPortal} from 'react-dom';
+import HorarioConfigModal from '../agenda/HorarioConfigModal';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X,
@@ -77,6 +79,7 @@ export default function ServicioCreateWizard({
   const isAdmin = userRole === 'admin';
   const isEdit = mode === 'edit' && Boolean(serviceId || service?.id);
   const targetServiceId = serviceId || service?.id || null;
+  const [horarioTech,setHorarioTech]=useState(null);
   const [step, setStep] = useState(0);
   const [clientQuery, setClientQuery] = useState('');
   const [clients, setClients] = useState([]);
@@ -852,17 +855,14 @@ export default function ServicioCreateWizard({
           createdIntakeRef.current = {...intake, status:'activated', service_order_id:order?.id};
 
           if (order?.id && primaryTechnicianId) {
-            await api.patch(`/api/service-orders/${order.id}/approve`, {
+            const approval=await api.patch(`/api/service-orders/${order.id}/approve`, {
               observaciones: 'Creada y asignada desde el flujo controlado',
+              scheduling_mode:schedulingMode,
+              ...(schedulingMode==='manual'?{fecha_agendada:form.scheduled_date,hora_inicio:form.scheduled_time}:{}),
             });
+            if(approval.data?.scheduling_pending)throw new Error(approval.data?.schedule_warning?.message||'La orden sigue pendiente de agenda. Configura el horario laboral del equipo.');
 
-            if (schedulingMode === 'manual') {
-              await api.put(`/api/agenda/servicio/${order.id}`, {
-                fecha_agendada: form.scheduled_date,
-                hora_inicio: form.scheduled_time,
-                duracion_estimada: Number(form.estimated_duration || 60),
-              });
-            }
+
           }
         } catch (activateError) {
           if (activateError.response?.data?.code !== 'INTAKE_NOT_READY') {
@@ -1534,6 +1534,7 @@ export default function ServicioCreateWizard({
                 </div>
               ) : (
                 <>
+                  <section className="rounded-xl border p-3 space-y-2"><h3 className="font-semibold">Horario laboral del equipo</h3><p className="text-sm">Una agenda vacía indica que no hay reservas. Cada técnico también necesita días y turnos laborales configurados para programar e iniciar servicios.</p><div className="flex flex-wrap gap-2">{[primaryTechnicianId,...supportTechnicianIds].filter(Boolean).map(id=>{const tech=technicians.find(t=>t.id===id);return tech&&<button type="button" key={id} className="border rounded-xl min-h-11 px-3 py-2 text-sm" onClick={()=>setHorarioTech(tech)}>Configurar horario: {[...new Set([tech.nombre1,tech.apellidos].filter(Boolean))].join(' ')||tech.usuario}</button>;})}</div></section>
                   <div>
                     <label className="text-sm font-semibold">
                       Buscar técnico
@@ -1983,6 +1984,7 @@ export default function ServicioCreateWizard({
           </div>
         </footer>
       </section>
+      {horarioTech&&createPortal(<HorarioConfigModal isOpen tecnicoId={horarioTech.id} tecnicoNombre={[horarioTech.nombre1,horarioTech.apellidos].filter(Boolean).join(' ')} onClose={()=>setHorarioTech(null)} onSave={()=>{setError('');}}/>,document.body)}
     </div>
   );
 }

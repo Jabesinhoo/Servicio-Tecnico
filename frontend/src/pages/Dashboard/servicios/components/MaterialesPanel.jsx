@@ -95,6 +95,7 @@ function ModalShell({ title, children, onClose, busy, footer }) {
 
 export default function MaterialesPanel({ servicioId, onRefresh, allowRequest=true }) {
   const [items, setItems] = useState([]);
+  const [requestList,setRequestList]=useState([]);
   const [externalMode,setExternalMode]=useState(false),[externalName,setExternalName]=useState(''),[externalDescription,setExternalDescription]=useState(''),[externalUnit,setExternalUnit]=useState('unidad'),[canDecide,setCanDecide]=useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -187,7 +188,7 @@ export default function MaterialesPanel({ servicioId, onRefresh, allowRequest=tr
   }, [showRequest, productQuery]);
 
   const closeRequest = () => {
-    setShowRequest(false);
+    setShowRequest(false);setRequestList([]);
     setSelectedProduct(null);
     setProductQuery('');
     setProducts([]);
@@ -197,37 +198,24 @@ export default function MaterialesPanel({ servicioId, onRefresh, allowRequest=tr
     setExternalMode(false);setExternalName('');setExternalDescription('');setExternalUnit('unidad');
   };
 
+  const currentRequest = () => {
+    if (externalMode?!externalName.trim():!selectedProduct?.id) throw new Error(externalMode?'Escribe el material que necesitas.':'Selecciona un producto del inventario.');
+    const qty=Number(requestQty);if(!Number.isInteger(qty)||qty<1)throw new Error('La cantidad debe ser un entero mayor que cero.');
+    return {label:externalMode?externalName.trim():selectedProduct.nombre,...(externalMode?{external_name:externalName.trim(),external_description:externalDescription.trim(),external_unit:externalUnit.trim()||'unidad'}:{product_id:selectedProduct.id}),cantidad:qty,observaciones:requestNote.trim()||null};
+  };
+  const addRequest = () => {try{const row=currentRequest();if(requestList.length>=50)throw new Error('Máximo 50 materiales por envío.');setRequestList(list=>[...list,row]);setSelectedProduct(null);setProductQuery('');setExternalName('');setExternalDescription('');setRequestQty(1);setRequestNote('');setRequestError('');}catch(e){setRequestError(e.message);}};
   const submitRequest = async () => {
-    if (externalMode?!externalName.trim():!selectedProduct?.id) {
-      setRequestError(externalMode?'Escribe el material que necesitas.':'Selecciona un producto del inventario.');
-      return;
-    }
-
-    const qty = Number(requestQty);
-    if (!Number.isInteger(qty) || qty < 1) {
-      setRequestError('La cantidad debe ser mayor que cero.');
-      return;
-    }
-
     try {
-      setBusy(true);
-      setRequestError('');
-      await api.post(`/api/materiales/servicio/${servicioId}/solicitar`, {
-        ...(externalMode?{external_name:externalName.trim(),external_description:externalDescription.trim(),external_unit:externalUnit.trim()||'unidad'}:{product_id:selectedProduct.id}),
-        cantidad: qty,
-        observaciones: requestNote.trim() || null,
-      });
-      closeRequest();
-      await load();
-      onRefresh?.();
-    } catch (requestErrorValue) {
-      setRequestError(
-        requestErrorValue?.response?.data?.message ||
-          'No fue posible solicitar el material.'
-      );
-    } finally {
-      setBusy(false);
-    }
+      const hasCurrent=externalMode?!!externalName.trim():!!selectedProduct;
+      const rows=[...requestList,...(hasCurrent?[currentRequest()]:[])];
+      if(!rows.length){currentRequest();return;}
+      if(rows.length>50)throw new Error('Máximo 50 materiales por envío.');
+      setBusy(true);setRequestError('');
+      const clean=rows.map(({label,...row})=>row);
+      await api.post(`/api/materiales/servicio/${servicioId}/solicitar`,clean.length===1?clean[0]:{items:clean});
+      closeRequest();await load();onRefresh?.();
+    } catch(e){setRequestError(e.response?.data?.message||e.message||'No fue posible solicitar los materiales.');}
+    finally{setBusy(false);}
   };
 
   const openAction = (type, item) => {
@@ -436,11 +424,13 @@ export default function MaterialesPanel({ servicioId, onRefresh, allowRequest=tr
           footer={
             <>
               <button type="button" onClick={closeRequest} disabled={busy} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 font-semibold">Cancelar</button>
-              <button type="button" onClick={submitRequest} disabled={busy || (externalMode?!externalName.trim():!selectedProduct)} className="px-4 py-2 rounded-xl accent-fill text-white font-semibold disabled:opacity-50">{busy ? 'Solicitando...' : 'Solicitar'}</button>
+              <button type="button" onClick={addRequest} disabled={busy} className="px-4 py-2 rounded-xl border font-semibold">Añadir a lista</button>
+              <button type="button" onClick={submitRequest} disabled={busy || (!requestList.length && (externalMode?!externalName.trim():!selectedProduct))} className="px-4 py-2 rounded-xl accent-fill text-white font-semibold disabled:opacity-50">{busy ? 'Solicitando...' : 'Solicitar'}</button>
             </>
           }
         >
           <div className="space-y-4">
+            {requestList.length>0&&<section aria-label="Materiales a solicitar" className="border rounded-xl p-3"><h3 className="font-semibold">Materiales a solicitar ({requestList.length})</h3><ul>{requestList.map((row,index)=><li key={index} className="flex items-center justify-between gap-2 border-b py-2"><span className="min-w-0 break-words">{row.cantidad} × {row.label}</span><button type="button" aria-label={'Quitar '+row.label} title="Quitar material" className="shrink-0 min-h-11 min-w-11 flex items-center justify-center" disabled={busy} onClick={()=>setRequestList(list=>list.filter((_,i)=>i!==index))}><X size={18}/></button></li>)}</ul><p className="text-xs mt-2">Añade más artículos del inventario o externos; Solicitar envía toda la lista.</p></section>}
             <fieldset className="flex flex-wrap gap-3"><legend className="text-sm font-semibold mb-2">Origen del material</legend><label><input type="radio" checked={!externalMode} onChange={()=>setExternalMode(false)}/> Del inventario</label><label><input type="radio" checked={externalMode} onChange={()=>setExternalMode(true)}/> Fuera del inventario</label></fieldset>
             {externalMode?<div className="space-y-3"><label className="block text-sm font-semibold">Material solicitado *<input aria-label="Material solicitado" maxLength={200} value={externalName} onChange={e=>setExternalName(e.target.value)} className="block w-full border rounded-xl p-2 mt-2 bg-transparent"/></label><label className="block text-sm">Descripción / especificaciones<textarea aria-label="Especificaciones del material" maxLength={2000} value={externalDescription} onChange={e=>setExternalDescription(e.target.value)} className="block w-full border rounded-xl p-2 mt-2 bg-transparent"/></label><label className="block text-sm">Unidad<input aria-label="Unidad del material" maxLength={40} value={externalUnit} onChange={e=>setExternalUnit(e.target.value)} className="block w-full border rounded-xl p-2 mt-2 bg-transparent"/></label></div>:<>
             <div>

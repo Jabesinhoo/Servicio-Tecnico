@@ -9,6 +9,7 @@ const {
 
 const {
   scheduleOrderAutomatically,
+  rescheduleOrderAt,
 } = require('../services/service-scheduling.service');
 
 const UUID_RE =
@@ -616,7 +617,7 @@ exports.updateTeam = async (req, res) => {
       [
         'NO_COMMON_SLOT',
         'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS', 'SCHEDULE_NOT_STARTED',
-        'TEAM_REQUIRED_FOR_SCHEDULE',
+        'TEAM_REQUIRED_FOR_SCHEDULE','SCHEDULE_CONFLICT','INVALID_SCHEDULE','PAST_SCHEDULE',
       ].includes(error?.code)
     ) {
       return res.status(409).json({
@@ -777,8 +778,8 @@ exports.approveAndAssign = async (req, res) => {
 
     if (primary) {
       /*
-       * La asignación del técnico NO debe depender de que exista
-       * disponibilidad automática.
+       * La aprobación y reserva deben confirmarse juntas.
+       * Si no hay horario o turno común, no se deja una asignación sin agenda.
        *
        * El SAVEPOINT permite revertir únicamente los cambios que
        * pudiera hacer el motor de agenda, conservando:
@@ -792,14 +793,9 @@ exports.approveAndAssign = async (req, res) => {
       );
 
       try {
-        schedule = await scheduleOrderAutomatically(
-          client,
-          {
-            orderId: id,
-            actorUserId: req.user.id,
-            replaceExisting: true,
-          }
-        );
+        schedule = req.body?.scheduling_mode==='manual'
+          ? await rescheduleOrderAt(client,{orderId:id,dateText:req.body.fecha_agendada,timeText:req.body.hora_inicio,actorUserId:req.user.id})
+          : await scheduleOrderAutomatically(client,{orderId:id,actorUserId:req.user.id,replaceExisting:true});
 
         await client.query(
           'RELEASE SAVEPOINT service_auto_schedule'
@@ -825,10 +821,7 @@ exports.approveAndAssign = async (req, res) => {
             message: scheduleError.message,
           };
 
-          console.warn(
-            '⚠️ Orden aprobada/asignada sin agenda automática:',
-            scheduleWarning
-          );
+          throw scheduleError;
         } else {
           try {
             await client.query(
@@ -877,7 +870,7 @@ exports.approveAndAssign = async (req, res) => {
       [
         'NO_COMMON_SLOT',
         'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS', 'SCHEDULE_NOT_STARTED',
-        'TEAM_REQUIRED_FOR_SCHEDULE',
+        'TEAM_REQUIRED_FOR_SCHEDULE','SCHEDULE_CONFLICT','INVALID_SCHEDULE','PAST_SCHEDULE',
       ].includes(error?.code)
     ) {
       return res.status(409).json({
@@ -1124,7 +1117,7 @@ exports.assignPrimary = async (req, res) => {
       [
         'NO_COMMON_SLOT',
         'WORK_HOURS_REQUIRED', 'OUTSIDE_WORK_HOURS', 'SCHEDULE_NOT_STARTED',
-        'TEAM_REQUIRED_FOR_SCHEDULE',
+        'TEAM_REQUIRED_FOR_SCHEDULE','SCHEDULE_CONFLICT','INVALID_SCHEDULE','PAST_SCHEDULE',
       ].includes(error?.code)
     ) {
       return res.status(409).json({

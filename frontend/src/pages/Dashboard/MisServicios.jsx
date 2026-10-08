@@ -1,3 +1,4 @@
+import {serviceSchedule,formatDateOnly,formatTime} from './servicios/serviceFormatters';
 import EquipmentIntakeList from './servicios/components/EquipmentIntakeList';
 import {equipmentIntakeError} from './servicios/components/EquipmentIntakeFields';
 import ResponsiveSignaturePad from '../../components/ui/ResponsiveSignaturePad';
@@ -352,8 +353,8 @@ const ServiceCard = ({
           <div className="flex items-start gap-2">
             <Clock3 className="w-4 h-4 mt-0.5 shrink-0 text-slate-400" />
             <span className="text-slate-600 dark:text-slate-300">
-              {service.fecha_agendada
-                ? formatDateTime(service.fecha_agendada)
+              {serviceSchedule(service).date
+                ? `${formatDateOnly(serviceSchedule(service).date)} · ${formatTime(serviceSchedule(service).time)}`
                 : 'Sin fecha agendada'}
             </span>
           </div>
@@ -499,11 +500,11 @@ const ServiceCard = ({
       {!service.service_site && !isAdmin && !service.creator_view_only && <p className="px-4 pb-3 text-sm text-amber-700">Solicita a administración configurar la modalidad y, si es visita externa, el punto del servicio.</p>}
       {!isAdmin && !service.creator_view_only && serviceMode(service.service_site)==='external' && ['asignada', 'en_ejecucion', 'en_espera'].includes(service.estado) && service.assignment_status === 'aceptada' && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" disabled={busy} onClick={() => onEnRoute(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4">
-            En camino
+          <button type="button" disabled={busy||service.visit_en_route_recorded||service.visit_arrival_recorded} onClick={() => onEnRoute(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 disabled:opacity-50">
+            {service.visit_en_route_recorded||service.visit_arrival_recorded?'En camino registrado':'En camino'}
           </button>
-          <button type="button" disabled={busy} onClick={() => onArrived(service)} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4">
-            {service.service_site?.confirmed ? 'Llegué al sitio' : 'Registrar llegada (sin validación GPS)'}
+          <button type="button" disabled={busy||service.visit_arrival_recorded} onClick={() => onArrived(service)} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4">
+            {service.visit_arrival_recorded?'Llegada registrada':'Registrar llegada'}
           </button>
         </div>
       )}
@@ -605,15 +606,10 @@ const ServiceCard = ({
 
           {action === 'take_custody' && (
             <div className="space-y-2">
-              {(service.custody_requires_location ?? !['remote','local'].includes(serviceMode(service.service_site))) && !gps?.valid_for_custody && (
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  Esta visita requiere una ubicación precisa. Si el equipo solo obtiene una ubicación aproximada, usa el servicio desde un celular con ubicación precisa habilitada.
-                </p>
-              )}
 
               <button
                 type="button"
-                disabled={busy || ((service.custody_requires_location ?? !['remote','local'].includes(serviceMode(service.service_site))) && !gps?.valid_for_custody)}
+                disabled={busy}
                 onClick={() => onTakeCustody(service)}
                 className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
               >
@@ -2017,6 +2013,9 @@ const TechnicalClosureModal = ({
     }
   };
 
+  const finalPhotoCount = data?.final_photo_count ?? (data?.evidences||[]).filter(e=>['image/jpeg','image/png','image/webp'].includes(e.mime_type)&&(closure.status!=='rework_required'||new Date(e.created_at)>new Date(closure.rework_started_at))).length;
+  const uploadPhotos = async files=>{for(const file of files)await upload(file);};
+
   const required = [
     ['tests_completed', 'Pruebas finales realizadas'],
     ['functional_verified', 'Funcionamiento final verificado'],
@@ -2201,32 +2200,15 @@ const TechnicalClosureModal = ({
                       Evidencias finales
                     </h4>
                     <p className="text-xs text-slate-500 mt-1">
-                      JPG, PNG, WEBP o PDF.
+                      Obligatorio: al menos una foto del trabajo terminado (JPG, PNG o WEBP). Puedes añadir PDF como soporte adicional.
                     </p>
                   </div>
 
-                  {editable && (
-                    <label className="min-h-11 rounded-xl border border-dashed accent-border dark:accent-border accent-text dark:accent-text font-semibold px-3 flex items-center justify-center gap-2 cursor-pointer">
-                      <Camera className="w-4 h-4" />
-                      Adjuntar evidencia
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="image/jpeg,image/png,image/webp,application/pdf"
-                        disabled={saving}
-                        onChange={(event) => {
-                          const file =
-                            event.target.files?.[0];
+                  {editable && <div className="flex flex-wrap gap-2">
+                    <label className="min-h-11 border rounded-xl px-3 flex items-center justify-center gap-2 cursor-pointer accent-text"><Camera className="w-4 h-4"/>Tomar foto<input type="file" className="sr-only" aria-label="Tomar foto final" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={saving} onChange={event=>{const files=Array.from(event.target.files||[]);event.target.value='';uploadPhotos(files);}}/></label>
+                    <label className="min-h-11 border rounded-xl px-3 flex items-center justify-center gap-2 cursor-pointer accent-text"><FileText className="w-4 h-4"/>Adjuntar archivos<input type="file" multiple className="sr-only" aria-label="Adjuntar evidencias finales" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={saving} onChange={event=>{const files=Array.from(event.target.files||[]);event.target.value='';uploadPhotos(files);}}/></label>
+                  </div>}
 
-                          if (file) {
-                            upload(file);
-                          }
-
-                          event.target.value = '';
-                        }}
-                      />
-                    </label>
-                  )}
                 </div>
 
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2269,6 +2251,8 @@ const TechnicalClosureModal = ({
                   Flujo de entrega interna
                 </h4>
 
+                {['draft','rework_required'].includes(closure.status)&&finalPhotoCount<1&&<p role="status" className="text-sm">Falta una fotografía final para confirmar el cierre. Tómala con la cámara o adjúntala desde tus archivos; un PDF no reemplaza la foto.</p>}
+
                 {(isAdmin || isPrimary) &&
                   closure.status ===
                     'draft' &&
@@ -2276,7 +2260,7 @@ const TechnicalClosureModal = ({
                     'en_ejecucion' && (
                     <button
                       type="button"
-                      disabled={saving}
+                      disabled={saving||finalPhotoCount<1}
                       onClick={() =>
                         run(
                           'technical-close', {duration_note:durationNote}
@@ -2295,7 +2279,7 @@ const TechnicalClosureModal = ({
                     'en_ejecucion' && (
                     <button
                       type="button"
-                      disabled={saving}
+                      disabled={saving||finalPhotoCount<1}
                       onClick={() =>
                         run(
                           'technical-close', {duration_note:durationNote}

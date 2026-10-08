@@ -130,8 +130,9 @@ async function conflicts(client, technicianIds, startAt, endAt, orderId) {
 }
 
 async function workingHours(client, ids) {
- const r=await client.query('SELECT tecnico_id,dia_semana,hora_inicio,hora_fin,activo FROM tecnicos_horarios WHERE tecnico_id=ANY($1::uuid[]) AND activo=TRUE',[ids]);
- for(const id of ids) if(!r.rows.some(h=>h.tecnico_id===id)) throw Object.assign(new Error('Configura el horario laboral de todos los técnicos asignados antes de programar.'),{code:'WORK_HOURS_REQUIRED',status:409});
+ const r=await client.query('SELECT h.tecnico_id,h.dia_semana,h.hora_inicio,h.hora_fin,h.activo FROM tecnicos_horarios h WHERE h.tecnico_id=ANY($1::uuid[]) AND h.activo=TRUE',[ids]);
+ const missing=ids.filter(id=>!r.rows.some(h=>h.tecnico_id===id));
+ if(missing.length){const users=await client.query('SELECT id,usuario,nombre1,apellidos FROM usuarios WHERE id=ANY($1::uuid[])',[missing]);const names=missing.map(id=>{const user=users.rows.find(u=>u.id===id);return user?[...new Set([user.nombre1,user.apellidos].filter(Boolean))].join(' ')||user.usuario:id;});throw Object.assign(new Error('Falta configurar el horario laboral de: '+names.join(', ')+'. Administración: abre Agenda → Configurar horario (⚙️) para cada técnico. Una agenda sin reservas no significa que exista un turno laboral.'),{code:'WORK_HOURS_REQUIRED',status:409,missing_technician_ids:missing});}
  return r.rows;
 }
 async function assertHours(client,ids,start,end){const rows=await workingHours(client,ids);if(!fitsHours(new Date(start).getTime(),new Date(end).getTime(),ids,rows))throw Object.assign(new Error('El servicio completo debe caber en el horario laboral de todos los técnicos, en hora de Colombia.'),{code:'OUTSIDE_WORK_HOURS',status:409});}
@@ -201,7 +202,7 @@ async function persistSchedule(
 
   const local = await client.query(
     `SELECT
-       ($1::timestamptz AT TIME ZONE $2::text)::date AS date_local,
+       ($1::timestamptz AT TIME ZONE $2::text)::date::text AS date_local,
        ($1::timestamptz AT TIME ZONE $2::text)::time AS time_local`,
     [startAt, TZ]
   );

@@ -47,6 +47,7 @@ const Agenda = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] =
     useState(localDate());
+  const [horarioRevision,setHorarioRevision]=useState(0);
   const [showHorarioModal, setShowHorarioModal] =
     useState(false);
   const [selectedTecnico, setSelectedTecnico] =
@@ -559,7 +560,8 @@ const Agenda = () => {
             </section>
           )}
 
-          <DisponibilidadPanel
+          <DisponibilidadPanel key={horarioRevision}
+            onConfigureHorario={isAdmin ? row=>{const tech=tecnicosList.find(t=>t.id===row.tecnico_id);setSelectedTecnico(tech||{id:row.tecnico_id,nombre1:row.tecnico_nombre});setShowHorarioModal(true);}:undefined}
             fecha={selectedDate}
             onSelectTecnico={() => {}}
           />
@@ -575,6 +577,7 @@ const Agenda = () => {
         tecnicoId={selectedTecnico?.id}
         tecnicoNombre={`${selectedTecnico?.nombre1 || ''} ${selectedTecnico?.apellidos || ''}`}
         onSave={async () => {
+          setHorarioRevision(n=>n+1);
           await fetchTecnicos();
           await fetchEventos();
         }}

@@ -54,3 +54,14 @@ export const bogotaDateInput = () => {
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${map.year}-${map.month}-${map.day}`;
 };
+
+export const serviceSchedule = (service) => {
+  if(service?.agenda_inicio){
+    const date=new Date(service.agenda_inicio);
+    if(Number.isFinite(date.getTime())){
+      const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date).map(p=>[p.type,p.value]));
+      return {date:`${parts.year}-${parts.month}-${parts.day}`,time:`${parts.hour}:${parts.minute}`};
+    }
+  }
+  return {date:service?.fecha_agendada||null,time:service?.hora_inicio_agendada||null};
+};

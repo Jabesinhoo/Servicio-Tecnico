@@ -101,9 +101,18 @@ exports.setHorarioTecnico = async (req, res) => {
 
     await client.query('COMMIT');
 
-    return res.json({
-      message: 'Horarios guardados correctamente',
-    });
+    const agendaUpdates = [];
+    try {
+      await require('../services/repair-missing-schedules.service').repairMissingSchedules(
+        client,
+        { log: text => agendaUpdates.push(text), warn: text => agendaUpdates.push(text) },
+        { technicianId: req.params.tecnico_id }
+      );
+    } catch (error) {
+      console.error('Horario guardado; error reparando agenda:', error);
+      agendaUpdates.push('Horario guardado. No fue posible completar la programación automática; revisa las órdenes pendientes en Agenda.');
+    }
+    return res.json({ message: 'Horarios guardados correctamente', agenda_updates: agendaUpdates });
   } catch (error) {
     try {
       await client.query('ROLLBACK');
@@ -289,6 +298,8 @@ exports.getDisponibilidad = async (req, res) => {
             u.apellidos
           ) AS tecnico_nombre,
           u.usuario,
+          EXISTS(SELECT 1 FROM tecnicos_horarios h WHERE h.tecnico_id=u.id AND h.activo=TRUE) AS horario_configurado,
+          COALESCE((SELECT jsonb_agg(jsonb_build_object('inicio',h.hora_inicio::text,'fin',h.hora_fin::text) ORDER BY h.hora_inicio) FROM tecnicos_horarios h WHERE h.tecnico_id=u.id AND h.activo=TRUE AND h.dia_semana=EXTRACT(DOW FROM ${dateParam}::date)::int),'[]'::jsonb) AS turnos_laborales,
           COALESCE(
             (
               SELECT jsonb_agg(
@@ -350,10 +361,10 @@ exports.getDisponibilidad = async (req, res) => {
       result.rows.map((row) => ({
         ...row,
         disponible:
-          !row.en_servicio_ahora &&
+          row.horario_configurado && row.turnos_laborales.length>0 && !row.en_servicio_ahora &&
           row.horarios_ocupados.length === 0,
         motivo:
-          row.en_servicio_ahora
+          !row.horario_configurado ? 'Sin horario laboral configurado' : !row.turnos_laborales.length ? 'Sin turno laboral para ese día' : row.en_servicio_ahora
             ? 'Actualmente en servicio'
             : row.horarios_ocupados.length > 0
               ? 'Tiene servicios programados'

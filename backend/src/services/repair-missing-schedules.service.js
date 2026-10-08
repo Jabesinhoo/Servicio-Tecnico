@@ -1,0 +1,7 @@
+'use strict';
+const {scheduleOrderAutomatically}=require('./service-scheduling.service');
+async function repairMissingSchedules(client,log=console,{technicianId=null}={}){
+ const result=await client.query(`SELECT id,codigo_os FROM service_orders so WHERE estado='asignada' AND tecnico_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM service_order_schedule_blocks b WHERE b.service_order_id=so.id AND b.status='active') AND ($1::uuid IS NULL OR so.tecnico_id=$1 OR EXISTS(SELECT 1 FROM service_order_team_members t WHERE t.service_order_id=so.id AND t.technician_id=$1 AND t.member_status<>'removed')) ORDER BY so."createdAt"`,[technicianId]);
+ for(const order of result.rows){try{await client.query('BEGIN');const locked=await client.query('SELECT estado FROM service_orders WHERE id=$1 FOR UPDATE',[order.id]);const active=await client.query("SELECT 1 FROM service_order_schedule_blocks WHERE service_order_id=$1 AND status='active' LIMIT 1",[order.id]);if(locked.rows[0]?.estado!=='asignada'||active.rows.length){await client.query('COMMIT');continue;}await scheduleOrderAutomatically(client,{orderId:order.id});await client.query('COMMIT');log.log('OK Agenda: '+order.codigo_os);}catch(error){await client.query('ROLLBACK');if(['WORK_HOURS_REQUIRED','NO_COMMON_SLOT','TEAM_REQUIRED_FOR_SCHEDULE','OUTSIDE_WORK_HOURS'].includes(error.code))log.warn('Agenda pendiente '+order.codigo_os+': '+error.message);else throw error;}}
+}
+module.exports={repairMissingSchedules};

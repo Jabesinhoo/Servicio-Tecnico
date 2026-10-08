@@ -37,7 +37,7 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => 
             blob,
             name: file.name,
             type: 'image/jpeg',
-            url: URL.createObjectURL(blob)
+            url: null
           });
         }, 'image/jpeg', quality);
       };
@@ -79,23 +79,25 @@ const ProductImageUpload = ({ images = [], onChange, disabled = false }) => {
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
     setUploading(true);
     
+    const additions=[];
     for (const file of imageFiles) {
       try {
         // Comprimir la imagen antes de guardar
         const compressed = await compressImage(file, 800, 800, 0.7);
         
-        const newImages = [...images, {
+        const persistentUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(compressed.blob);});
+        additions.push({
           id: Date.now() + Math.random(),
-          url: compressed.url,
+          url: persistentUrl,
           blob: compressed.blob,
           name: compressed.name,
           type: compressed.type
-        }];
-        onChange(newImages);
+        });
       } catch (error) {
         console.error('Error compressing image:', error);
       }
     }
+    if(additions.length)onChange([...images,...additions]);
     setUploading(false);
   };
 

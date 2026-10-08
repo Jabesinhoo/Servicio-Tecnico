@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import api from '../../../services/api';
 
-const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
+const DisponibilidadPanel = ({ fecha, onSelectTecnico, onConfigureHorario }) => {
   const [tecnicos, setTecnicos] = useState([]);
   const [errorMessage,setErrorMessage]=useState('');
   const [loading, setLoading] = useState(false);
@@ -67,7 +67,7 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
                   <div className="flex items-center gap-2 mt-1">
                     <Clock className="w-3 h-3 accent-text" />
                     <span className="text-xs accent-text">
-                      {tecnico.horario_laboral?.inicio} - {tecnico.horario_laboral?.fin}
+                      {(tecnico.turnos_laborales||[]).map(w=>`${w.inicio.slice(0,5)}–${w.fin.slice(0,5)}`).join(', ')}
                     </span>
                   </div>
                 ) : (
@@ -81,13 +81,14 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico }) => {
               )}
             </div>
             
+            {!tecnico.horario_configurado&&onConfigureHorario&&<button type="button" className="border rounded-lg min-h-11 p-2 mt-2 text-sm" onClick={e=>{e.stopPropagation();onConfigureHorario(tecnico);}}>Configurar horario laboral</button>}
             {tecnico.horarios_ocupados?.length > 0 && (
               <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500">Ocupado:</p>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {tecnico.horarios_ocupados.map((ocupado, idx) => (
                     <span key={idx} className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
-                      {ocupado.inicio} - {ocupado.fin.split('T')[1]?.slice(0,5)}
+                      {ocupado.servicio}: {new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(ocupado.inicio))}–{new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(ocupado.fin))}
                     </span>
                   ))}
                 </div>
