@@ -10,6 +10,15 @@ function normalizeEquipmentIntake(raw) {
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     return { value: null, errors: ['Datos de ingreso del equipo no válidos'] };
   }
+  if(raw.equipments!==undefined){
+    if(!Array.isArray(raw.equipments)||raw.equipments.length>50)return {value:null,errors:['Registra hasta 50 equipos por orden.']};
+    if(raw.equipment_received===false){const errors=[],ids=new Set();const items=raw.equipments.map((item,index)=>{const id=String(item?.id||'');if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)||ids.has(id.toLowerCase()))errors.push(`Equipo ${index+1}: identificación interna inválida o repetida.`);ids.add(id.toLowerCase());const equipment_type=text(item?.equipment_type,150);if(!equipment_type)errors.push(`Equipo ${index+1}: indica el equipo del servicio.`);return {id,equipment_received:false,equipment_type,brand:text(item?.brand,120),model:text(item?.model,120),serial_number:text(item?.serial_number,160),serial_reason:text(item?.serial_reason,200),technical_observations:text(item?.technical_observations)};});return {value:{...(items[0]||{}),equipment_received:false,equipments:items},errors};}
+    const errors=[],ids=new Set(),items=[];
+    if(raw.equipment_received!==true)errors.push('Indica si se reciben equipos.');
+    if(!raw.equipments.length)errors.push('Agrega al menos un equipo recibido.');
+    raw.equipments.forEach((item,index)=>{const id=String(item?.id||'');if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)||ids.has(id.toLowerCase()))errors.push(`Equipo ${index+1}: identificación interna inválida o repetida.`);ids.add(id.toLowerCase());const result=normalizeEquipmentIntake({...item,equipments:undefined,equipment_received:true});errors.push(...result.errors.map(e=>`Equipo ${index+1}: ${e}`));if(result.value)items.push({...result.value,id});});
+    return {value:{...(items[0]||{}),equipment_received:true,equipments:items},errors};
+  }
   const value = {
     equipment_received: raw.equipment_received,
     worldoffice_order_reference: text(raw.worldoffice_order_reference, 180),

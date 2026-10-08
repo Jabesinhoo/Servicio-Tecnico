@@ -1,3 +1,59 @@
+# Corrección del paquete de instalación
+
+El paquete anterior omitió `backend/src/domain/service-equipment-intake.js`. Las migraciones se aplicaron, pero el validador anterior causaba tres fallos en las pruebas de varios equipos. Este paquete incluye el archivo faltante y conserva todos los cambios anteriores.
+
+Detén backend y frontend, extrae este ZIP actualizado y reemplaza los archivos del proyecto, incluido el validador indicado. Ejecuta de nuevo `INSTALAR_MEJORAS.ps1`. Las migraciones pueden repetirse; no debes borrar la base de datos. El instalador debe aprobar las 98 pruebas y completar la compilación del frontend.
+
+# Una orden con uno o varios equipos — 8 de octubre
+
+En **Nueva orden → Equipo recibido**, registra el primer equipo y usa **Agregar otro equipo** para los demás (hasta 50). Cada ficha tiene identificación, serial o motivo de ausencia, persona que entrega, condiciones, accesorios, observaciones y hasta tres fotos propias. El cliente seleccionado completa la persona que entrega; puedes corregirla por equipo.
+
+Para servicios en sitio o remotos, desmarca la recepción en taller: podrás conservar los equipos atendidos con sus datos descriptivos, sin exigir condiciones de ingreso. También puedes quitar todas las fichas si el servicio no requiere equipos físicos. Antes de quitar un equipo con fotos guardadas, elimina sus fotos.
+
+El Resumen y las actas de aceptación, recepción, cierre técnico y entrega identifican todos los equipos. Modificar una ficha en el borrador invalida la aceptación anterior. El técnico verifica todas las fichas en recepción, sin añadir ni retirar equipos de la orden; al confirmar se conserva el registro. Las fotos quedan asociadas al equipo correspondiente. Los servicios anteriores con un solo equipo siguen siendo compatibles.
+
+Los equipos físicos no multiplican automáticamente la duración ni el inventario: estos siguen el plan de tipos de servicio y las cantidades configuradas. La custodia y el cierre permanecen agrupados por orden.
+
+**Instalación:** detén backend y frontend, extrae este paquete aparte y ejecuta `INSTALAR_MEJORAS.ps1`. Aplica `20261008-order-multiple-equipment.sql` automáticamente. Debe mostrar `OK SQL: varios equipos por orden y fotos por equipo`. Si ya copiaste los archivos, ejecuta desde backend `node .\scripts\install-service-creation-v2.js` antes de reiniciar; evita ejecutar el SQL directamente en PowerShell.
+
+Validación: 98 pruebas de backend aprobadas; pruebas con PostgreSQL de creación/edición, fotos por equipo y recepción técnica; controles de identidad, modificación y reversión; vista a 390 y 1366 px y compilación del frontend. Incluye los cambios anteriores.
+
+# Una orden con varios tipos de servicio — 8 de octubre
+
+**Nueva orden → Clasificación:** busca y selecciona uno o varios tipos. Cada clic agrega o retira un tipo; los seleccionados también tienen botón Quitar. La duración total y el valor base inicial se suman automáticamente. El inventario previsto combina las cantidades de los productos repetidos. El valor inicial puede ajustarse en el formulario.
+
+Ejemplo: mantenimiento de 60 minutos e instalación de 90 minutos reservan 150 minutos para el técnico principal y todos los apoyos. Si cada tipo requiere 1 y 2 unidades del mismo artículo, al aceptar se asignan y descuentan 3, una sola vez. Es una orden con el mismo cliente/equipo técnico/flujo y varias filas en service_order_services. No crea órdenes separadas.
+
+La solicitud guarda los tipos con sus nombres, valores, duraciones e inventarios. La activación crea una fila por cada tipo; la agenda usa la suma de sus duraciones guardadas. Resumen y el acta de aceptación muestran la lista completa. Cambiar la lista en el borrador invalida la firma anterior. Las órdenes anteriores de un solo tipo siguen siendo compatibles.
+
+En edición se pueden cambiar los tipos antes de que el técnico reciba el inventario. Se recalcula el tiempo y se comprueba/reserva la nueva agenda: si no hay espacio, la edición completa se revierte. Una vez asignado el inventario al aceptar, se conserva la lista para no alterar su custodia ni duplicar descuentos; los trabajos adicionales se registran por separado.
+
+**Instalación:** ejecuta INSTALAR_MEJORAS.ps1 con backend/frontend detenidos. Aplica automáticamente la migración `20261008-order-multiple-service-types.sql`. Si ya copiaste los archivos manualmente, ejecuta desde backend `node .\scripts\install-service-creation-v2.js` antes de reiniciar. Debe aparecer `OK SQL: varios tipos por orden de servicio`.
+
+Validación: 91 pruebas de backend aprobadas; creación/actualización de solicitud con PostgreSQL de prueba; múltiples filas y descuento conjunto al aceptar; agenda de 150 minutos con principal/apoyo; edición con reversión por conflicto; selección, eliminación y Resumen en el modal real a 390 y 1366 px; compilación del frontend aprobada. Incluye las mejoras anteriores, incluida la factura opcional.
+
+# Aceptación con inventario automático y factura opcional — 8 de octubre
+
+**Aceptar servicio:** el técnico principal recibe automáticamente los artículos previstos en la copia guardada al activar la orden. Se descuenta la disponibilidad, se registra su custodia por cantidad/orden/técnico y se crean movimientos de salida e historial. La aceptación y el inventario se guardan juntos: cualquier falta de stock, artículo inactivo o sin clasificación revierte toda la operación. Cada orden se procesa una sola vez, incluso con reintentos o reasignación posterior. Una reasignación no supone una devolución física ni vuelve a descontar los artículos.
+
+**Antes de probar:** en Inventario de taller clasifica los artículos del tipo como herramienta retornable o insumo. Crea una orden con ese tipo y deja al técnico principal aceptarla. Se abre Inventario de taller con las asignaciones. Ahí puede devolver herramientas, registrar consumo de insumos y devolver sobrantes. Consumo no vuelve a descontar lo que ya salió al aceptar; devolución solo suma la cantidad pendiente devuelta. No permite consumir herramientas ni devolver lo ya consumido. Al cierre definitivo deben quedar resueltas todas las cantidades.
+
+El responsable inicial es el técnico principal que acepta; no se multiplica la lista por cada apoyo. Administración e inventario ven responsables, órdenes, cantidades asignadas/devueltas/consumidas/pendientes e historial, también exportables a Excel. Los eventos alimentan el historial y las notificaciones al creador mediante el mecanismo existente. Las órdenes antiguas ya aceptadas no reciben descuentos retroactivos. Las órdenes sin inventario previsto siguen funcionando.
+
+**Factura opcional:** se permite avanzar, registrar y activar sin factura World Office, también verificar un pago con su soporte sin número de factura. Se conserva el control de pago y la autorización de pospago. Puedes vincular la factura después desde edición; una consulta fallida no obliga a vincularla. Esta actualización no modifica la conexión ni resuelve por sí sola `ENOTFOUND tecnoserver`.
+
+Validación: 83 pruebas de backend; controladores reales con PostgreSQL de prueba para aceptación, reintento, falta de existencias con reversión, permisos, consumo y devoluciones; verificación de pago sin factura; selector/tabla en móvil y escritorio; compilación aprobada. El instalador aplica ambas migraciones nuevas y ejecuta las pruebas.
+
+# Inventario por tipo de servicio y verificación de agenda — 8 de octubre
+
+En **Tipos de servicio**, crea o edita un tipo y usa **Inventario necesario** para buscar artículos por código/nombre, agregarlos, indicar cantidades o quitarlos. También está disponible al crear un tipo dentro de la nueva orden. Al seleccionar el tipo, aparece la lista y se repite en Resumen. Al activar la orden se conserva una copia del inventario previsto; editar la plantilla no reescribe esa copia. No se descuentan existencias ni se asigna material por configurar una plantilla. El registro de uso por el técnico se revisará en la siguiente etapa.
+
+**Agenda:** la implementación existente reserva la duración completa para principal y apoyos; las comprobaciones y los bloqueos de transacción se aplican a todos ellos. Se probó que un apoyo ocupado impide otra orden, que iniciar justo al terminar el intervalo es válido y que los bloques liberados permiten reutilizar al técnico. Esto impide cruces de asignación, sin impedir el acceso del técnico al sistema.
+
+Para comprobarlo tras instalar: configura un tipo de 90 minutos con dos artículos, selecciónalo en una nueva orden y revisa Resumen. Programa principal y apoyo a las 09:00; intenta otra orden con ese apoyo a las 10:00 (debe rechazarse) y a las 10:30 (debe permitirse si su horario lo admite). Horas de Colombia; el intervalo completo debe caber en la jornada laboral. Las reservas se consolidan al aprobar/asignar: un borrador no reserva agenda.
+
+76 pruebas de backend aprobadas, migración repetible y CRUD con PostgreSQL de prueba, cruces de agenda con equipo completo, selector de inventario en móvil/escritorio y compilación del frontend. Instalar aplica automáticamente la nueva migración. Incluye todos los ajustes anteriores.
+
 # Corrección de búsqueda en edición y detalle en Resumen
 
 La captura de OS-2026-0017 mostraba **Editar**. En esa pantalla el número era texto y no se consultaba World Office: el buscador estaba condicionado al modo de creación. Esta versión habilita el buscador real también al editar, elimina el campo duplicado y carga en Resumen la factura seleccionada con sus líneas. Las facturas vinculadas se precargan al volver a abrir la orden.
@@ -23,7 +79,7 @@ Actualización acumulativa del 7 de octubre de 2026. Incluye las mejoras anterio
 powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
 ```
 
-El destino predeterminado es `C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico`. Para otra ruta agrega `-ProjectPath "ruta del proyecto"`. El instalador verifica y respalda archivos, copia los cambios, aplica las migraciones idempotentes, ejecuta 73 pruebas y compila el frontend. Conserva `.env` y los logos existentes. Detener los servidores evita dependencias bloqueadas en Windows. No pegues SQL directamente en PowerShell.
+El destino predeterminado es `C:\Users\USUARIO\Desktop\inventario-app\Servicio-Tecnico`. Para otra ruta agrega `-ProjectPath "ruta del proyecto"`. El instalador verifica y respalda archivos, copia los cambios, aplica las migraciones idempotentes, ejecuta 91 pruebas y compila el frontend. Conserva `.env` y los logos existentes. Detener los servidores evita dependencias bloqueadas en Windows. No pegues SQL directamente en PowerShell.
 
 3. Reinicia los dos servidores como normalmente los inicias.
 

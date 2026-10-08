@@ -10,6 +10,7 @@ router.use(authRequired);
 // Rutas públicas (para todos los roles autenticados)
 router.get('/tipos-servicio', tipoServicioController.getAll);
 router.get('/tipos-servicio/activos', tipoServicioController.getActivos);
+router.get('/tipos-servicio/inventory-catalog', tipoServicioController.inventoryCatalog);
 router.get('/tipos-servicio/:id', tipoServicioController.getById);
 
 // Rutas solo para admin

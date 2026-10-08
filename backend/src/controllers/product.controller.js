@@ -153,8 +153,8 @@ exports.delete = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const history=await pool.query('SELECT id,quantity,returned_quantity FROM workshop_assignments WHERE product_id=$1',[id]);
-    if(history.rows.some(a=>a.quantity>a.returned_quantity))return res.status(409).json({message:'Primero registra la devolución de los ítems de taller que están en uso.'});
+    const history=await pool.query('SELECT id,quantity,returned_quantity,consumed_quantity FROM workshop_assignments WHERE product_id=$1',[id]);
+    if(history.rows.some(a=>a.quantity>a.returned_quantity+(a.consumed_quantity||0)))return res.status(409).json({message:'Primero registra la devolución de los ítems de taller que están en uso.'});
     const result = history.rows.length
       ? await pool.query('UPDATE products SET estado=false,"updatedAt"=now() WHERE id=$1 RETURNING id',[id])
       : await pool.query(`DELETE FROM products WHERE id = $1 RETURNING id`, [id]);

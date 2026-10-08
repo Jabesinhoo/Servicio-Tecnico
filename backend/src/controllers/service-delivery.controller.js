@@ -557,8 +557,8 @@ exports.confirmDelivery = async (req, res) => {
     if (!delivery) { await rollback(client); return res.status(409).json({ success:false, message:'Guarda primero los datos de entrega' }); }
     if (delivery.status === 'delivered') { await rollback(client); return res.status(409).json({ success:false, message:'La entrega ya fue confirmada' }); }
 
-    const tools=await client.query('SELECT id FROM workshop_assignments WHERE service_order_id=$1 AND returned_quantity<quantity LIMIT 1',[order.id]);
-    if(tools.rows.length){await rollback(client);return res.status(409).json({message:'Devuelve los ítems de taller pendientes antes de cerrar definitivamente la orden.',code:'WORKSHOP_ITEMS_PENDING'});}
+    const tools=await client.query('SELECT id FROM workshop_assignments WHERE service_order_id=$1 AND returned_quantity+consumed_quantity<quantity LIMIT 1',[order.id]);
+    if(tools.rows.length){await rollback(client);return res.status(409).json({message:'Devuelve las herramientas y registra el consumo o devolución de los insumos pendientes antes de cerrar definitivamente la orden.',code:'WORKSHOP_ITEMS_PENDING'});}
     const notifications = await getNotifications(client, order.id);
     if (!notifications.length) {
       await rollback(client);

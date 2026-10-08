@@ -377,6 +377,7 @@ async function loadSnapshot(
           storage_path,
           mime_type,
           category,
+          equipment_id,
           note,
           captured_at,
           created_at
@@ -458,6 +459,7 @@ async function loadSnapshot(
         SELECT
           original_name,
           category,
+          equipment_id,
           note,
           created_at
         FROM

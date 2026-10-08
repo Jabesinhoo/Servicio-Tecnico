@@ -1,0 +1,9 @@
+'use strict';const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm'),path=require('path');
+const text=fs.readFileSync(path.join(__dirname,'../src/controllers/service-intake.controller.js'),'utf8');
+// Execute the actual pure readiness function from the controller, with its real allowed classifications.
+const start=text.indexOf('function evaluateReadiness('),end=text.indexOf('\nasync function validateIntakeTeam',start);
+const context={normalizeEquipmentIntake:require('../src/domain/service-equipment-intake').normalizeEquipmentIntake,VALID_CLASSIFICATIONS:new Set(['specific','diagnostic'])};vm.createContext(context);vm.runInContext(text.slice(start,end)+';this.check=evaluateReadiness;',context);
+const intake={client_id:'cliente',request_description:'Reparar',classification:'specific',service_type_name:'Reparación',scope_text:'Revisión',conditions_text:'Condiciones',client_acceptance:true,client_acceptance_name:'Cliente',client_acceptance_document:'123',client_acceptance_channel:'in_person',billing_mode:'prepaid',payment_status:'verified',primary_technician_id:'técnico'};
+test('prepago verificado permite activar una solicitud sin factura ni conexión SQL Server',()=>{const r=context.check(intake);assert.equal(r.ready,true);assert.equal(r.missing.length,0);});
+test('factura opcional no equivale a pago verificado',()=>{const r=context.check({...intake,payment_status:'pending'});assert.equal(r.ready,false);assert(r.missing.includes('pago_verificado'));assert(!r.missing.includes('factura'));});
+test('pospago conserva el motivo aunque no haya factura',()=>{const r=context.check({...intake,billing_mode:'postpaid',postpaid_reason:'Crédito autorizado'});assert.equal(r.ready,true);assert.equal(context.check({...intake,billing_mode:'postpaid'}).ready,false);});

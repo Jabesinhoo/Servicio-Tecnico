@@ -2116,6 +2116,8 @@ exports.acceptAssignment = async (req, res) => {
       });
     }
 
+    const inventory=await require('../services/service-acceptance-inventory.service').allocateAcceptanceInventory(client,id,userId);
+
     const location = await getRecentPreciseLocation(
       client,
       userId
@@ -2154,15 +2156,16 @@ exports.acceptAssignment = async (req, res) => {
       message: 'Asignación aceptada correctamente',
       assignment: result.rows[0],
       precise_location_recorded: Boolean(location),
+      inventory,
     });
   } catch (error) {
     await safeRollback(client);
 
     console.error('Error accepting assignment:', error);
 
-    return res.status(500).json({
+    return res.status(error.status||500).json({
       success: false,
-      message: 'Error al aceptar la asignación',
+      message: error.status?error.message:'Error al aceptar la asignación',
     });
   } finally {
     client.release();
@@ -2750,7 +2753,8 @@ exports.saveReceptionChecklist = async (req, res) => {
       });
     }
 
-    const {
+    await client.query('BEGIN');
+    let {
       equipment_type,
       brand,
       model,
@@ -2768,7 +2772,7 @@ exports.saveReceptionChecklist = async (req, res) => {
         SELECT *
         FROM service_order_reception_checklists
         WHERE service_order_id = $1
-        LIMIT 1
+        LIMIT 1 FOR UPDATE
       `,
       [id]
     );
@@ -2776,6 +2780,7 @@ exports.saveReceptionChecklist = async (req, res) => {
     const existing = existingResult.rows[0];
 
     if (existing?.status === 'confirmed') {
+      await safeRollback(client);
       return res.status(409).json({
         success: false,
         message:
@@ -2783,6 +2788,13 @@ exports.saveReceptionChecklist = async (req, res) => {
       });
     }
 
+    let equipmentItems=null;
+    if(req.body?.equipment_items!==undefined||existing?.equipment_items?.length){
+      const helper=require('../services/order-equipment.service');
+      equipmentItems=helper.validateEquipmentItems(req.body?.equipment_items||existing.equipment_items,existing?.equipment_items?.length?existing.equipment_items:null);
+      const first=require('../domain/service-equipment-intake').receptionDraft(equipmentItems[0],{});
+      ({equipment_type,brand,model,serial_number,received_from_name,received_from_document,condition_flags,accessories,accessories_other}=first);
+    }
     const checklistId = existing?.id || randomUUID();
 
     const result = await client.query(
@@ -2873,12 +2885,16 @@ exports.saveReceptionChecklist = async (req, res) => {
       ]
     );
 
+    if(equipmentItems){await client.query('UPDATE service_order_reception_checklists SET equipment_items=$2::jsonb WHERE id=$1',[checklistId,JSON.stringify(equipmentItems)]);await require('../services/order-equipment.service').storeOrderEquipment(client,id,equipmentItems);result.rows[0].equipment_items=equipmentItems;}
+    await client.query('COMMIT');
     return res.json({
       success: true,
       message: 'Checklist guardado como borrador',
       data: result.rows[0],
     });
   } catch (error) {
+    await safeRollback(client);
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error saving reception checklist:', error);
 
     if (error?.code === '42P01') {
@@ -3003,6 +3019,7 @@ exports.confirmReceptionChecklist = async (req, res) => {
       });
     }
 
+    if(checklist.equipment_items?.length){const normalized=require('../domain/service-equipment-intake').normalizeEquipmentIntake({equipment_received:true,equipments:checklist.equipment_items});if(normalized.errors.length){await safeRollback(client);return res.status(400).json({message:normalized.errors.join('. ')});}}
     const conditionFlags =
       checklist.condition_flags || {};
 
@@ -3370,6 +3387,8 @@ exports.update = async (req, res) => {
       );
     }
 
+    let serviceTypesChanged=false;
+    let selectedServices=null;
     let intake = null;
     const intakeResult = await client.query(
       `SELECT *
@@ -3380,6 +3399,18 @@ exports.update = async (req, res) => {
       [id]
     );
     intake = intakeResult.rows[0] || null;
+
+    if(isAdmin && body.service_type_ids!==undefined){
+      const helper=require('../services/order-service-types.service');
+      const oldIds=intake?.service_types?.length?intake.service_types.map(t=>t.id):(await client.query('SELECT tipo_servicio_id FROM service_order_services WHERE service_order_id=$1',[id])).rows.map(t=>t.tipo_servicio_id).filter(Boolean);
+      const newIds=helper.validateTypeIds(body.service_type_ids);
+      serviceTypesChanged=oldIds.length!==newIds.length||oldIds.some(id=>!newIds.includes(id));
+      if(serviceTypesChanged){const allocated=await client.query('SELECT 1 FROM service_inventory_allocations WHERE service_order_id=$1',[id]);if(allocated.rows.length)throw Object.assign(new Error('El técnico ya recibió el inventario. Conserva los tipos de esta orden y registra los trabajos adicionales por separado.'),{status:409});}
+      selectedServices=await helper.prepareServiceTypes(client,body,intake);
+      if(intake)await helper.saveIntakeTypes(client,intake.id,selectedServices);
+      if(serviceTypesChanged){await helper.replaceOrderServices(client,id,selectedServices,body);changedFields.push('service_types');}
+      await client.query('UPDATE service_orders SET duracion_estimada=$2 WHERE id=$1',[id,body.estimated_duration]);
+    }
 
     if (isAdmin && intake) {
       const intakeUpdates = [];
@@ -3676,7 +3707,7 @@ exports.update = async (req, res) => {
     let schedule = null;
     let scheduleWarning = null;
 
-    if (isAdmin && body.reschedule === true) {
+    if (isAdmin && (body.reschedule === true || serviceTypesChanged)) {
       const mode = String(body.scheduling_mode || intake?.scheduling_mode || 'auto');
       const duration = Number(body.estimated_duration || body.duracion_estimada || current.duracion_estimada || 60);
 
@@ -3716,7 +3747,7 @@ exports.update = async (req, res) => {
             scheduleError?.code
           )
         ) {
-          if (mode === 'manual') throw scheduleError;
+          if (mode === 'manual'||serviceTypesChanged) {scheduleError.status=409;throw scheduleError;}
           scheduleWarning = scheduleError.message;
         } else {
           throw scheduleError;
@@ -3790,6 +3821,7 @@ exports.update = async (req, res) => {
             fields: [...new Set(changedFields)].sort(),
             scheduling_mode: body.scheduling_mode || intake?.scheduling_mode || null,
             schedule_warning: scheduleWarning,
+            ...(serviceTypesChanged?{service_type_ids:selectedServices.map(t=>t.id),summary:'Actualizó los tipos del servicio: '+selectedServices.map(t=>t.nombre).join(', ')}:{}),
           }),
         ]
       );
@@ -4597,7 +4629,7 @@ exports.getReceptionAct = async (req, res) => {
       ),
       client.query(
         `SELECT id, status, received_from_name, received_from_document, equipment_type,
-                brand, model, serial_number, condition_flags, accessories, accessories_other, observations, confirmed_at
+                brand, model, serial_number, condition_flags, accessories, accessories_other, observations, equipment_items, confirmed_at
          FROM service_order_reception_checklists
          WHERE service_order_id = $1 LIMIT 1`,
         [id]

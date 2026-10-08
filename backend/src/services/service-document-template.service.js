@@ -170,6 +170,10 @@ function checklistRows(checklist) {
 
 function receptionEquipmentSection(snapshot) {
   const checklist = snapshot.reception_checklist?.checklist || snapshot.reception_checklist || {};
+  const equipmentItems=checklist.equipment_items?.length?checklist.equipment_items:(snapshot.intake?.equipment_intake?.equipments||[]);
+  if(equipmentItems.length){const labels={good:'Buen estado',scratches:'Rayones',dents:'Golpes / abolladuras',broken:'Partes rotas',humidity:'Humedad',other:'Otro estado',received:'Recibido',not_received:'No recibido',not_applicable:'No aplica'};
+    return `<h2>Equipos del servicio (${equipmentItems.length})</h2>`+equipmentItems.map((e,n)=>`<h3>Equipo ${n+1}</h3><div class="grid">${row('Equipo',e.equipment_type)}${row('Marca / modelo',[e.brand,e.model].filter(Boolean).join(' · '))}${row('Serial',e.serial_number||e.serial_reason)}${row('Entregado por',e.received_from_name)}${row('Documento',e.received_from_document)}${row('Estado físico',labels[e.physical_condition]||e.physical_condition)}${row('Daños visibles',e.physical_notes)}${row('Accesorios y cantidades',e.accessories_detail)}${row('Cargador',labels[e.charger])}${row('Batería',labels[e.battery])}${row('Observaciones',e.technical_observations)}</div>`).join('')+`<h3>Solicitud y observaciones generales</h3><div class="note">${escapeHtml(snapshot.intake?.request_description||snapshot.order?.descripcion_inicial||'')}<br>${escapeHtml(checklist.observations||'')}</div>`;
+  }
   return `<h2>Equipo recibido</h2><div class="grid">
     ${row('Equipo', checklist.equipment_type)}${row('Marca', checklist.brand)}
     ${row('Modelo', checklist.model)}${row('Serial', checklist.serial_number || 'Ver observaciones')}
@@ -185,13 +189,13 @@ function receptionEquipmentSection(snapshot) {
     <h3>Observaciones de recepción</h3><div class="note">${escapeHtml(checklist.observations || '—')}</div>`;
 }
 
-function receptionPhotos(items) {
+function receptionPhotos(items,equipments=[]) {
   if (!Array.isArray(items) || !items.length) return '<div class="muted">Sin fotografías registradas.</div>';
-  return `<div class="photo-grid">${items.map(item => `<figure class="photo-card">
+  return `<div class="photo-grid">${items.map(item => {const equipment=equipments.find(e=>e.id===item.equipment_id);const label=equipment?[equipment.equipment_type,equipment.brand,equipment.model,equipment.serial_number].filter(Boolean).join(' · '):'';return `<figure class="photo-card">
     <img src="${escapeHtml(item.data_uri)}" alt="${escapeHtml(item.note || item.original_name || 'Equipo recibido')}">
-    <figcaption>${escapeHtml(item.note || item.original_name || 'Equipo recibido')}<br>
+    <figcaption>${escapeHtml(label)} ${escapeHtml(item.note || item.original_name || 'Equipo recibido')}<br>
     ${escapeHtml(fmtDate(item.captured_at || item.created_at))}</figcaption>
-    </figure>`).join('')}</div>`;
+    </figure>`;}).join('')}</div>`;
 }
 
 function evidenceList(items) {
@@ -628,7 +632,7 @@ function buildReceptionAct(snapshot) {
 
     ${receptionEquipmentSection(snapshot)}
     <h3>Fotografías del estado inicial</h3>
-    ${receptionPhotos(snapshot.reception_evidences)}
+    ${receptionPhotos(snapshot.reception_evidences,(snapshot.reception_checklist?.checklist||snapshot.reception_checklist||{}).equipment_items||[])}
 
     <h2>Firma de recepción</h2>
     <div class="signature-grid">
@@ -852,6 +856,7 @@ function buildFinalDelivery(snapshot) {
   const body = `
     ${commonOrderSection(snapshot)}
 
+    ${(snapshot.reception_checklist?.equipment_items?.length||snapshot.intake?.equipment_intake?.equipments?.length)?receptionEquipmentSection(snapshot):''}
     <h2>Entrega final</h2>
 
     <div class="grid">

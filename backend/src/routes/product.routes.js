@@ -12,6 +12,7 @@ router.get('/workshop',workshop.list);
 router.put('/workshop/catalog/:productId',workshop.classify);
 router.post('/workshop/assignments',workshop.assign);
 router.post('/workshop/assignments/:id/return',workshop.returnItem);
+router.post('/workshop/assignments/:id/consume',workshop.consumeItem);
 
 // Rutas públicas (para todos los roles autenticados)
 router.get('/products', productController.getAll);

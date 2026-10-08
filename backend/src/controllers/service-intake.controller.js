@@ -744,7 +744,6 @@ function evaluateReadiness(intake) {
   }
 
   if (intake.billing_mode === 'prepaid') {
-    if (!String(intake.invoice_reference || '').trim()) missing.push('factura');
     if (intake.payment_status !== 'verified') missing.push('pago_verificado');
   }
 
@@ -1106,6 +1105,7 @@ exports.create = async (req, res) => {
       return res.status(403).json({ success: false, message: 'No autorizado' });
     }
 
+    const selectedServices=await require('../services/order-service-types.service').prepareServiceTypes(client,req.body||{});
     const validation = validateCorePayload(req.body || {});
 
     if (validation.errors.length) {
@@ -1264,6 +1264,7 @@ exports.create = async (req, res) => {
           v.clientAcceptanceClientId;
     }
 
+    if(selectedServices){await require('../services/order-service-types.service').saveIntakeTypes(client,id,selectedServices);result.rows[0].service_types=selectedServices;}
     if (v.equipmentIntake) {
       await client.query(
         'UPDATE service_order_intakes SET equipment_intake = $1::jsonb WHERE id = $2',
@@ -1378,6 +1379,7 @@ exports.update = async (req, res) => {
       });
     }
 
+    const selectedServices=await require('../services/order-service-types.service').prepareServiceTypes(client,req.body||{},intake);
     const validation = validateCorePayload(req.body || {}, { partial: true });
 
     if (validation.errors.length) {
@@ -1545,6 +1547,7 @@ exports.update = async (req, res) => {
     }
 
     if (req.body?.equipment_intake !== undefined) {
+      if(intake.equipment_intake?.equipments?.length){const kept=(v.equipmentIntake?.equipments||[]).map(i=>i.id);const orphan=await client.query("SELECT id FROM service_intake_creation_files WHERE intake_id=$1 AND kind='reception_photo' AND (NOT($3::boolean) OR (equipment_id IS NOT NULL AND NOT(equipment_id=ANY($2::uuid[])))) LIMIT 1",[intake.id,kept,!!v.equipmentIntake?.equipment_received]);if(orphan.rows.length)throw Object.assign(new Error('Quita las fotos del equipo antes de retirarlo de la solicitud.'),{status:400});}
       await client.query(
         'UPDATE service_order_intakes SET equipment_intake = $1::jsonb WHERE id = $2',
         [v.equipmentIntake ? JSON.stringify(v.equipmentIntake) : null, intake.id]
@@ -1552,6 +1555,7 @@ exports.update = async (req, res) => {
       result.rows[0].equipment_intake = v.equipmentIntake;
     }
 
+    if(selectedServices){await require('../services/order-service-types.service').saveIntakeTypes(client,intake.id,selectedServices);result.rows[0].service_types=selectedServices;}
     if (req.body?.service_site !== undefined) {
       const site = normalizeServiceSite(req.body.service_site);
       await client.query('UPDATE service_order_intakes SET service_site=$1::jsonb WHERE id=$2',[site?JSON.stringify(site):null,intake.id]);
@@ -1740,13 +1744,6 @@ exports.verifyPayment = async (req, res) => {
       cleanText(req.body?.invoice_reference, 180) || intake.invoice_reference;
     const paymentReference = cleanText(req.body?.payment_reference, 220);
     const paymentMethod = cleanText(req.body?.payment_method, 60);
-
-    if (!invoiceReference) {
-      return res.status(400).json({
-        success: false,
-        message: 'La referencia de factura es obligatoria',
-      });
-    }
 
     if (!paymentReference) {
       return res.status(400).json({
@@ -2044,9 +2041,17 @@ exports.activate = async (req, res) => {
       ]
     );
 
+    if(intake.service_types?.length){
+      await require('../services/order-service-types.service').replaceOrderServices(client,serviceOrderId,intake.service_types,intake);
+    } else if(intake.service_type_id && isUuid(intake.service_type_id)) {
+      const requirements=await require('../services/service-type-inventory.service').readRequirements(client,[intake.service_type_id]);
+      await client.query('UPDATE service_order_services SET inventory_requirements=$2::jsonb WHERE service_order_id=$1',[serviceOrderId,JSON.stringify(requirements.map(({stock_actual,service_type_id,...item})=>item))]);
+    }
     console.log('✅ Detalle del servicio guardado en service_order_services');
 
     // Initial observations are a draft, never a verified reception or client signature.
+    const equipmentItems=intake.equipment_intake?.equipments||[];
+    if(equipmentItems.length)await require('../services/order-equipment.service').storeOrderEquipment(client,serviceOrderId,equipmentItems);
     const draft = receptionDraft(intake.equipment_intake, intake);
     if (draft) {
       await client.query(
@@ -2064,6 +2069,7 @@ exports.activate = async (req, res) => {
           JSON.stringify(draft.condition_flags), JSON.stringify(draft.accessories),
           draft.accessories_other, draft.observations]
       );
+      if(equipmentItems.length)await client.query('UPDATE service_order_reception_checklists SET equipment_items=$2::jsonb WHERE service_order_id=$1',[serviceOrderId,JSON.stringify(equipmentItems)]);
       await addEvent(client, {
         intakeId: intake.id, serviceOrderId, eventType: 'equipment_intake_registered',
         actorUserId: req.user.id,

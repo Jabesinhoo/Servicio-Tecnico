@@ -50,7 +50,7 @@ async function getOrderAndTeam(client, orderId) {
   }
 
   const order = orderResult.rows[0];
-  const typed = await client.query(`SELECT SUM(ts.duracion_estimada)::int AS minutes FROM service_order_services ss JOIN tipos_servicio ts ON ts.id=ss.tipo_servicio_id WHERE ss.service_order_id=$1`,[orderId]);
+  const typed = await client.query(`SELECT SUM(COALESCE(ss.estimated_minutes,ts.duracion_estimada))::int AS minutes FROM service_order_services ss JOIN tipos_servicio ts ON ts.id=ss.tipo_servicio_id WHERE ss.service_order_id=$1`,[orderId]);
   if(Number(typed.rows[0]?.minutes)>0) order.duracion_estimada=Number(typed.rows[0].minutes);
 
 

@@ -1,5 +1,6 @@
 // src/pages/Dashboard/tipos-servicio/TipoServicioForm.jsx
 import React, { useState, useEffect } from 'react';
+import ServiceInventoryRequirements from '../servicios/components/ServiceInventoryRequirements';
 import { X, Save, Clock, DollarSign, AlertCircle } from 'lucide-react';
 
 const TipoServicioForm = ({ isOpen, onClose, onSubmit, initialData }) => {
@@ -13,6 +14,7 @@ const TipoServicioForm = ({ isOpen, onClose, onSubmit, initialData }) => {
     requiere_aprobacion: false,
     categoria: '',
     activo: true,
+    inventory_requirements: [],
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -29,6 +31,7 @@ const TipoServicioForm = ({ isOpen, onClose, onSubmit, initialData }) => {
         requiere_aprobacion: initialData.requiere_aprobacion || false,
         categoria: initialData.categoria || '',
         activo: initialData.activo !== false,
+        inventory_requirements: initialData.inventory_requirements || [],
       });
     } else {
       resetForm();
@@ -47,6 +50,7 @@ const TipoServicioForm = ({ isOpen, onClose, onSubmit, initialData }) => {
       requiere_aprobacion: false,
       categoria: '',
       activo: true,
+    inventory_requirements: [],
     });
   };
 
@@ -68,7 +72,7 @@ const TipoServicioForm = ({ isOpen, onClose, onSubmit, initialData }) => {
       await onSubmit(formData);
       onClose();
     } catch (error) {
-      console.error('Error submitting form:', error);
+      setErrors(previous=>({...previous,submit:error.response?.data?.message||'No se pudo guardar el tipo de servicio.'}));
     } finally {
       setLoading(false);
     }
@@ -201,6 +205,7 @@ const TipoServicioForm = ({ isOpen, onClose, onSubmit, initialData }) => {
               </div>
             </div>
 
+            <ServiceInventoryRequirements value={formData.inventory_requirements} onChange={items=>setFormData(previous=>({...previous,inventory_requirements:items}))} />
             <div className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-4">
               <label className="flex items-center gap-2">
                 <input
@@ -235,6 +240,7 @@ const TipoServicioForm = ({ isOpen, onClose, onSubmit, initialData }) => {
             </div>
           </div>
 
+          {errors.submit&&<p role="alert" className="px-4">{errors.submit}</p>}
           <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <button
               type="button"

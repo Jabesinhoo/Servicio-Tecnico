@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import api from '../../../services/api';
 import ServiceTypePicker from './components/ServiceTypePicker';
+import {summarizeServiceTypes} from './serviceTypeSelection';
+import ServiceInventoryRequirements from './components/ServiceInventoryRequirements';
 import InvoiceRecord from './components/InvoiceRecord';
 import IntakeInvoicePicker from './components/IntakeInvoicePicker';
 import {IntakePhotos,IntakeAcceptance} from './components/IntakeCreationDocuments';
@@ -26,7 +28,8 @@ import {emptyServiceSite,serviceSiteError} from './serviceLocation';
 import AcceptanceEvidenceFiles from './components/AcceptanceEvidenceFiles';
 import {uploadAcceptanceFiles} from './acceptanceFiles';
 import { bogotaDateInput } from './serviceFormatters';
-import EquipmentIntakeFields, { emptyEquipmentIntake, equipmentIntakeError } from './components/EquipmentIntakeFields';
+import EquipmentIntakeList,{emptyEquipmentList} from './components/EquipmentIntakeList';
+import { equipmentIntakeError } from './components/EquipmentIntakeFields';
 
 const DEFAULT_CONDITIONS =
   'El cliente fue informado del alcance inicial del servicio, tiempos estimados, posibles costos adicionales y de que cualquier reparación o repuesto adicional requerirá autorización previa.';
@@ -85,6 +88,7 @@ export default function ServicioCreateWizard({
   const [ingressPhotos,setIngressPhotos]=useState([]),[savedPhotos,setSavedPhotos]=useState([]);
   const [invoiceFile,setInvoiceFile]=useState(null);
   const [invoiceLinked,setInvoiceLinked]=useState(null);
+  const [invoiceChanged,setInvoiceChanged]=useState(false);
   const [acceptanceSignature,setAcceptanceSignature]=useState(''),[signedRevision,setSignedRevision]=useState(''),[acceptanceAct,setAcceptanceAct]=useState(null);
   const profileCache=useRef(new Map());
 
@@ -119,10 +123,11 @@ export default function ServicioCreateWizard({
 
   const [form, setForm] = useState({
     service_site: emptyServiceSite(),
-    equipment_intake: emptyEquipmentIntake(),
+    equipment_intake: emptyEquipmentList(),
     request_description: '',
     classification: 'diagnostic',
     service_type_id: '',
+    service_type_ids: [],
     service_type_name: '',
     service_type_category: '',
     base_value: '',
@@ -249,6 +254,7 @@ export default function ServicioCreateWizard({
         const intake = row.intake || {};
         const documents=await api.get(`/api/service-orders/${targetServiceId}/creation-documents`);
         if(!active)return;
+        setInvoiceChanged(false);
         setInvoiceLinked(documents.data?.invoice?{reference:documents.data.invoice.invoice_reference,record:documents.data.invoice.record}:null);
         const currentTeam = Array.isArray(row.equipo) ? row.equipo : [];
 
@@ -310,6 +316,7 @@ export default function ServicioCreateWizard({
           request_description: intake.request_description || row.descripcion_inicial || '',
           classification: intake.classification || row.classification || 'diagnostic',
           service_type_id: intake.service_type_id || row.service_type_id || '',
+          service_type_ids: intake.service_types?.length?intake.service_types.map(t=>t.id):(row.servicios?.length?row.servicios.map(t=>t.tipo_servicio_id).filter(Boolean):[intake.service_type_id||row.service_type_id].filter(Boolean)),
           service_type_name: intake.service_type_name || row.service_type_name || '',
           service_type_category: intake.service_type_category || row.service_type_category || '',
           base_value: intake.base_value ?? '',
@@ -446,10 +453,10 @@ export default function ServicioCreateWizard({
     selectedAcceptanceClient,
   ]);
 
-  const selectedType = useMemo(
-    () => types.find((item) => String(item.id) === String(form.service_type_id)),
-    [types, form.service_type_id]
-  );
+  const typeCatalog=useMemo(()=>{const saved=editDetail?.intake?.service_types||[];return [...types.map(t=>saved.find(x=>x.id===t.id)||t),...saved.filter(t=>!types.some(x=>x.id===t.id))];},[types,editDetail]);
+  const selectedTypes = useMemo(()=>typeCatalog.filter(t=>(form.service_type_ids||[form.service_type_id]).includes(t.id)),[typeCatalog,form.service_type_ids,form.service_type_id]);
+  const selectionSummary=useMemo(()=>summarizeServiceTypes(selectedTypes),[selectedTypes]);
+  const selectedType=selectedTypes.length?{nombre:selectionSummary.service_type_name,categoria:selectionSummary.service_type_category,valor_base:selectionSummary.base_value,duracion_estimada:selectionSummary.estimated_minutes,inventory_requirements:selectionSummary.inventory_requirements}:null;
 
   const filteredTechnicians = useMemo(() => {
     const term = technicianSearch.trim().toLowerCase();
@@ -565,23 +572,18 @@ export default function ServicioCreateWizard({
     }));
   };
 
-  const chooseType = (id) => {
+  const chooseType = (id,createdType=null) => {
     setAcceptanceSignature('');setSignedRevision('');setAcceptanceAct(null);
-    const type = types.find((item) => String(item.id) === String(id));
-    setForm((previous) => ({
-      ...previous,
-      service_type_id: id,
-      service_type_name: type?.nombre || '',
-      service_type_category: type?.categoria || '',
-      base_value: previous.base_value !== '' ? previous.base_value : type?.valor_base ?? '',
-      estimated_minutes: type?.duracion_estimada || previous.estimated_minutes || 60,
-      estimated_duration: type?.duracion_estimada || previous.estimated_duration || 60,
-      scope_text: previous.scope_text || type?.descripcion || '',
-      classification: type?.requiere_diagnostico ? 'diagnostic' : previous.classification,
-    }));
+    const catalog=createdType?[...typeCatalog,createdType]:typeCatalog;
+    setForm(previous=>{
+      const ids=previous.service_type_ids||[previous.service_type_id].filter(Boolean);
+      const next=ids.includes(id)?ids.filter(v=>v!==id):[...ids,id];
+      const selected=next.map(id=>catalog.find(t=>t.id===id)).filter(Boolean);
+      return {...previous,...summarizeServiceTypes(selected),scope_text:previous.scope_text||selected.map(t=>t.descripcion).filter(Boolean).join('\n')};
+    });
   };
 
-  const acceptanceRevision=JSON.stringify([selectedClient?.id,form.request_description,form.classification,form.service_type_name,form.base_value,form.estimated_minutes,form.scope_text,form.conditions_text,form.additional_costs_notice,form.service_site,form.client_acceptance_name,form.client_acceptance_document]);
+  const acceptanceRevision=JSON.stringify([form.equipment_intake,form.service_type_ids,selectedClient?.id,form.request_description,form.classification,form.service_type_name,form.base_value,form.estimated_minutes,form.scope_text,form.conditions_text,form.additional_costs_notice,form.service_site,form.client_acceptance_name,form.client_acceptance_document]);
   const ensureDraft=async()=>{
     if(!selectedClient)throw new Error('Selecciona el cliente.');
     for(const n of [0,1,2,3]){const issue=validateStep(n);if(issue)throw new Error(issue);}
@@ -655,9 +657,6 @@ export default function ServicioCreateWizard({
     }
 
     if (targetStep === 6 && form.billing_mode === 'prepaid') {
-      if (!form.invoice_reference.trim()) {
-        return 'Registra la referencia de factura.';
-      }
       if (isAdmin && paymentVerified && !paymentReference.trim()) {
         return 'Registra la referencia o soporte del pago.';
       }
@@ -693,7 +692,7 @@ export default function ServicioCreateWizard({
       setSaving(true);
       setError('');
       if(isAdmin&&schedulingMode==='manual'){
-        const r=await api.post('/api/service-orders/creation-availability',{date:form.scheduled_date,time:form.scheduled_time,typeId:form.service_type_id,technicians:[primaryTechnicianId,...supportTechnicianIds],excludeOrder:isEdit?targetServiceId:null});
+        const r=await api.post('/api/service-orders/creation-availability',{date:form.scheduled_date,time:form.scheduled_time,typeIds:form.service_type_ids,typeId:form.service_type_id,technicians:[primaryTechnicianId,...supportTechnicianIds],excludeOrder:isEdit?targetServiceId:null});
         if(!r.data.available)throw new Error(r.data.technicians.filter(t=>!t.available).map(t=>{const tech=technicians.find(x=>x.id===t.technician_id);return [tech?.nombre1,tech?.apellidos].filter(Boolean).join(' ')+': '+t.reason;}).join(' '));
       }
 
@@ -731,6 +730,7 @@ export default function ServicioCreateWizard({
             descripcion_inicial: form.request_description,
             classification: form.classification,
             service_type_id: form.service_type_id || null,
+            ...(form.service_type_ids?.length?{service_type_ids:form.service_type_ids}:{}),
             service_type_name: form.service_type_name,
             service_type_category: form.service_type_category,
             base_value: form.base_value === '' ? null : Number(form.base_value),
@@ -748,7 +748,7 @@ export default function ServicioCreateWizard({
             client_acceptance_reference: form.client_acceptance_reference,
             billing_mode: form.billing_mode,
             invoice_reference: form.invoice_reference,
-            ...(invoiceLinked?.record?.source_company&&invoiceLinked?.record?.source_id?{worldoffice_invoice:{reference:invoiceLinked.reference,source_company:invoiceLinked.record.source_company,source_id:invoiceLinked.record.source_id}}:{}),
+            ...(invoiceChanged&&invoiceLinked?.record?.source_company&&invoiceLinked?.record?.source_id?{worldoffice_invoice:{reference:invoiceLinked.reference,source_company:invoiceLinked.record.source_company,source_id:invoiceLinked.record.source_id}}:{}),
             postpaid_reason: form.postpaid_reason,
             priority: form.priority,
             estimated_duration: form.estimated_duration
@@ -1010,8 +1010,8 @@ export default function ServicioCreateWizard({
                         key={client.id}
                         type="button"
                         onClick={() => {
-                          setSelectedClient(client);setCompleteProfile(client);setProfileRetry(0);setInvoiceLinked(null);setInvoiceFile(null);update('invoice_reference','');
-                          setForm(previous=>({...previous,equipment_intake:{...previous.equipment_intake,received_from_name:clientName(client),received_from_document:client.documento||''},service_site:{...emptyServiceSite(),mode:previous.service_site.mode,address:client.direccion||'',city:client.ciudad||'',contact_name:client.contacto||clientName(client),contact_phone:client.telefono||client.telefono_2||''}}));
+                          setSelectedClient(client);setCompleteProfile(client);setProfileRetry(0);setInvoiceChanged(false);setInvoiceLinked(null);setInvoiceFile(null);update('invoice_reference','');
+                          setForm(previous=>({...previous,equipment_intake:{...previous.equipment_intake,received_from_name:clientName(client),received_from_document:client.documento||'',...(previous.equipment_intake?.equipments?{equipments:previous.equipment_intake.equipments.map(item=>({...item,received_from_name:clientName(client),received_from_document:client.documento||''}))}:{})},service_site:{...emptyServiceSite(),mode:previous.service_site.mode,address:client.direccion||'',city:client.ciudad||'',contact_name:client.contacto||clientName(client),contact_phone:client.telefono||client.telefono_2||''}}));
                           setSignedRevision('');setAcceptanceAct(null);setAcceptanceSignature('');setSavedPhotos([]);createdIntakeRef.current=null;
 
                           setClientQuery(clientName(client));
@@ -1083,7 +1083,7 @@ export default function ServicioCreateWizard({
           {step === 1 && (
             isEdit && !form.equipment_intake ? (
               <p className="text-sm text-gray-500">Este servicio se creó antes del registro de equipo en la solicitud. Consulta su checklist de recepción.</p>
-            ) : <><EquipmentIntakeFields value={form.equipment_intake} onChange={(value) => update('equipment_intake', value)} readOnly={isEdit} />{form.equipment_intake.equipment_received&&<IntakePhotos files={ingressPhotos} onChange={setIngressPhotos} existing={savedPhotos} onRemoveExisting={removeSavedPhoto}/>}</>
+            ) : <EquipmentIntakeList value={form.equipment_intake} onChange={value=>update('equipment_intake',value)} readOnly={isEdit} files={ingressPhotos} onPhotosChange={setIngressPhotos} existing={savedPhotos} onRemoveExisting={removeSavedPhoto}/>
           )}
 
           {step === 2 && (
@@ -1121,7 +1121,8 @@ export default function ServicioCreateWizard({
                 </button>
               </div>
 
-              <ServiceTypePicker types={types} value={form.service_type_id} onSelect={chooseType} canCreate={isAdmin} onCreated={type=>{setAcceptanceSignature('');setSignedRevision('');setAcceptanceAct(null);setTypes(previous=>[...previous,type]);setForm(previous=>({...previous,service_type_id:type.id,service_type_name:type.nombre,service_type_category:type.categoria||'',estimated_minutes:type.duracion_estimada,estimated_duration:type.duracion_estimada,base_value:type.valor_base,scope_text:previous.scope_text||type.descripcion||''}));}} />
+              <ServiceTypePicker types={typeCatalog} value={form.service_type_ids||[form.service_type_id].filter(Boolean)} onSelect={chooseType} canCreate={isAdmin} onCreated={type=>{setTypes(previous=>[...previous,type]);chooseType(type.id,type);}} />
+              {selectedTypes.length>0&&<><p className="font-semibold">Duración total: {selectionSummary.estimated_minutes} minutos · {selectedTypes.length} tipos seleccionados</p><ServiceInventoryRequirements value={selectionSummary.inventory_requirements}/></>}
 
               {selectedType && (
                 <div className="rounded-xl bg-gray-50 dark:bg-gray-950/40 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1757,7 +1758,7 @@ export default function ServicioCreateWizard({
 
           {step === 6 && (
             <div className="space-y-5">
-              {selectedClient&&<IntakeInvoicePicker edit={isEdit} initialReference={form.invoice_reference} selectedInvoice={invoiceLinked} key={selectedClient.id} client={selectedClient} ensureDraft={ensureDraft} onLinked={record=>{setInvoiceLinked(record);setInvoiceFile(null);update('invoice_reference',record.reference);}} file={invoiceFile} onFile={setInvoiceFile} admin={isAdmin}/>}
+              {selectedClient&&<IntakeInvoicePicker edit={isEdit} initialReference={form.invoice_reference} selectedInvoice={invoiceLinked} key={selectedClient.id} client={selectedClient} ensureDraft={ensureDraft} onLinked={record=>{setInvoiceChanged(true);setInvoiceLinked(record);setInvoiceFile(null);update('invoice_reference',record.reference);}} file={invoiceFile} onFile={setInvoiceFile} admin={isAdmin}/>}
 
               <details className="rounded-xl border p-3"><summary className="cursor-pointer font-semibold">Control de pago</summary><div className="mt-3 space-y-3">
               {isAdmin && (
@@ -1880,6 +1881,8 @@ export default function ServicioCreateWizard({
               </div></details>
               <div className="rounded-2xl bg-gray-50 dark:bg-gray-950/40 p-4">
                 <p className="font-bold">Resumen</p>
+                {form.equipment_intake?.equipments?.length>0&&<ul className="my-3 text-sm">{form.equipment_intake.equipments.map((item,index)=><li key={item.id}>Equipo {index+1}: {[item.equipment_type,item.brand,item.model].filter(Boolean).join(' · ')} · Serial: {item.serial_number||item.serial_reason}</li>)}</ul>}
+                <ServiceInventoryRequirements value={selectedType?.inventory_requirements||[]} />
                 {invoiceLinked?.record?<div className="mt-3"><InvoiceRecord record={invoiceLinked.record} reference={invoiceLinked.reference}/></div>:<p className="mt-3 text-sm">{form.invoice_reference?`Referencia guardada: ${form.invoice_reference}. Busca y selecciona la factura para cargar sus datos.`:'No se ha seleccionado una factura.'}</p>}
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div>

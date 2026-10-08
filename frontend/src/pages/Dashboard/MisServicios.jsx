@@ -1,3 +1,5 @@
+import EquipmentIntakeList from './servicios/components/EquipmentIntakeList';
+import {equipmentIntakeError} from './servicios/components/EquipmentIntakeFields';
 import ResponsiveSignaturePad from '../../components/ui/ResponsiveSignaturePad';
 import ServiceActivityModal from './servicios/components/ServiceActivityModal';
 import {serviceMode} from './servicios/serviceLocation';
@@ -905,6 +907,7 @@ const ChecklistModal = ({ service, isAdmin, onClose, onRefresh }) => {
   };
 
   const payload = () => ({
+    ...(form.equipment_items?.length?{equipment_items:form.equipment_items}:{}),
     equipment_type: form.equipment_type,
     brand: form.brand,
     model: form.model,
@@ -946,6 +949,7 @@ const ChecklistModal = ({ service, isAdmin, onClose, onRefresh }) => {
   };
 
   const confirmChecklist = async () => {
+    if(form.equipment_items?.length){const issue=equipmentIntakeError({equipment_received:true,equipments:form.equipment_items});if(issue){setError(issue);return;}}
     const hasCondition = Object.values(
       form.condition_flags || {}
     ).some(Boolean);
@@ -1028,6 +1032,7 @@ const ChecklistModal = ({ service, isAdmin, onClose, onRefresh }) => {
                 </div>
               )}
 
+              {form.equipment_items?.length>0?<EquipmentIntakeList allowCollectionChanges={false} readOnly={readOnly} value={{equipment_received:true,equipments:form.equipment_items}} onChange={value=>setForm(previous=>({...previous,equipment_items:value.equipments}))}/>:<>
               <section>
                 <h4 className="font-bold text-slate-900 dark:text-white">Identificación del equipo</h4>
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1069,6 +1074,7 @@ const ChecklistModal = ({ service, isAdmin, onClose, onRefresh }) => {
                 </div>
               </section>
 
+              </>}
               <section>
                 <label className="block text-sm font-bold text-slate-900 dark:text-white">Observaciones de recepción</label>
                 <textarea disabled={readOnly} value={form.observations || ''} onChange={(event) => setField('observations', event.target.value)} rows={5} className="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white disabled:bg-slate-100 dark:bg-slate-950 dark:disabled:bg-slate-800 px-3 py-2" placeholder="Describe novedades, daños visibles, faltantes o detalles relevantes..." />
@@ -1493,6 +1499,7 @@ const ReceptionActModal = ({ service, isAdmin, onClose, onRefresh, onDocuments }
             </>
           ) : (
             <>
+              {checklist?.equipment_items?.length>0&&<EquipmentIntakeList readOnly allowCollectionChanges={false} value={{equipment_received:true,equipments:checklist.equipment_items}} onChange={()=>{}}/>}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Info label="Equipo" value={[checklist?.equipment_type, checklist?.brand, checklist?.model].filter(Boolean).join(' · ')} />
                 <Info label="Serial" value={checklist?.serial_number} />
@@ -3794,9 +3801,10 @@ export default function MisServicios() {
   };
 
   const accept = (service) =>
-    runAction(service, () =>
-      api.post(`/api/service-orders/${service.id}/assignment/accept`)
-    );
+    runAction(service, async () => {
+      const response=await api.post(`/api/service-orders/${service.id}/assignment/accept`);
+      if(response.data?.inventory?.items?.length)setWorkshopService(service);
+    });
 
   const takeCustody = (service) =>
     runAction(service, () =>
