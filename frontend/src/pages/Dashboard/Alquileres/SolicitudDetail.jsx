@@ -163,7 +163,7 @@ const SolicitudDetail = ({ solicitudId, onClose, onRefresh, onEdit }) => {
                         </span>
                     )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex-wrap flex gap-2">
                     <button
                         onClick={handleExportar}
                         className="px-3 py-1.5 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
@@ -204,7 +204,7 @@ const SolicitudDetail = ({ solicitudId, onClose, onRefresh, onEdit }) => {
 
             {/* Tabs */}
             <div className="px-4 sm:px-6 pt-4 border-b border-gray-200 dark:border-gray-800">
-                <div className="flex gap-4 overflow-x-auto">
+                <div className="flex-wrap flex gap-4 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('items')}
                         className={`pb-2 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
@@ -275,7 +275,7 @@ const SolicitudDetail = ({ solicitudId, onClose, onRefresh, onEdit }) => {
                                         />
                                     </div>
                                 </div>
-                                <div className="flex justify-end gap-3">
+                                <div className="flex-wrap flex justify-end gap-3">
                                     <button
                                         onClick={() => setShowAddItem(false)}
                                         className="px-4 py-2 text-gray-600 hover:text-gray-800"

@@ -82,7 +82,7 @@ const Facturas = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Facturas</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Gestiona las facturas emitidas</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex-wrap flex gap-3">
           <button
             onClick={fetchFacturas}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2"

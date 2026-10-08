@@ -600,7 +600,7 @@ export default function TechnicalStatisticsPanel({
                       </span>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                       <div>
                         <p className="text-xs text-gray-500">
                           Principal

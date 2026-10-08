@@ -57,7 +57,7 @@ const ItemCard = ({ item, tecnicos, onAssignTecnico, onDelete, onOpenChecklist, 
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex-wrap flex items-center gap-2">
                     {/* Asignar tecnico */}
                     {isAdmin && !item.tecnico_id && item.estado_revision === 'pendiente' && (
                         <button

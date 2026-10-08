@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardList, LayoutGrid, Plus, RefreshCw, Table2 } from 'lucide-react';
+import { ClipboardList, LayoutGrid, Plus, RefreshCw, Table2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import ServicioCreateWizard from './servicios/ServicioCreateWizard';
 import ServicioDetail from './servicios/ServicioDetail';
@@ -49,12 +49,12 @@ export default function Servicios() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Órdenes de Servicio</h1>
           <p className="text-sm text-gray-500 mt-1">{total} orden(es) · búsqueda, filtros, edición, agenda y detalle operativo.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <div className="flex rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden">
-            <button onClick={() => setViewMode('table')} className={`p-2 ${viewMode === 'table' ? 'accent-fill text-white' : ''}`} title="Tabla"><Table2 className="w-4 h-4" /></button>
-            <button onClick={() => setViewMode('cards')} className={`p-2 ${viewMode === 'cards' ? 'accent-fill text-white' : ''}`} title="Tarjetas"><LayoutGrid className="w-4 h-4" /></button>
+        <div className="service-toolbar flex flex-wrap gap-2 min-w-0">
+          <div className="flex-wrap flex rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden">
+            <button onClick={() => setViewMode('table')} className={`p-2 ${viewMode === 'table' ? 'accent-fill text-white' : ''}`} title="Tabla" aria-label="Ver servicios en tabla" aria-pressed={viewMode === 'table'}><Table2 className="w-4 h-4" /></button>
+            <button onClick={() => setViewMode('cards')} className={`p-2 ${viewMode === 'cards' ? 'accent-fill text-white' : ''}`} title="Tarjetas" aria-label="Ver servicios en tarjetas" aria-pressed={viewMode === 'cards'}><LayoutGrid className="w-4 h-4" /></button>
           </div>
-          <button onClick={() => fetchServicios()} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" />Actualizar</button>
+          <button onClick={() => fetchServicios()} aria-label="Actualizar servicios" title="Actualizar servicios" className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">Actualizar</span></button>
           {isAdmin && <button onClick={() => setShowIntakes(true)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 flex items-center gap-2 text-sm"><ClipboardList className="w-4 h-4" />Solicitudes previas</button>}
           {canCreate && <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-lg accent-fill text-white flex items-center gap-2 text-sm font-medium"><Plus className="w-4 h-4" />Nueva OS</button>}
         </div>
@@ -90,11 +90,11 @@ export default function Servicios() {
       )}
 
       {pagination.pages > 1 && (
-        <div className="flex items-center justify-between gap-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
           <span className="text-gray-500">Página {pagination.page} de {pagination.pages}</span>
-          <div className="flex gap-2">
-            <button disabled={pagination.page <= 1} onClick={() => setFilters({ page: pagination.page - 1 })} className="px-3 py-2 rounded-lg border disabled:opacity-40">Anterior</button>
-            <button disabled={pagination.page >= pagination.pages} onClick={() => setFilters({ page: pagination.page + 1 })} className="px-3 py-2 rounded-lg border disabled:opacity-40">Siguiente</button>
+          <div className="flex-wrap flex gap-2">
+            <button disabled={pagination.page <= 1} onClick={() => setFilters({ page: pagination.page - 1 })} aria-label="Página anterior" title="Página anterior" className="icon-action border"><ChevronLeft aria-hidden="true" className="w-5 h-5"/></button>
+            <button disabled={pagination.page >= pagination.pages} onClick={() => setFilters({ page: pagination.page + 1 })} aria-label="Página siguiente" title="Página siguiente" className="icon-action border"><ChevronRight aria-hidden="true" className="w-5 h-5"/></button>
           </div>
         </div>
       )}

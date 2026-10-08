@@ -28,8 +28,8 @@ export default function ServicioTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-[1250px] w-full divide-y divide-gray-200 dark:divide-gray-800">
+    <div className="service-orders-scroll overflow-x-auto min-w-0">
+      <table className="service-order-table min-w-[1250px] w-full divide-y divide-gray-200 dark:divide-gray-800">
         <thead className="bg-gray-50 dark:bg-gray-950/60">
           <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500">
             <th className="px-4 py-3">Orden</th>
@@ -45,7 +45,7 @@ export default function ServicioTable({
         <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
           {servicios.map((servicio) => (
             <tr key={servicio.id} className="align-top hover:bg-gray-50 dark:hover:bg-gray-800/60">
-              <td className="px-4 py-4">
+              <td data-label="Orden" className="px-4 py-4">
                 <button onClick={() => onViewDetail(servicio.id)} className="font-semibold accent-text hover:underline">
                   {servicio.codigo_os}
                 </button>
@@ -57,13 +57,13 @@ export default function ServicioTable({
                 </span>
               </td>
 
-              <td className="px-4 py-4 text-sm">
+              <td data-label="Cliente" className="px-4 py-4 text-sm">
                 <div className="font-medium text-gray-900 dark:text-white">{servicio.cliente_nombre || '—'}</div>
                 <div className="text-xs text-gray-500">Doc: {servicio.cliente_documento || '—'}</div>
                 <div className="text-xs text-gray-500">{servicio.cliente_telefono || servicio.cliente_email || 'Sin contacto'}</div>
               </td>
 
-              <td className="px-4 py-4 text-sm">
+              <td data-label="Servicio / factura" className="px-4 py-4 text-sm">
                 <div className="font-medium">{servicio.service_type_name || '—'}</div>
                 <div className="text-xs text-gray-500">Factura: {servicio.invoice_reference || '—'}</div>
                 {servicio.base_value !== null && servicio.base_value !== undefined && (
@@ -71,41 +71,41 @@ export default function ServicioTable({
                 )}
               </td>
 
-              <td className="px-4 py-4 text-sm">
+              <td data-label="Equipo técnico" className="px-4 py-4 text-sm">
                 <div>{servicio.tecnico_nombre || 'Sin principal'}</div>
                 <div className="text-xs text-gray-500">Equipo: {Number(servicio.team_size || 0)} técnico(s)</div>
               </td>
 
-              <td className="px-4 py-4"><StatusBadge status={servicio.estado} /></td>
+              <td data-label="Estado" className="px-4 py-4"><StatusBadge status={servicio.estado} /></td>
 
-              <td className="px-4 py-4 text-sm">
+              <td data-label="Agenda" className="px-4 py-4 text-sm">
                 <div>{servicio.fecha_agendada ? formatDateOnly(servicio.fecha_agendada) : 'Sin agendar'}</div>
                 <div className="text-xs text-gray-500">
                   {servicio.hora_inicio_agendada ? `${formatTime(servicio.hora_inicio_agendada)} · ${servicio.duracion_estimada || 60} min` : '—'}
                 </div>
               </td>
 
-              <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+              <td data-label="Creación" className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
                 {formatDateTime(servicio.createdAt)}
               </td>
 
-              <td className="px-4 py-4">
-                <div className="flex justify-end gap-1">
-                  <button onClick={() => onViewDetail(servicio.id)} className="p-2 rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Ver detalle">
+              <td data-label="Acciones" className="px-4 py-4">
+                <div className="flex-wrap flex justify-end gap-1">
+                  <button onClick={() => onViewDetail(servicio.id)} className="icon-action rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Ver detalle" aria-label="Ver detalle">
                     <Eye className="w-4 h-4" />
                   </button>
                   {isAdmin && (
-                    <button onClick={() => onEdit(servicio)} className="p-2 rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Editar">
+                    <button onClick={() => onEdit(servicio)} className="icon-action rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Editar" aria-label="Editar">
                       <Edit className="w-4 h-4" />
                     </button>
                   )}
                   {isAdmin && !servicio.tecnico_id && !['cancelado', 'cerrada', 'rechazado'].includes(servicio.estado) && (
-                    <button onClick={() => onAssignTech(servicio.id)} className="p-2 rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Asignar técnico">
+                    <button onClick={() => onAssignTech(servicio.id)} className="icon-action rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Asignar técnico" aria-label="Asignar técnico">
                       <UserCheck className="w-4 h-4" />
                     </button>
                   )}
                   {isAdmin && !['cerrada', 'rechazado', 'cancelado'].includes(servicio.estado) && (
-                    <button onClick={() => onDelete(servicio)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950" title="Eliminar / cancelar">
+                    <button onClick={() => onDelete(servicio)} className="icon-action rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950" title="Eliminar / cancelar" aria-label="Eliminar / cancelar">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}

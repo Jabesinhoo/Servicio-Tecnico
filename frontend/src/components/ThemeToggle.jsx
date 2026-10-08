@@ -16,6 +16,7 @@ const ThemeToggle = () => {
         color: isDark ? 'var(--text-primary)' : '#374151'
       }}
       title={isDark ? 'Modo claro' : 'Modo oscuro'}
+      aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
     >
       {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
     </button>

@@ -12,7 +12,8 @@ export const Modal = ({ isOpen, onClose, title, children, footer }) => {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            aria-label="Cerrar ventana" title="Cerrar ventana"
+            className="icon-action text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

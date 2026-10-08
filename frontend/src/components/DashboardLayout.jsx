@@ -192,7 +192,7 @@ const DashboardLayout = () => {
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       {/* Sidebar */}
-      <aside
+      <aside aria-hidden={!sidebarOpen} inert={!sidebarOpen}
         className={`fixed inset-y-0 left-0 z-40 w-64 transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -297,15 +297,16 @@ const DashboardLayout = () => {
             boxShadow: 'var(--shadow)'
           }}
         >
-          <div className="h-16 px-4 flex items-center justify-between">
+          <div className="app-toolbar min-h-16 px-3 sm:px-4 py-2 flex flex-wrap gap-2 items-center justify-between">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg transition-colors"
+              aria-label="Abrir o cerrar menú" title="Abrir o cerrar menú"
+              className="icon-action rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap flex-1 min-w-0 items-center justify-end gap-1 sm:gap-2">
               {/* Botón IA Chat - Asistente Personal */}
               <button
                 onClick={() => setShowIAChat(true)}
@@ -327,7 +328,7 @@ const DashboardLayout = () => {
           </div>
         </header>
 
-        <main className="p-4 md:p-6 lg:p-8">
+        <main className="page-content p-4 md:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

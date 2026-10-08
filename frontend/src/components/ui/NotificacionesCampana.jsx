@@ -115,7 +115,7 @@ const NotificacionesCampana = () => {
     return (
         <div className="relative inline-block">
             {assignmentNotice && <div role="status" aria-live="polite" className="fixed top-20 right-3 sm:right-6 z-[200] w-[calc(100vw-24px)] sm:w-96 rounded-2xl border accent-border dark:accent-border bg-white dark:bg-gray-900 shadow-xl p-4">
-                <div className="flex items-start gap-3">
+                <div className="flex-wrap flex items-start gap-3">
                     <Wrench className="w-5 h-5 accent-text shrink-0" />
                     <button type="button" onClick={() => handleNotificacionClick(assignmentNotice.id, assignmentNotice.link, assignmentNotice.leido)} className="flex-1 text-left">
                         <p className="font-bold text-sm">{assignmentNotice.titulo}</p>
@@ -165,7 +165,7 @@ const NotificacionesCampana = () => {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex-wrap flex items-center gap-1.5">
                                 {noLeidas > 0 && (
                                     <button
                                         onClick={marcarTodasLeidas}

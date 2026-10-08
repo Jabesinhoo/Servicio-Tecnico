@@ -13,7 +13,7 @@ function isUuid(value) {
 }
 
 function positiveInt(value, fallback = null) {
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
@@ -46,7 +46,8 @@ async function addServiceEvent(client, serviceOrderId, eventType, actorUserId, m
 
 async function getOrderForUpdate(client, orderId) {
   const result = await client.query(
-    `SELECT id, codigo_os, estado
+    `SELECT id, codigo_os, estado,tecnico_id,
+       (SELECT created_by FROM service_order_intakes WHERE service_order_id=service_orders.id LIMIT 1) AS creator_id
      FROM service_orders
      WHERE id = $1
      FOR UPDATE`,
@@ -57,15 +58,25 @@ async function getOrderForUpdate(client, orderId) {
 
 async function getMaterialForUpdate(client, id) {
   const result = await client.query(
-    `SELECT *
-     FROM servicio_materiales
-     WHERE id = $1
-     FOR UPDATE`,
+    `SELECT sm.*, (SELECT nombre FROM products WHERE id=sm.product_id) AS product_name
+     FROM servicio_materiales sm
+     WHERE sm.id = $1
+     FOR UPDATE OF sm`,
     [id]
   );
   return result.rows[0] || null;
 }
 
+function materialFail(message,status=403){throw Object.assign(new Error(message),{status});}
+async function materialAccess(client,req,order,decision=false){
+ if(!order)materialFail('Orden no encontrada',404);
+ const role=req.user?.role?.name||req.user?.rol,actor=req.user?.id;
+ if(['admin','inventario'].includes(role)||order.creator_id===actor)return;
+ if(decision)materialFail('Solo el creador del servicio, administración o inventario puede decidir la solicitud.');
+ if(order.tecnico_id===actor)return;
+ const team=await client.query("SELECT 1 FROM service_order_team_members WHERE service_order_id=$1 AND technician_id=$2 AND member_status<>'removed'",[order.id,actor]);
+ if(!team.rows.length)materialFail('No perteneces al equipo de esta orden.');
+}
 exports.getMaterialesByServicio = async (req, res) => {
   try {
     const { service_order_id: orderId } = req.params;
@@ -74,12 +85,13 @@ exports.getMaterialesByServicio = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Orden no válida' });
     }
 
+    const order=await getOrderForUpdate(pool,orderId);await materialAccess(pool,req,order);
     const result = await pool.query(
       `SELECT
          sm.*,
          p.codigo AS producto_codigo,
-         p.nombre AS producto_nombre,
-         p.tipo AS producto_tipo,
+         COALESCE(p.nombre,sm.external_name) AS producto_nombre,
+         CASE WHEN sm.product_id IS NULL THEN 'external' ELSE p.tipo::text END AS producto_tipo,
          p.stock_actual,
          p.stock_minimo,
          p.precio_venta,
@@ -100,8 +112,9 @@ exports.getMaterialesByServicio = async (req, res) => {
       [orderId]
     );
 
-    return res.json({ success: true, data: result.rows });
+    return res.json({ success: true, data: result.rows,permissions:{can_decide:['admin','inventario'].includes(req.user?.role?.name||req.user?.rol)||order.creator_id===req.user?.id} });
   } catch (error) {
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error loading service materials:', error);
     return res.status(500).json({ success: false, message: 'Error al cargar materiales del servicio' });
   }
@@ -114,8 +127,9 @@ exports.solicitarMateriales = async (req, res) => {
     const { service_order_id: orderId } = req.params;
     const { product_id: productId, cantidad, observaciones } = req.body || {};
     const qty = positiveInt(cantidad);
+    const external=typeof req.body?.external_name==='string'?req.body.external_name.trim().slice(0,200):'';
 
-    if (!isUuid(orderId) || !isUuid(productId)) {
+    if (!isUuid(orderId) || (productId ? !isUuid(productId)||!!external : !external)) {
       return res.status(400).json({ success: false, message: 'Orden o producto no válido' });
     }
 
@@ -131,11 +145,14 @@ exports.solicitarMateriales = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Orden de servicio no encontrada' });
     }
 
+    await materialAccess(client,req,order);
     if (TERMINAL_STATES.has(order.estado)) {
       await safeRollback(client);
       return res.status(409).json({ success: false, message: 'No se pueden solicitar materiales para una orden finalizada' });
     }
 
+    let product={nombre:external,codigo:null};
+    if(productId){
     const productResult = await client.query(
       `SELECT id, codigo, nombre, tipo, stock_actual, estado
        FROM products
@@ -144,7 +161,7 @@ exports.solicitarMateriales = async (req, res) => {
       [productId]
     );
 
-    const product = productResult.rows[0];
+    product = productResult.rows[0];
     if (!product || product.estado === false) {
       await safeRollback(client);
       return res.status(404).json({ success: false, message: 'Producto no encontrado o inactivo' });
@@ -155,15 +172,7 @@ exports.solicitarMateriales = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Un servicio no puede solicitarse como material' });
     }
 
-    if (Number(product.stock_actual || 0) < qty) {
-      await safeRollback(client);
-      return res.status(409).json({
-        success: false,
-        code: 'INSUFFICIENT_STOCK',
-        message: `Stock insuficiente. Disponible: ${Number(product.stock_actual || 0)}`,
-      });
     }
-
     const id = randomUUID();
     const result = await client.query(
       `INSERT INTO servicio_materiales (
@@ -172,17 +181,18 @@ exports.solicitarMateriales = async (req, res) => {
          cantidad_usada, cantidad_devuelta,
          estado, observaciones,
          solicitado_por, solicitado_at,
-         created_at, updated_at
+         external_name,external_description,external_unit,created_at, updated_at
        )
-       VALUES ($1,$2,$3,$4,0,0,0,'solicitado',$5,$6,NOW(),NOW(),NOW())
+       VALUES ($1,$2,$3,$4,0,0,0,'solicitado',$5,$6,NOW(),$7,$8,$9,NOW(),NOW())
        RETURNING *`,
       [
         id,
         orderId,
-        productId,
+        productId||null,
         qty,
         typeof observaciones === 'string' ? observaciones.trim() || null : null,
         req.user?.id || null,
+        productId?null:external,productId?null:String(req.body.external_description||'').trim().slice(0,2000),productId?null:String(req.body.external_unit||'unidad').trim().slice(0,40),
       ]
     );
 
@@ -192,6 +202,7 @@ exports.solicitarMateriales = async (req, res) => {
       product_code: product.codigo,
       product_name: product.nombre,
       quantity: qty,
+      summary:`Solicitó ${qty} × ${product.nombre}${!productId?' (fuera del inventario)':''}. ${String(observaciones||'').slice(0,500)}`,
     });
 
     await client.query('COMMIT');
@@ -203,6 +214,7 @@ exports.solicitarMateriales = async (req, res) => {
     });
   } catch (error) {
     await safeRollback(client);
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error requesting material:', error);
     return res.status(500).json({ success: false, message: 'Error al solicitar material' });
   } finally {
@@ -221,6 +233,7 @@ exports.aprobarMaterial = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Material no válido' });
     }
 
+    if (req.body?.cantidad !== undefined && !positiveInt(req.body.cantidad)) return res.status(400).json({success:false,message:'La cantidad debe ser un entero mayor que cero'});
     await client.query('BEGIN');
     const material = await getMaterialForUpdate(client, id);
 
@@ -229,6 +242,7 @@ exports.aprobarMaterial = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Solicitud de material no encontrada' });
     }
 
+    await materialAccess(client,req,await getOrderForUpdate(client,material.service_order_id),true);
     if (material.estado !== 'solicitado') {
       await safeRollback(client);
       return res.status(409).json({ success: false, message: `El material está en estado ${material.estado}` });
@@ -256,12 +270,14 @@ exports.aprobarMaterial = async (req, res) => {
       material_id: id,
       product_id: material.product_id,
       quantity: approved,
+      summary:`Aprobó ${approved} unidades del material ${material.external_name||material.product_name||material.product_id}`,
     });
 
     await client.query('COMMIT');
     return res.json({ success: true, message: 'Material aprobado', data: result.rows[0] });
   } catch (error) {
     await safeRollback(client);
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error approving material:', error);
     return res.status(500).json({ success: false, message: 'Error al aprobar material' });
   } finally {
@@ -279,6 +295,7 @@ exports.rechazarMaterial = async (req, res) => {
     if (!isUuid(id)) return res.status(400).json({ success: false, message: 'Material no válido' });
     if (reason.length < 3) return res.status(400).json({ success: false, message: 'Indica el motivo del rechazo' });
 
+    if (req.body?.cantidad !== undefined && !positiveInt(req.body.cantidad)) return res.status(400).json({success:false,message:'La cantidad debe ser un entero mayor que cero'});
     await client.query('BEGIN');
     const material = await getMaterialForUpdate(client, id);
 
@@ -287,6 +304,7 @@ exports.rechazarMaterial = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Solicitud de material no encontrada' });
     }
 
+    await materialAccess(client,req,await getOrderForUpdate(client,material.service_order_id),true);
     if (!['solicitado', 'aprobado'].includes(material.estado)) {
       await safeRollback(client);
       return res.status(409).json({ success: false, message: `No se puede rechazar un material en estado ${material.estado}` });
@@ -308,12 +326,14 @@ exports.rechazarMaterial = async (req, res) => {
       material_id: id,
       product_id: material.product_id,
       reason,
+      summary:`Rechazó el material ${material.external_name||material.product_name||material.product_id}: ${reason}`,
     });
 
     await client.query('COMMIT');
     return res.json({ success: true, message: 'Solicitud de material rechazada', data: result.rows[0] });
   } catch (error) {
     await safeRollback(client);
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error rejecting material:', error);
     return res.status(500).json({ success: false, message: 'Error al rechazar material' });
   } finally {
@@ -330,6 +350,7 @@ exports.entregarMateriales = async (req, res) => {
 
     if (!isUuid(id)) return res.status(400).json({ success: false, message: 'Material no válido' });
 
+    if (req.body?.cantidad !== undefined && !positiveInt(req.body.cantidad)) return res.status(400).json({success:false,message:'La cantidad debe ser un entero mayor que cero'});
     await client.query('BEGIN');
     const material = await getMaterialForUpdate(client, id);
 
@@ -337,6 +358,8 @@ exports.entregarMateriales = async (req, res) => {
       await safeRollback(client);
       return res.status(404).json({ success: false, message: 'Solicitud de material no encontrada' });
     }
+    await materialAccess(client,req,await getOrderForUpdate(client,material.service_order_id));
+
 
     if (!['aprobado', 'entrega_parcial'].includes(material.estado)) {
       await safeRollback(client);
@@ -353,6 +376,8 @@ exports.entregarMateriales = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cantidad inválida. Pendiente por entregar: ${pending}` });
     }
 
+    let product={nombre:material.external_name,codigo:null};
+    if(material.product_id){
     const productResult = await client.query(
       `SELECT id, codigo, nombre, stock_actual
        FROM products
@@ -360,7 +385,7 @@ exports.entregarMateriales = async (req, res) => {
        FOR UPDATE`,
       [material.product_id]
     );
-    const product = productResult.rows[0];
+    product = productResult.rows[0];
 
     if (!product) {
       await safeRollback(client);
@@ -384,6 +409,7 @@ exports.entregarMateriales = async (req, res) => {
       [qty, material.product_id]
     );
 
+    }
     const newDelivered = delivered + qty;
     const nextState = newDelivered >= approved ? 'entregado' : 'entrega_parcial';
 
@@ -399,7 +425,7 @@ exports.entregarMateriales = async (req, res) => {
       [newDelivered, nextState, req.user?.id || null, id]
     );
 
-    await client.query(
+    if(material.product_id)await client.query(
       `INSERT INTO inventory_movements (
          id, product_id, tipo_movimiento, origen_tipo,
          origen_id, cantidad, usuario_id, observaciones,
@@ -426,9 +452,10 @@ exports.entregarMateriales = async (req, res) => {
     });
 
     await client.query('COMMIT');
-    return res.json({ success: true, message: 'Material entregado y descontado del inventario', data: result.rows[0] });
+    return res.json({ success: true, message: material.product_id?'Material entregado y descontado del inventario':'Entrega externa registrada, sin movimiento de inventario', data: result.rows[0] });
   } catch (error) {
     await safeRollback(client);
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error delivering material:', error);
     return res.status(500).json({ success: false, message: 'Error al entregar material' });
   } finally {
@@ -445,6 +472,7 @@ exports.reportarUso = async (req, res) => {
 
     if (!isUuid(id)) return res.status(400).json({ success: false, message: 'Material no válido' });
 
+    if (req.body?.cantidad !== undefined && !positiveInt(req.body.cantidad)) return res.status(400).json({success:false,message:'La cantidad debe ser un entero mayor que cero'});
     await client.query('BEGIN');
     const material = await getMaterialForUpdate(client, id);
 
@@ -452,6 +480,8 @@ exports.reportarUso = async (req, res) => {
       await safeRollback(client);
       return res.status(404).json({ success: false, message: 'Material no encontrado' });
     }
+    await materialAccess(client,req,await getOrderForUpdate(client,material.service_order_id));
+
 
     if (!['entregado', 'en_uso'].includes(material.estado)) {
       await safeRollback(client);
@@ -495,6 +525,7 @@ exports.reportarUso = async (req, res) => {
     return res.json({ success: true, message: 'Uso del material registrado', data: result.rows[0] });
   } catch (error) {
     await safeRollback(client);
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error reporting material use:', error);
     return res.status(500).json({ success: false, message: 'Error al registrar uso del material' });
   } finally {
@@ -511,6 +542,7 @@ exports.devolverMaterial = async (req, res) => {
 
     if (!isUuid(id)) return res.status(400).json({ success: false, message: 'Material no válido' });
 
+    if (req.body?.cantidad !== undefined && !positiveInt(req.body.cantidad)) return res.status(400).json({success:false,message:'La cantidad debe ser un entero mayor que cero'});
     await client.query('BEGIN');
     const material = await getMaterialForUpdate(client, id);
 
@@ -518,6 +550,8 @@ exports.devolverMaterial = async (req, res) => {
       await safeRollback(client);
       return res.status(404).json({ success: false, message: 'Material no encontrado' });
     }
+    await materialAccess(client,req,await getOrderForUpdate(client,material.service_order_id));
+
 
     if (!['entregado', 'en_uso'].includes(material.estado)) {
       await safeRollback(client);
@@ -534,7 +568,7 @@ exports.devolverMaterial = async (req, res) => {
       return res.status(400).json({ success: false, message: `Solo hay ${available} unidad(es) disponibles para devolución` });
     }
 
-    await client.query(
+    if(material.product_id)await client.query(
       `UPDATE products
        SET stock_actual = stock_actual + $1,
            "updatedAt" = NOW()
@@ -559,7 +593,7 @@ exports.devolverMaterial = async (req, res) => {
       [newReturned, nextState, req.user?.id || null, id]
     );
 
-    await client.query(
+    if(material.product_id)await client.query(
       `INSERT INTO inventory_movements (
          id, product_id, tipo_movimiento, origen_tipo,
          origen_id, cantidad, usuario_id, observaciones,
@@ -587,6 +621,7 @@ exports.devolverMaterial = async (req, res) => {
     return res.json({ success: true, message: 'Material devuelto al inventario', data: result.rows[0] });
   } catch (error) {
     await safeRollback(client);
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error returning material:', error);
     return res.status(500).json({ success: false, message: 'Error al devolver material' });
   } finally {
@@ -602,7 +637,7 @@ exports.getConsumoTecnico = async (req, res) => {
          NULLIF(TRIM(CONCAT_WS(' ', u.nombre1, u.nombre2, u.apellidos)), '') AS tecnico_nombre,
          sm.product_id,
          p.codigo AS producto_codigo,
-         p.nombre AS producto_nombre,
+         COALESCE(p.nombre,sm.external_name) AS producto_nombre,
          SUM(COALESCE(sm.cantidad_usada,0))::int AS cantidad_usada
        FROM servicio_materiales sm
        LEFT JOIN usuarios u ON u.id = sm.solicitado_por
@@ -615,6 +650,7 @@ exports.getConsumoTecnico = async (req, res) => {
 
     return res.json({ success: true, data: result.rows });
   } catch (error) {
+    if(error.status)return res.status(error.status).json({message:error.message});
     console.error('Error loading technician material consumption:', error);
     return res.status(500).json({ success: false, message: 'Error al consultar consumo de materiales' });
   }

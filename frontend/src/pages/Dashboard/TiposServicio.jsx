@@ -123,9 +123,9 @@ const TiposServicio = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tipos de Servicio</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Gestiona los tipos de servicios predefinidos</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex-wrap flex gap-3">
           {/* Botones de cambio de vista */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+          <div className="flex-wrap flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
             <button
               onClick={() => setViewMode('table')}
               className={`p-2 rounded-md transition-colors ${
@@ -245,7 +245,7 @@ const TiposServicio = () => {
                         </button>
                       </td>
                       <td className="px-4 sm:px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex-wrap flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEdit(tipo)}
                             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 p-1"

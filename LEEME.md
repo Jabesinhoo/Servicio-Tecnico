@@ -1,3 +1,33 @@
+# Técnico: botones, inventario previsto y solicitudes — 8 de octubre
+
+- Los botones de cada tarjeta se distribuyen según el ancho de la tarjeta, con texto dentro del botón, incluso cuando el monitor muestra varias columnas.
+- En Ítems de taller y materiales → Inventario asignado se ven los artículos previstos por todos los tipos del servicio, su cantidad total y cuánto se ha asignado. Se muestran antes de aceptar; al aceptar se conserva el descuento único y el historial por servicio/técnico.
+- Solicitar materiales adicionales permite elegir un producto del catálogo o escribir un artículo fuera del inventario, con especificaciones, unidad, cantidad y observaciones. Puede solicitarse un producto sin existencias; entregarlo exige stock suficiente.
+- El creador recibe notificación con usuario, artículo y cantidad. En Inventario asignado consulta las solicitudes y puede aprobarlas o rechazarlas; administración/inventario también puede decidir. El técnico asignado no puede aprobar su propia solicitud salvo que sea el creador. La entrega queda a cargo de administración/inventario. Solicitar y aprobar no descuentan stock; entregar un artículo del catálogo sí. Los artículos externos no generan movimientos ficticios de inventario.
+- La migración reconoce Herramienta/herramienta/herramientas/tool e insumo/insumos/consumible/supply en Tipo del producto y los vincula al taller, incluyendo productos existentes. Respeta una clasificación ya guardada en el catálogo. Un texto no reconocido sigue requiriendo clasificación explícita en Inventario de taller.
+
+**Instalación:** detén backend y frontend. Extrae el paquete en la raíz de Servicio-Tecnico y ejecuta desde esa carpeta:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
+```
+
+Reinicia backend y frontend; recarga el navegador. La salida debe incluir `OK SQL: clasificación de taller y solicitudes externas de materiales`. El instalador aplica `20261008-technician-material-requests.sql`; no pegues SQL en PowerShell.
+
+**Validación:** 102 pruebas de backend aprobadas y compilación de frontend. Pruebas adicionales con PostgreSQL embebido: migración repetida, clasificación automática y preservación de clasificación manual, aceptación con inventario consolidado sin doble descuento, permisos de creador, notificación real e historial, solicitudes externas, entrega/consumo/devolución, falta de stock y acceso ajeno. Navegador con API simulada: tarjetas pobladas a 320, 390, 768, 1366, 1920 y 3840 px; inventario visible antes de aceptar; solicitud externa en celular y aprobación por creador. La base de datos de tu equipo se actualiza al ejecutar el instalador.
+
+# Interfaz responsive e iconos — 8 de octubre
+
+Las acciones de quitar equipos, tipos de servicio, artículos previstos y evidencias usan icono de papelera. Borrar firma usa borrador. Cada botón conserva nombre accesible, ayuda al pasar el cursor, estado deshabilitado y área de 44 × 44 px; guardar y confirmar conservan texto.
+
+En Servicios, la tabla se presenta como fichas en celulares, conservando todas las columnas y acciones. En tablet/escritorio mantiene tabla con desplazamiento horizontal interno cuando lo necesita. Barra de acciones, paginación, tarjetas, cabecera general y formularios permiten distribuir controles en más de una línea. La navegación de creación muestra todos los pasos mediante iconos en celular e indica el paso activo. Las ventanas de personalización y ayuda de ubicación permanecen dentro de la pantalla.
+
+Revisión estática de los 122 archivos JSX de producción. Ajustes en grupos de acciones de clientes, inventarios, técnicos, usuarios, tipos, agenda, facturas, alquileres, roles, modales y componentes comunes. Se respetan los colores de Personalizar.
+
+Validación en navegador con API simulada: Servicios y creación en 320, 360, 390, 768, 1024, 1366, 1920, 2560 y 3840 px; 12 módulos principales en seis tamaños; 13 modales operativos en ocho tamaños, incluida orientación horizontal; firma conservada al girar y borrado intencional; ventanas de ubicación, notificaciones y personalización; temas claro/oscuro; creación con altura reducida y acciones visibles. Selección y eliminación de tipos y equipos siguen funcionando. Compilación de frontend aprobada. Se probaron resoluciones, no dispositivos físicos ni controles remotos de TV; no se garantiza un comportamiento idéntico en todos los navegadores o datos posibles.
+
+**Instalación:** detén frontend y backend; reemplaza los archivos con este paquete y ejecuta `INSTALAR_MEJORAS.ps1`. Contiene los cambios anteriores y el validador de varios equipos corregido. Esta mejora visual no añade una migración nueva.
+
 # Corrección del paquete de instalación
 
 El paquete anterior omitió `backend/src/domain/service-equipment-intake.js`. Las migraciones se aplicaron, pero el validador anterior causaba tres fallos en las pruebas de varios equipos. Este paquete incluye el archivo faltante y conserva todos los cambios anteriores.

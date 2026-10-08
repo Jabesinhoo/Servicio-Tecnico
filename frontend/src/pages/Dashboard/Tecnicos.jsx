@@ -906,7 +906,7 @@ const Tecnicos = () => {
 
                         <td className="px-4 py-4">
 
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex-wrap flex items-center justify-end gap-2">
 
                             {canEdit && (
                               <button

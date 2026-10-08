@@ -162,7 +162,7 @@ export default function ServicioEditModal({ service, onClose, onSaved }) {
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 flex justify-end gap-2">
+        <footer className="flex-wrap shrink-0 border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700">Cancelar</button>
           <button type="submit" disabled={saving || loading} className="px-4 py-2 rounded-lg accent-fill text-white flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</button>
         </footer>

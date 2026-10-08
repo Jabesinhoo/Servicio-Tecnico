@@ -123,7 +123,7 @@ const FacturaDetail = ({ isOpen, onClose, facturaId, onRefresh }) => {
                                 {factura.estado.toUpperCase()}
                             </span>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex-wrap flex gap-2">
                             <button
                                 onClick={handleExportPDF}
                                 className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"

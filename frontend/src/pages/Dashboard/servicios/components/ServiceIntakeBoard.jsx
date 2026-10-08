@@ -357,7 +357,7 @@ export default function ServiceIntakeBoard({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                       <div className="rounded-xl bg-gray-50 dark:bg-gray-950/40 p-3">
                         <p className="text-xs text-gray-500">Modalidad</p>
                         <p className="font-semibold">

@@ -400,7 +400,7 @@ export default function ServicioDetail({ isOpen, onClose, servicioId, onRefresh 
           {!loading && servicio && tab === 'materiales' && <MaterialesPanel servicioId={servicioId} tecnicoId={servicio.tecnico_id} isAdmin={isAdmin} onRefresh={load} />}
         </main>
 
-        <footer className="shrink-0 border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <footer className="flex-wrap shrink-0 border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <button onClick={() => setShowDocuments(true)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm flex items-center gap-2"><FileText className="w-4 h-4" /> Documentos</button>
           <button onClick={async () => { await load(); await onRefresh?.(); }} className="px-3 py-2 rounded-lg accent-fill text-white text-sm">Actualizar</button>
         </footer>

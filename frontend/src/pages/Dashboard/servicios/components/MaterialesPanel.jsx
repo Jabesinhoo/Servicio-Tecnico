@@ -70,8 +70,8 @@ function StatusBadge({ status }) {
 function ModalShell({ title, children, onClose, busy, footer }) {
   return (
     <div className="workflow-theme fixed inset-0 z-[240] bg-black/65 p-3 flex items-center justify-center">
-      <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden">
-        <header className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
+      <div className="w-full max-w-xl max-h-[94dvh] flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden">
+        <header className="shrink-0 px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
           <h3 className="font-bold text-lg">{title}</h3>
           <button
             type="button"
@@ -82,9 +82,9 @@ function ModalShell({ title, children, onClose, busy, footer }) {
             <X className="w-5 h-5" />
           </button>
         </header>
-        <div className="p-5">{children}</div>
+        <div className="p-4 sm:p-5 min-h-0 overflow-y-auto">{children}</div>
         {footer && (
-          <footer className="px-5 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-2">
+          <footer className="shrink-0 px-5 py-4 border-t border-gray-200 dark:border-gray-800 flex flex-wrap justify-end gap-2">
             {footer}
           </footer>
         )}
@@ -93,8 +93,9 @@ function ModalShell({ title, children, onClose, busy, footer }) {
   );
 }
 
-export default function MaterialesPanel({ servicioId, onRefresh }) {
+export default function MaterialesPanel({ servicioId, onRefresh, allowRequest=true }) {
   const [items, setItems] = useState([]);
+  const [externalMode,setExternalMode]=useState(false),[externalName,setExternalName]=useState(''),[externalDescription,setExternalDescription]=useState(''),[externalUnit,setExternalUnit]=useState('unidad'),[canDecide,setCanDecide]=useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showRequest, setShowRequest] = useState(false);
@@ -122,7 +123,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
   }, []);
 
   const role = user?.rol || user?.role?.name || '';
-  const canRequest = role === 'admin' || role === 'tecnico';
+  const canRequest = allowRequest&&(role === 'admin' || role === 'tecnico');
   const canManage = role === 'admin' || role === 'inventario';
   const canUse = role === 'admin' || role === 'tecnico';
 
@@ -133,6 +134,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
       setError('');
       const response = await api.get(`/api/materiales/servicio/${servicioId}`);
       setItems(unwrapArray(response));
+      setCanDecide(!!response.data?.permissions?.can_decide);
     } catch (requestErrorValue) {
       setItems([]);
       setError(
@@ -192,11 +194,12 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
     setRequestQty(1);
     setRequestNote('');
     setRequestError('');
+    setExternalMode(false);setExternalName('');setExternalDescription('');setExternalUnit('unidad');
   };
 
   const submitRequest = async () => {
-    if (!selectedProduct?.id) {
-      setRequestError('Selecciona un producto del inventario.');
+    if (externalMode?!externalName.trim():!selectedProduct?.id) {
+      setRequestError(externalMode?'Escribe el material que necesitas.':'Selecciona un producto del inventario.');
       return;
     }
 
@@ -206,16 +209,11 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
       return;
     }
 
-    if (qty > Number(selectedProduct.stock_actual || 0)) {
-      setRequestError(`Solo hay ${Number(selectedProduct.stock_actual || 0)} unidad(es) disponibles.`);
-      return;
-    }
-
     try {
       setBusy(true);
       setRequestError('');
       await api.post(`/api/materiales/servicio/${servicioId}/solicitar`, {
-        product_id: selectedProduct.id,
+        ...(externalMode?{external_name:externalName.trim(),external_description:externalDescription.trim(),external_unit:externalUnit.trim()||'unidad'}:{product_id:selectedProduct.id}),
         cantidad: qty,
         observaciones: requestNote.trim() || null,
       });
@@ -315,7 +313,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex-wrap flex gap-2">
           <button
             type="button"
             onClick={load}
@@ -364,11 +362,12 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold">{item.producto_nombre || 'Producto'}</h4>
+                      <h4 className="font-bold">{item.producto_nombre || item.external_name || 'Producto'}</h4>
                       <StatusBadge status={item.estado} />
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {item.producto_codigo || 'Sin código'} · stock actual {Number(item.stock_actual || 0)}
+                      {item.product_id?`${item.producto_codigo||'Sin código'} · stock actual ${Number(item.stock_actual||0)}`:`Fuera del inventario · ${item.external_unit||'unidad'}`}
+                      {item.external_description&&<span className="block mt-1">{item.external_description}</span>}
                     </p>
                     {item.observaciones && (
                       <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{item.observaciones}</p>
@@ -380,7 +379,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center shrink-0">
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 text-center min-w-0">
                     {[
                       ['Solicitado', item.cantidad_solicitada],
                       ['Aprobado', item.cantidad_aprobada ?? '—'],
@@ -388,7 +387,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
                       ['Usado', used],
                       ['Devuelto', returned],
                     ].map(([label, value]) => (
-                      <div key={label} className="rounded-xl bg-gray-50 dark:bg-gray-900 px-3 py-2 min-w-20">
+                      <div key={label} className="rounded-xl bg-gray-50 dark:bg-gray-900 px-2 py-2 min-w-0">
                         <div className="text-xs text-gray-500">{label}</div>
                         <div className="font-bold">{value}</div>
                       </div>
@@ -403,7 +402,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {canManage && item.estado === 'solicitado' && (
+                    {(canManage||canDecide) && item.estado === 'solicitado' && (
                       <>
                         <button onClick={() => openAction('approve', item)} className="px-3 py-1.5 rounded-lg accent-fill text-white text-xs font-semibold flex items-center gap-1"><Check className="w-3.5 h-3.5" />Aprobar</button>
                         <button onClick={() => openAction('reject', item)} className="px-3 py-1.5 rounded-lg border border-red-300 text-red-600 text-xs font-semibold flex items-center gap-1"><XCircle className="w-3.5 h-3.5" />Rechazar</button>
@@ -437,11 +436,13 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
           footer={
             <>
               <button type="button" onClick={closeRequest} disabled={busy} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 font-semibold">Cancelar</button>
-              <button type="button" onClick={submitRequest} disabled={busy || !selectedProduct} className="px-4 py-2 rounded-xl accent-fill text-white font-semibold disabled:opacity-50">{busy ? 'Solicitando...' : 'Solicitar'}</button>
+              <button type="button" onClick={submitRequest} disabled={busy || (externalMode?!externalName.trim():!selectedProduct)} className="px-4 py-2 rounded-xl accent-fill text-white font-semibold disabled:opacity-50">{busy ? 'Solicitando...' : 'Solicitar'}</button>
             </>
           }
         >
           <div className="space-y-4">
+            <fieldset className="flex flex-wrap gap-3"><legend className="text-sm font-semibold mb-2">Origen del material</legend><label><input type="radio" checked={!externalMode} onChange={()=>setExternalMode(false)}/> Del inventario</label><label><input type="radio" checked={externalMode} onChange={()=>setExternalMode(true)}/> Fuera del inventario</label></fieldset>
+            {externalMode?<div className="space-y-3"><label className="block text-sm font-semibold">Material solicitado *<input aria-label="Material solicitado" maxLength={200} value={externalName} onChange={e=>setExternalName(e.target.value)} className="block w-full border rounded-xl p-2 mt-2 bg-transparent"/></label><label className="block text-sm">Descripción / especificaciones<textarea aria-label="Especificaciones del material" maxLength={2000} value={externalDescription} onChange={e=>setExternalDescription(e.target.value)} className="block w-full border rounded-xl p-2 mt-2 bg-transparent"/></label><label className="block text-sm">Unidad<input aria-label="Unidad del material" maxLength={40} value={externalUnit} onChange={e=>setExternalUnit(e.target.value)} className="block w-full border rounded-xl p-2 mt-2 bg-transparent"/></label></div>:<>
             <div>
               <label className="text-sm font-semibold">Buscar producto en inventario *</label>
               <div className="mt-2 relative">
@@ -465,7 +466,7 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
                 ) : (
                   products.map((product) => {
                     const stock = Number(product.stock_actual || 0);
-                    const disabled = stock <= 0;
+                    const disabled = false;
                     const selected = selectedProduct?.id === product.id;
                     return (
                       <button
@@ -500,12 +501,13 @@ export default function MaterialesPanel({ servicioId, onRefresh }) {
               </div>
             )}
 
+            </>}
+            <p className="text-xs text-gray-500">El creador del servicio recibirá la solicitud con el artículo, cantidad y observaciones para aprobarla o rechazarla. Solicitar y aprobar no descuentan existencias.</p>
             <label className="block">
               <span className="text-sm font-semibold">Cantidad *</span>
               <input
                 type="number"
                 min="1"
-                max={selectedProduct ? Number(selectedProduct.stock_actual || 1) : undefined}
                 value={requestQty}
                 onChange={(event) => setRequestQty(event.target.value)}
                 className="mt-2 w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2"

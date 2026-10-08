@@ -807,7 +807,7 @@ const ServicioForm = ({ isOpen, onClose, onSubmit }) => {
                     )}
 
                     {/* Botones */}
-                    <div className="flex justify-between gap-3 pt-4 border-t mt-6">
+                    <div className="flex-wrap flex justify-between gap-3 pt-4 border-t mt-6">
                         {currentStep > 1 && (
                             <button type="button" onClick={prevStep} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
                                 Anterior

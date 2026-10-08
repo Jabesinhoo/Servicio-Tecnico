@@ -311,7 +311,7 @@ const ServiceCard = ({
   const busy = busyId === service.id;
 
   return (
-    <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+    <article className="technician-service-card rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
       {!isAdmin&&!service.creator_view_only&&<button type="button" onClick={()=>onWorkshop(service)} className="min-h-11 border rounded-xl m-3 px-4 font-semibold">Ítems de taller y materiales</button>}
       <button
         type="button"
@@ -443,52 +443,52 @@ const ServiceCard = ({
 
       {isAdmin && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" onClick={() => onTeamWork(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onTeamWork(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <UsersRound className="w-4 h-4" /> Equipo / bitácora
           </button>
 
           <button type="button" onClick={()=>onWorkshop(service)} className="min-h-11 border rounded-xl px-4 font-semibold">Ítems de taller y materiales</button>
-          <button type="button" onClick={() => onClosure(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onClosure(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <PackageCheck className="w-4 h-4" /> Cierre / Dirección Técnica
           </button>
 
-          <button type="button" onClick={() => onFinalDelivery(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onFinalDelivery(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <PackageCheck className="w-4 h-4" /> Entrega final
           </button>
 
-          <button type="button" onClick={() => onAudit(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onAudit(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <FileText className="w-4 h-4" /> Auditoría
           </button>
 
-          <button type="button" onClick={() => onDocuments(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onDocuments(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <FileText className="w-4 h-4" /> Documentos PDF
           </button>
-          <button type="button" onClick={() => onConfigureGeofence(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => onConfigureGeofence(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <MapPin className="w-4 h-4" /> Punto del servicio
           </button>
           {service.reception_checklist_id && (
-            <button type="button" onClick={() => onChecklist(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => onChecklist(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
               <Eye className="w-4 h-4" /> Ver checklist
             </button>
           )}
           {Number(service.reception_evidence_count || 0) > 0 && (
-            <button type="button" onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
               <Camera className="w-4 h-4" /> Evidencias iniciales
             </button>
           )}
           {service.reception_act_signed && (
-            <button type="button" onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
               <PenLine className="w-4 h-4" /> Acta de recibo
             </button>
           )}
           {(service.diagnosis_status || Number(service.diagnosis_evidence_count || 0) > 0) && (
-            <button type="button" onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2 sm:col-span-2">
+            <button type="button" onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2 sm:col-span-2">
               <FileText className="w-4 h-4" /> Diagnóstico / resultado
             </button>
           )}
 
           {service.diagnosis_status === 'confirmed' && (
-            <button type="button" onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold px-4 flex items-center justify-center gap-2 sm:col-span-2">
+            <button type="button" onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold p-3 flex flex-wrap items-center justify-center gap-2 sm:col-span-2">
               <BadgeCheck className="w-4 h-4" /> Autorización del cliente
             </button>
           )}
@@ -511,28 +511,28 @@ const ServiceCard = ({
 
       {!isAdmin && !service.creator_view_only && ['en_ejecucion', 'en_espera'].includes(service.estado) && service.has_custody && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" disabled={busy} onClick={() => onEvidence(service, 'diagnosis')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" disabled={busy} onClick={() => onEvidence(service, 'diagnosis')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <Camera className="w-4 h-4" /> Evidencias diagnóstico
           </button>
-          <button type="button" disabled={busy} onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+          <button type="button" disabled={busy} onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
             <FileText className="w-4 h-4" /> Diagnóstico / resultado
           </button>
           {service.diagnosis_status === 'confirmed' && (
-            <button type="button" disabled={busy} onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold px-4 flex items-center justify-center gap-2 sm:col-span-2">
+            <button type="button" disabled={busy} onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold p-3 flex flex-wrap items-center justify-center gap-2 sm:col-span-2">
               <BadgeCheck className="w-4 h-4" /> Autorización del cliente
             </button>
           )}
         </div>
       )}
 
-      {service.creator_view_only&&<div className="border-t p-3 grid grid-cols-2 gap-2"><button type="button" onClick={()=>onAudit(service)} className="rounded-xl border p-3">Historial de acciones</button><button type="button" onClick={()=>onDocuments(service)} className="rounded-xl border p-3">Documentos PDF</button></div>}
+      {service.creator_view_only&&<div className="border-t p-3 grid grid-cols-1 sm:grid-cols-2 gap-2"><button type="button" onClick={()=>onAudit(service)} className="rounded-xl border p-3">Historial de acciones</button><button type="button" onClick={()=>onWorkshop(service)} className="rounded-xl border p-3">Inventario y solicitudes</button><button type="button" onClick={()=>onDocuments(service)} className="rounded-xl border p-3">Documentos PDF</button></div>}
       {!isAdmin && !service.creator_view_only && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+          <div className="technician-action-grid grid grid-cols-1 gap-2">
             <button
               type="button"
               onClick={() => onTeamWork(service)}
-              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <NotebookPen className="w-4 h-4" />
               Equipo y bitácora
@@ -541,7 +541,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onClosure(service)}
-              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <PackageCheck className="w-4 h-4" />
               {service.estado === 'en_ejecucion' ? 'Finalizar trabajo' : 'Cierre técnico'}
@@ -550,7 +550,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onFinalDelivery(service)}
-              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <PackageCheck className="w-4 h-4" />
               Entrega final
@@ -559,7 +559,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onAudit(service)}
-              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4" />
               Auditoría
@@ -568,7 +568,7 @@ const ServiceCard = ({
             <button
               type="button"
               onClick={() => onDocuments(service)}
-              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4" />
               Documentos PDF
@@ -585,7 +585,7 @@ const ServiceCard = ({
                 type="button"
                 disabled={busy}
                 onClick={() => onAccept(service)}
-                className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+                className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Aceptar servicio
@@ -595,7 +595,7 @@ const ServiceCard = ({
                 type="button"
                 disabled={busy}
                 onClick={() => onImpediment(service)}
-                className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold px-4 flex items-center justify-center gap-2"
+                className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
               >
                 <TriangleAlert className="w-4 h-4" />
                 Reportar impedimento
@@ -615,7 +615,7 @@ const ServiceCard = ({
                 type="button"
                 disabled={busy || ((service.custody_requires_location ?? !['remote','local'].includes(serviceMode(service.service_site))) && !gps?.valid_for_custody)}
                 onClick={() => onTakeCustody(service)}
-                className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+                className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
               >
                 <ShieldCheck className="w-4 h-4" />
                 Tomar custodia del equipo
@@ -628,7 +628,7 @@ const ServiceCard = ({
               type="button"
               disabled={busy}
               onClick={() => onChecklist(service)}
-              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <ClipboardCheck className="w-4 h-4" />
               Completar checklist de recepción
@@ -636,17 +636,17 @@ const ServiceCard = ({
           )}
 
           {action === 'reception_evidence' && (
-            <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
+            <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
               <Camera className="w-4 h-4" /> Tomar evidencias iniciales
             </button>
           )}
 
           {action === 'sign_reception_act' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold px-4 flex items-center justify-center gap-2">
+              <button type="button" disabled={busy} onClick={() => onEvidence(service, 'reception')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
                 <Camera className="w-4 h-4" /> Revisar evidencias
               </button>
-              <button type="button" disabled={busy} onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
+              <button type="button" disabled={busy} onClick={() => onReceptionAct(service)} className="min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
                 <PenLine className="w-4 h-4" /> Firmar acta de recibo
               </button>
             </div>
@@ -657,7 +657,7 @@ const ServiceCard = ({
               type="button"
               disabled={busy}
               onClick={() => onChangeStatus(service, 'en_ejecucion')}
-              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <PlayCircle className="w-4 h-4" />
               Iniciar servicio
@@ -669,7 +669,7 @@ const ServiceCard = ({
               type="button"
               disabled={busy}
               onClick={() => onChangeStatus(service, 'en_espera')}
-              className="w-full min-h-11 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <PauseCircle className="w-4 h-4" />
               Poner en espera
@@ -703,7 +703,7 @@ const ServiceCard = ({
               type="button"
               disabled={busy}
               onClick={() => onChangeStatus(service, 'en_ejecucion')}
-              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2"
+              className="w-full min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2"
             >
               <PlayCircle className="w-4 h-4" />
               Reanudar servicio
@@ -1313,7 +1313,7 @@ const EvidenceModal = ({ context, isAdmin, onClose, onRefresh }) => {
                 <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ej. Golpe en esquina izquierda, cargador recibido..." className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3" />
               </div>
 
-              <label className={`min-h-12 rounded-xl accent-fill hover:accent-fill text-white font-semibold px-4 flex items-center justify-center gap-2 ${uploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}>
+              <label className={`min-h-12 rounded-xl accent-fill hover:accent-fill text-white font-semibold p-3 flex flex-wrap items-center justify-center gap-2 ${uploading ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}>
                 <Camera className="w-5 h-5" />
                 {uploading ? 'Cargando fotografía...' : 'Tomar foto / elegir imagen'}
                 <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={uploadFile} className="sr-only" disabled={uploading} />
@@ -2831,7 +2831,7 @@ const TeamWorkModal = ({
                             </p>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <button
                               type="button"
                               onClick={() => {

@@ -120,7 +120,7 @@ const ColorPicker = () => {
 
             {isOpen && (
                 <div
-                    className="absolute right-0 mt-2 rounded-2xl border p-4 z-50 overflow-y-auto"
+                    className="appearance-panel absolute right-0 mt-2 rounded-2xl border p-4 z-50 overflow-y-auto"
                     style={{
                         width: 'min(20rem, calc(100vw - 1rem))',
                         maxHeight: 'calc(100dvh - 5rem)',
@@ -141,7 +141,7 @@ const ColorPicker = () => {
                         <button
                             type="button"
                             onClick={() => setIsOpen(false)}
-                            className="icon-button !w-8 !h-8 !min-w-8 !min-h-8"
+                            className="icon-action"
                             aria-label="Cerrar personalización"
                         >
                             <X className="w-4 h-4" />
@@ -227,7 +227,7 @@ const ColorPicker = () => {
                                         Color personalizado
                                     </label>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex-wrap flex items-center gap-2">
                                         <input
                                             type="color"
                                             value={localColor}

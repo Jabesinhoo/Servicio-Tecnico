@@ -261,7 +261,7 @@ const UserRoleAssignment = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {isEditing ? (
-                          <div className="flex gap-2">
+                          <div className="flex-wrap flex gap-2">
                             <button
                               onClick={() => handleSaveRole(user.id)}
                               className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50 transition-colors"

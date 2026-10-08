@@ -74,7 +74,7 @@ const TecnicoTable = ({ tecnicos, loading, onViewDetail, onEdit, onDelete, onTog
                 </span>
                </td>
               <td className="px-4 sm:px-6 py-4 text-right">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex-wrap flex items-center justify-end gap-2">
                   <button
                     onClick={() => onViewDetail(tecnico.id)}
                     className="text-blue-600 hover:text-blue-800 dark:text-blue-400"

@@ -521,7 +521,7 @@ const Agenda = () => {
                   return (
                     <div
                       key={tech.id}
-                      className="flex items-center gap-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                      className="flex-wrap flex items-center gap-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       <button
                         type="button"

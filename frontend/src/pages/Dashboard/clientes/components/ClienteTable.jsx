@@ -65,7 +65,7 @@ const ClienteTable = ({ clientes, loading, onViewDetail, onEdit, onDelete }) => 
                 </div>
               </td>
               <td className="px-4 sm:px-6 py-4 text-right">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex-wrap flex items-center justify-end gap-2">
                   <button
                     onClick={() => onViewDetail(cliente.id)}
                     className="accent-text hover:accent-text dark:accent-text transition-colors"

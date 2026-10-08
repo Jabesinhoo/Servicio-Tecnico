@@ -40,7 +40,7 @@ const SolicitudList = ({ solicitudes, loading, onViewDetail, onRefresh }) => {
                         className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
                     />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex-wrap flex gap-2">
                     <select
                         value={filterEstado}
                         onChange={(e) => setFilterEstado(e.target.value)}

@@ -453,7 +453,7 @@ const RolesManagement = () => {
           </div>
 
           {/* Botones de acción */}
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-system">
+          <div className="flex-wrap flex justify-end gap-3 mt-6 pt-4 border-t border-system">
             <button
               onClick={handleCancel}
               className="btn-secondary"
@@ -546,7 +546,7 @@ const RolesManagement = () => {
                   )}
                 </div>
 
-                <div className="flex justify-end gap-1 mt-4 pt-4 border-t border-system">
+                <div className="flex-wrap flex justify-end gap-1 mt-4 pt-4 border-t border-system">
                   <button
                     onClick={() => handleEdit(role)}
                     className="icon-button icon-button-primary"

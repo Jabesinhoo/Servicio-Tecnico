@@ -17,7 +17,7 @@ const ClienteDetail = ({ isOpen, onClose, cliente, onEdit }) => {
               {cliente.documento || 'Sin documento'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex-wrap flex items-center gap-2">
             <button
               onClick={() => onEdit(cliente)}
               className="accent-text hover:accent-text dark:accent-text transition-colors p-1"

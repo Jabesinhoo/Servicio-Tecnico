@@ -693,7 +693,7 @@ const ClienteForm = ({ isOpen, onClose, onSubmit, initialData }) => {
           </div>
 
           {/* Botones */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+          <div className="flex-wrap flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
             <button
               type="button"
               onClick={onClose}

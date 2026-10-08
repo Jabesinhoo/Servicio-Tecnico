@@ -452,7 +452,7 @@ const Reportes = () => {
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               {reporteData.nombre}
             </h3>
-            <div className="flex gap-2">
+            <div className="flex-wrap flex gap-2">
               <button
                 onClick={() => handleExportar('excel')}
                 className="px-3 py-1.5 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"

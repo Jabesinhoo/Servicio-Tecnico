@@ -896,7 +896,7 @@ export default function ServicioCreateWizard({
   if (!isOpen) return null;
 
   return (
-    <div className="workflow-theme fixed inset-0 z-[110] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
+    <div className="service-create-modal workflow-theme fixed inset-0 z-[110] bg-black/60 sm:p-4 flex items-stretch sm:items-center justify-center">
       <section className="w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl bg-white dark:bg-gray-900 sm:rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
         <header className="shrink-0 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
@@ -906,7 +906,7 @@ export default function ServicioCreateWizard({
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {isEdit ? `Editar ${editDetail?.codigo_os || service?.codigo_os || 'Orden de Servicio'}` : 'Nueva Orden de Servicio'}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="wizard-description text-sm text-gray-500 mt-1">
               {isEdit
                 ? 'Mismos datos de creación, precargados para edición segura.'
                 : 'Solicitud → equipo recibido → clasificación → condiciones → aceptación → facturación.'}
@@ -916,19 +916,20 @@ export default function ServicioCreateWizard({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 w-10 h-10 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center"
+            aria-label="Cerrar creación de servicio" title="Cerrar creación de servicio"
+            className="icon-action rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
         </header>
 
-        <div className="shrink-0 border-b border-gray-100 dark:border-gray-800 overflow-x-auto">
-          <div className="min-w-max px-4 sm:px-6 py-3 flex gap-2">
+        <div className="shrink-0 border-b border-gray-100 dark:border-gray-800">
+          <div className="wizard-steps px-4 sm:px-6 py-2 sm:py-3 grid grid-cols-4 sm:flex sm:flex-wrap gap-2">
             {steps.map(([label, Icon], index) => (
               <button
                 type="button" onClick={()=>{setError('');setStep(index);}} disabled={saving}
-                key={label}
-                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold ${
+                key={label} aria-label={label} title={label} aria-current={index===step?'step':undefined}
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold ${
                   index === step
                     ? 'accent-fill text-white'
                     : index < step
@@ -937,10 +938,11 @@ export default function ServicioCreateWizard({
                 }`}
               >
                 {React.createElement(Icon,{className:"w-4 h-4"})}
-                {label}
+                <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
           </div>
+          <p className="sm:hidden px-4 pb-2 text-xs accent-text font-semibold">Paso {step+1} de {steps.length}: {steps[step][0]}</p>
         </div>
 
         <div

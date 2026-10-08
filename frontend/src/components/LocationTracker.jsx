@@ -262,12 +262,12 @@ const LocationTracker = () => {
       </span>
       <button type="button" onClick={()=>setShowHelp(!showHelp)} aria-label="Ayuda de ubicación" className="rounded border px-1">?</button>
       {(!active || precisionTier !== 'precise') && (
-        <button type="button" onClick={retry} className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10" title="Reintentar ubicación">
+        <button type="button" onClick={retry} className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10" title="Reintentar ubicación" aria-label="Reintentar ubicación">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       )}
     </div>
-    {showHelp&&<div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-xl border bg-white dark:bg-gray-900 p-3 shadow-xl text-sm">
+    {showHelp&&<div className="fixed left-3 right-3 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full mt-2 z-50 w-auto sm:w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-white dark:bg-gray-900 p-3 shadow-xl text-sm">
       <p className="font-semibold">Ubicación del dispositivo</p><p className="mt-2">{message}</p>
       <p className="mt-2">Remoto y en el local permiten tomar custodia sin GPS. Las visitas externas necesitan una lectura reciente y precisa.</p>
       <p className="mt-2">Si solo obtienes una ubicación aproximada, abre la plataforma en un celular, habilita ubicación precisa para el navegador y reintenta. El sitio debe usar HTTPS o localhost.</p>

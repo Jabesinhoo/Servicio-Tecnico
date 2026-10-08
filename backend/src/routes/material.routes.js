@@ -19,20 +19,16 @@ router.get(
 router.post(
   '/materiales/servicio/:service_order_id/solicitar',
   allowRoles('tecnico', 'admin'),
-  requireApprovedClientAuthorizationForMaterials,
   materialController.solicitarMateriales
 );
 
 router.put(
   '/materiales/:id/aprobar',
-  allowRoles('admin', 'inventario'),
-  requireApprovedClientAuthorizationForMaterials,
   materialController.aprobarMaterial
 );
 
 router.put(
   '/materiales/:id/rechazar',
-  allowRoles('admin', 'inventario'),
   materialController.rechazarMaterial
 );
 

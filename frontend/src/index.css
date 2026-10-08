@@ -1695,3 +1695,68 @@ input[type="radio"]:disabled {
 .workflow-theme .fc-event { color: var(--color-on-primary, #fff); }
 
 .service-signature { background: #fff !important; touch-action: none; }
+
+/* Responsive controls: wrap actions, retain readable content and touch targets. */
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  border-radius: .75rem;
+}
+.icon-action:disabled { opacity: .45; cursor: not-allowed; }
+.icon-action:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+:where(.page-content, .responsive-page, .modal-content) :where(.flex, .grid, .flex-1, fieldset) { min-width: 0; }
+:where(.page-content, .responsive-page, .modal-content) :where(input, select, textarea) { max-width: 100%; }
+:where(.page-content, .responsive-page, .modal-content) :where(button, h1, h2, h3, h4, p, label) { overflow-wrap: anywhere; }
+:where(.page-content, .responsive-page, .modal-content) button svg { flex-shrink: 0; }
+:where(.page-content, .responsive-page, .modal-content) :where(video, canvas) { max-width: 100%; }
+.service-toolbar > button { min-height: 44px; justify-content: center; }
+.modal-header, .modal-footer { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.modal-header > h3 { flex: 1; min-width: 0; }
+.responsive-table-wrap, .table-container { max-width: 100%; }
+@media (max-width: 767px) {
+  .responsive-table-wrap, .table-container { width: 100%; margin-inline: 0; padding-inline: 0; }
+  :where(.page-content, .responsive-page, .modal-content) button { min-height: 44px; white-space: normal; }
+  .service-toolbar { width: 100%; }
+  .service-toolbar > button { flex: 1 1 120px; }
+  .service-toolbar > button[aria-label="Actualizar servicios"] { flex: 0 0 44px; padding-inline: .5rem; }
+  .service-toolbar > div { flex: 0 0 auto; }
+  .service-toolbar > div button { min-width: 44px; }
+  .service-orders-scroll { overflow: visible; }
+  .service-order-table { display: block; min-width: 0; width: 100%; }
+  .service-order-table thead { display: none; }
+  .service-order-table tbody { display: grid; gap: .75rem; padding: .5rem; }
+  .service-order-table tr { display: grid; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--border-color); border-radius: .75rem; overflow: hidden; }
+  .service-order-table td { display: block; min-width: 0; padding: .625rem .75rem; border: 0; overflow-wrap: anywhere; }
+  .service-order-table td::before { content: attr(data-label); display: block; font-size: .7rem; font-weight: 700; color: var(--text-secondary); margin-bottom: .25rem; }
+  .service-order-table td:last-child > div { justify-content: flex-start; flex-wrap: wrap; }
+  .service-order-table td .max-w-\[240px\] { max-width: none; }
+}
+
+.app-toolbar button { min-height: 44px; min-width: 44px; }
+
+@media (max-height: 500px) {
+  .service-create-modal .wizard-description { display: none; }
+  .service-create-modal > section > header { padding-block: .5rem; }
+  .service-create-modal .wizard-steps { padding-block: .25rem; }
+}
+@media (min-width: 360px) and (max-width: 639px) and (max-height: 500px) {
+  .service-create-modal .wizard-steps { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .25rem; padding-inline: .5rem; }
+  .service-create-modal .wizard-steps button { padding-inline: .25rem; }
+}
+
+@media (max-width: 767px) {
+  .appearance-panel { position: fixed; top: 5rem; left: .5rem; right: .5rem; width: auto !important; max-height: calc(100dvh - 5.5rem) !important; margin-top: 0; }
+}
+
+.technician-service-card { container-type: inline-size; }
+.technician-action-grid { grid-template-columns: minmax(0, 1fr); }
+.technician-action-grid button { min-width: 0; height: auto; white-space: normal; overflow-wrap: anywhere; }
+@container (min-width: 320px) { .technician-action-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@container (min-width: 660px) { .technician-action-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@container (min-width: 1000px) { .technician-action-grid { grid-template-columns: repeat(5,minmax(0,1fr)); } }

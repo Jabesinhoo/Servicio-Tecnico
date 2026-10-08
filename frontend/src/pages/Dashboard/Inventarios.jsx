@@ -151,7 +151,7 @@ const Inventarios = () => {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex-wrap flex gap-3">
           <button
             onClick={() => {
               setShowLowStock(!showLowStock);
@@ -167,7 +167,7 @@ const Inventarios = () => {
             Stock Bajo
           </button>
 
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+          <div className="flex-wrap flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
             <button
               onClick={() => setViewMode('table')}
               className={`p-2 rounded-md transition-colors ${

@@ -213,7 +213,7 @@ const ChecklistTecnico = ({ item, tecnicoId, onComplete, onCancel, isModal = fal
                 </div>
 
                 {/* Botones */}
-                <div className="flex justify-end gap-3 pt-4 border-t">
+                <div className="flex-wrap flex justify-end gap-3 pt-4 border-t">
                     <button
                         type="button"
                         onClick={onCancel}

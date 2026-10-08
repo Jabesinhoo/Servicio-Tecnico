@@ -521,7 +521,7 @@ const Clientes = () => {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+          <div className="flex-wrap flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
             <button
               type="button"
               onClick={() =>

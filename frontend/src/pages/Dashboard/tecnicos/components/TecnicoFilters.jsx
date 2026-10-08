@@ -56,7 +56,7 @@ const TecnicoFilters = ({ filters, onFilterChange, onClearFilters, onSearch }) =
         
         <form onSubmit={handleSearchSubmit}>
           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Buscar</label>
-          <div className="flex gap-2">
+          <div className="flex-wrap flex gap-2">
             <input
               type="text"
               name="search"
