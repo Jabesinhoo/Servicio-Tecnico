@@ -1112,28 +1112,10 @@ exports.technicalClose = async (
       });
     }
 
-    const diagnosis = await client.query(
-      `
-        SELECT status
-        FROM service_order_diagnostics
-        WHERE service_order_id = $1
-        LIMIT 1
-      `,
-      [order.id]
-    );
-
-    if (
-      diagnosis.rows[0]?.status !==
-      'confirmed'
-    ) {
+    const pendingExtra = await client.query("SELECT id FROM service_order_authorizations WHERE service_order_id=$1 AND status='pending' LIMIT 1", [order.id]);
+    if (pendingExtra.rows.length) {
       await rollback(client);
-      return res.status(409).json({
-        success: false,
-        code:
-          'CONFIRMED_DIAGNOSIS_REQUIRED',
-        message:
-          'El diagnóstico o resultado debe estar confirmado antes del cierre técnico',
-      });
+      return res.status(409).json({code:'CLIENT_AUTHORIZATION_PENDING',message:'Registra la decisión del cliente sobre el servicio extra pendiente antes de finalizar.'});
     }
 
     const evidenceResult =

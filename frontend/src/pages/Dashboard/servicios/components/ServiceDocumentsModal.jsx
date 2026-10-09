@@ -13,6 +13,7 @@ import {
   Share2,
   ShieldCheck,
   X,
+  Trash2,
 } from 'lucide-react';
 import api from '../../../../services/api';
 import ClientSignatureHistory from './ClientSignatureHistory';
@@ -235,6 +236,12 @@ export default function ServiceDocumentsModal({
       return result;
     }, [documents]);
 
+  const removeVersion = async document => {
+    if(!window.confirm(`¿Eliminar la versión anterior v${document.version}? La versión vigente se conserva.`))return;
+    try{setBusyType(document.document_type);setError('');await api.delete(`/api/service-orders/${service.id}/documents/${document.id}`);await load();setNotice('Versión anterior eliminada. La acción queda en el historial.');}
+    catch(err){setError(err.response?.data?.message||'No fue posible eliminar esa versión.');}finally{setBusyType('');}
+  };
+
   const generate =
     async (
       documentType
@@ -343,6 +350,14 @@ export default function ServiceDocumentsModal({
     }
   };
 
+  const openClientWhatsApp = () => {
+    let number=String(dispatch.recipient_contact || data?.order?.client_phone || '').replace(/\D/g,'');
+    if(number.length===10&&number.startsWith('3'))number='57'+number;
+    if(number.length<10||number.length>15){setError('Revisa el teléfono del cliente para abrir WhatsApp.');return;}
+    window.open('https://wa.me/'+number+'?text='+encodeURIComponent('Hola '+(dispatch.recipient_name||'')+', te comparto el acta de tu servicio '+service.codigo_os+'.'),'_blank','noopener,noreferrer');
+    setNotice('Adjunta el PDF descargado al chat del cliente. Abrir WhatsApp no equivale a confirmar el envío.');
+  };
+
   const recordDispatch = async () => {
     if (!prepared) return;
     setSending(true);
@@ -430,7 +445,8 @@ export default function ServiceDocumentsModal({
               <p className="text-sm text-slate-500">Comparte el archivo desde el dispositivo o descárgalo y adjúntalo en WhatsApp o correo. Luego registra el envío realizado.</p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={sharePrepared} className="min-h-11 rounded-xl accent-fill text-white px-4 font-semibold">Compartir PDF</button>
-                <button type="button" onClick={downloadPrepared} className="min-h-11 rounded-xl border border-slate-300 px-4 font-semibold">Descargar PDF</button>
+                <button type="button" onClick={openClientWhatsApp} className="min-h-11 rounded-xl border px-4 text-sm">Abrir WhatsApp del cliente</button>
+              <button type="button" onClick={downloadPrepared} className="min-h-11 rounded-xl border border-slate-300 px-4 font-semibold">Descargar PDF</button>
                 <button type="button" onClick={() => setPrepared(null)} className="min-h-11 px-4">Cerrar envío</button>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
@@ -603,6 +619,7 @@ export default function ServiceDocumentsModal({
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
+                                {document.can_delete===true&&<button type="button" title="Eliminar versión anterior" disabled={!!busyType} onClick={()=>removeVersion(document)} className="min-h-10 border rounded-xl px-3 text-sm flex items-center gap-2"><Trash2 className="w-4 h-4"/>Eliminar versión</button>}
                                 {document.status === 'generated' && <button type="button" disabled={sending} onClick={() => prepareSend(document)} className="min-h-10 rounded-xl accent-fill text-white px-3 font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"><Share2 className="w-4 h-4" />Preparar envío</button>}
                                 <button
                                   type="button"
@@ -643,7 +660,7 @@ export default function ServiceDocumentsModal({
 
           {!isAdmin && (
             <p className="text-xs text-slate-500">
-              Los requisitos de cada documento se validan en el servidor. El acta de entrega final solo puede generarla administración.
+              El acta de cierre requiere trabajo finalizado; la de entrega final requiere entrega confirmada. Puedes eliminar versiones anteriores propias; administración puede eliminar cualquier versión anterior.
             </p>
           )}
         </div>

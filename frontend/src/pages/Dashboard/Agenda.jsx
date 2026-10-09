@@ -15,11 +15,9 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import multimonthPlugin from '@fullcalendar/multimonth';
-import HorarioConfigModal from './agenda/HorarioConfigModal';
 import DisponibilidadPanel from './agenda/DisponibilidadPanel';
 import {
   Calendar as CalendarIcon,
-  Settings,
   Users,
   Loader2,
   RefreshCw,
@@ -47,11 +45,6 @@ const Agenda = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] =
     useState(localDate());
-  const [horarioRevision,setHorarioRevision]=useState(0);
-  const [showHorarioModal, setShowHorarioModal] =
-    useState(false);
-  const [selectedTecnico, setSelectedTecnico] =
-    useState(null);
   const [currentView, setCurrentView] =
     useState(
       window.innerWidth < 768
@@ -542,17 +535,7 @@ const Agenda = () => {
                         </span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedTecnico(tech);
-                          setShowHorarioModal(true);
-                        }}
-                        className="w-10 h-10 flex items-center justify-center"
-                        title="Configurar horario"
-                      >
-                        <Settings className="w-4 h-4" />
-                      </button>
+
                     </div>
                   );
                 })}
@@ -560,28 +543,13 @@ const Agenda = () => {
             </section>
           )}
 
-          <DisponibilidadPanel key={horarioRevision}
-            onConfigureHorario={isAdmin ? row=>{const tech=tecnicosList.find(t=>t.id===row.tecnico_id);setSelectedTecnico(tech||{id:row.tecnico_id,nombre1:row.tecnico_nombre});setShowHorarioModal(true);}:undefined}
+          <DisponibilidadPanel
             fecha={selectedDate}
             onSelectTecnico={() => {}}
           />
         </aside>
       </div>
 
-      <HorarioConfigModal
-        isOpen={showHorarioModal}
-        onClose={() => {
-          setShowHorarioModal(false);
-          setSelectedTecnico(null);
-        }}
-        tecnicoId={selectedTecnico?.id}
-        tecnicoNombre={`${selectedTecnico?.nombre1 || ''} ${selectedTecnico?.apellidos || ''}`}
-        onSave={async () => {
-          setHorarioRevision(n=>n+1);
-          await fetchTecnicos();
-          await fetchEventos();
-        }}
-      />
       <ServicioDetail isOpen={Boolean(detailOrderId)} servicioId={detailOrderId} onClose={()=>setDetailOrderId(null)} onRefresh={fetchEventos}/>
     </div>
   );

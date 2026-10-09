@@ -1,7 +1,7 @@
 'use strict';
 
 const pool = require('../db/pool');
-const {deliveryPermissions}=require('../domain/service-delivery-permissions');
+const {deliveryPermissions, CLOSED_TECHNICAL}=require('../domain/service-delivery-permissions');
 const { randomUUID } = require('crypto');
 const fsp = require('fs/promises');
 const path = require('path');
@@ -204,6 +204,17 @@ async function getFinancialControlState(client, id) {
   };
 }
 
+async function extraDeliveryRequirement(client, id) {
+  const extra = await client.query(`SELECT status,estimated_amount,decided_at FROM service_order_authorizations WHERE service_order_id=$1 AND status IN ('pending','approved')`,[id]);
+  const pending = extra.rows.some(row=>row.status==='pending');
+  const charged = extra.rows.filter(row=>row.status==='approved' && Number(row.estimated_amount)>0);
+  const financial = charged.length ? await getFinancialControlState(client,id) : null;
+  const latestApproval=Math.max(0,...charged.map(row=>new Date(row.decided_at||0).getTime()));
+  const extrasReviewed=financial?.control?.clearance_status==='cleared' && financial.ready && new Date(financial.control.last_verified_at||0).getTime()>=latestApproval;
+  return { required: charged.length>0, extra_count:charged.length, authorization_pending:pending,
+    ready:!pending && (!charged.length || extrasReviewed===true), financial_status:financial?.control?.clearance_status || null };
+}
+
 async function event(client, id, type, actor, metadata = {}) {
   await client.query(`
     INSERT INTO service_order_delivery_events
@@ -257,6 +268,7 @@ exports.getDelivery = async (req, res) => {
       success:true,
       data:{
         order,
+        extra_financial:await extraDeliveryRequirement(client,order.id),
         closure,
         delivery: delivery || { service_order_id:order.id, status:'draft' },
         notifications,
@@ -548,9 +560,9 @@ exports.confirmDelivery = async (req, res) => {
     if (order.estado === 'cerrada') { await rollback(client); return res.status(409).json({ success:false, message:'La orden ya está cerrada' }); }
 
     const closure = await getClosure(client, order.id);
-    if (closure?.status !== 'validated') {
+    if (!CLOSED_TECHNICAL.has(closure?.status)) {
       await rollback(client);
-      return res.status(409).json({ success:false, message:'Dirección Técnica debe validar primero el cierre' });
+      return res.status(409).json({ success:false, message:'Primero finaliza el trabajo y confirma el cierre técnico' });
     }
 
     const delivery = await getDelivery(client, order.id, true);
@@ -559,12 +571,6 @@ exports.confirmDelivery = async (req, res) => {
 
     const tools=await client.query('SELECT id FROM workshop_assignments WHERE service_order_id=$1 AND returned_quantity+consumed_quantity<quantity LIMIT 1',[order.id]);
     if(tools.rows.length){await rollback(client);return res.status(409).json({message:'Devuelve las herramientas y registra el consumo o devolución de los insumos pendientes antes de cerrar definitivamente la orden.',code:'WORKSHOP_ITEMS_PENDING'});}
-    const notifications = await getNotifications(client, order.id);
-    if (!notifications.length) {
-      await rollback(client);
-      return res.status(409).json({ success:false, code:'CLIENT_NOTIFICATION_REQUIRED', message:'Registra al menos una notificación al cliente' });
-    }
-
     if (!delivery.receiver_type || !delivery.receiver_name || !delivery.receiver_document || !delivery.signature_storage_path) {
       await rollback(client);
       return res.status(409).json({ success:false, code:'DELIVERY_DATA_INCOMPLETE', message:'Completa receptor, documento y firma' });
@@ -581,70 +587,11 @@ exports.confirmDelivery = async (req, res) => {
       return res.status(409).json({ success:false, code:'DELIVERY_CHECKS_INCOMPLETE', message:failed[1] });
     }
 
-    let financialState;
-
-    try {
-      financialState = await getFinancialControlState(
-        client,
-        order.id
-      );
-    } catch (financialError) {
-      if (financialError?.code !== '42P01') {
-        throw financialError;
-      }
-
-      financialState = {
-        control: null,
-        verification_count: 0,
-        ready: null,
-        mode: 'legacy',
-      };
-    }
-
-    if (financialState.mode === 'v17') {
-      if (!financialState.ready) {
-        await rollback(client);
-        return res.status(409).json({
-          success:false,
-          code:'FINANCIAL_CLEARANCE_REQUIRED',
-          message:
-            financialState.control?.clearance_status === 'blocked'
-              ? 'La entrega está bloqueada por control financiero.'
-              : 'Falta una liberación financiera válida antes de entregar.',
-          financial_status:
-            financialState.control?.clearance_status || 'pending',
-        });
-      }
-
-      if (delivery.financial_clearance !== true) {
-        await client.query(
-          `
-            UPDATE service_order_deliveries
-            SET financial_clearance = TRUE,
-                financial_note =
-                  CASE
-                    WHEN financial_note IS NULL OR BTRIM(financial_note) = ''
-                    THEN $1
-                    ELSE financial_note
-                  END,
-                updated_at = NOW()
-            WHERE service_order_id = $2
-          `,
-          [
-            `Liberación validada por Control Financiero V17: ${financialState.control.clearance_status}.`,
-            order.id,
-          ]
-        );
-
-        delivery.financial_clearance = true;
-      }
-    } else if (delivery.financial_clearance !== true) {
+    const extraRequirement = await extraDeliveryRequirement(client,order.id);
+    if (!extraRequirement.ready) {
       await rollback(client);
-      return res.status(409).json({
-        success:false,
-        code:'FINANCIAL_CLEARANCE_REQUIRED',
-        message:'Confirma la liberación financiera antes de entregar.',
-      });
+      return res.status(409).json({success:false,code:extraRequirement.authorization_pending?'CLIENT_AUTHORIZATION_PENDING':'EXTRA_PAYMENT_REQUIRED',
+        message:extraRequirement.authorization_pending?'Registra la decisión del cliente sobre el servicio extra pendiente.':'Administración debe revisar el cobro de los servicios extra aprobados antes de entregar.'});
     }
 
     if (delivery.receiver_type === 'third_party') {

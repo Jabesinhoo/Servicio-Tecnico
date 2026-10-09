@@ -435,27 +435,6 @@ exports.create = async (req, res) => {
 
     const diagnosis = diagnosisResult.rows[0];
 
-    if (!diagnosis || diagnosis.status !== 'confirmed') {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        success: false,
-        code: 'CONFIRMED_DIAGNOSIS_REQUIRED',
-        message: 'Primero debes confirmar el diagnóstico o resultado del servicio',
-      });
-    }
-
-    if (
-      diagnosis.work_type === 'diagnostico' &&
-      diagnosis.solution_available === false
-    ) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        success: false,
-        code: 'NO_ADDITIONAL_WORK_RECOMMENDED',
-        message: 'El diagnóstico confirmado indica que no existe una solución adicional por autorizar',
-      });
-    }
-
     const pendingResult = await client.query(
       `
         SELECT id
@@ -479,25 +458,25 @@ exports.create = async (req, res) => {
     const authorizationId = randomUUID();
 
     const snapshot = {
-      work_type: diagnosis.work_type,
-      result_status: diagnosis.result_status,
-      description: diagnosis.description,
-      solution_available: diagnosis.solution_available,
-      approximate_cost: diagnosis.approximate_cost,
-      required_components: diagnosis.required_components,
-      functional_result: diagnosis.functional_result,
-      activities_performed: diagnosis.activities_performed,
-      confirmed_at: diagnosis.confirmed_at,
+      work_type: diagnosis?.work_type,
+      result_status: diagnosis?.result_status,
+      description: diagnosis?.description,
+      solution_available: diagnosis?.solution_available,
+      approximate_cost: diagnosis?.approximate_cost,
+      required_components: diagnosis?.required_components,
+      functional_result: diagnosis?.functional_result,
+      activities_performed: diagnosis?.activities_performed,
+      confirmed_at: diagnosis?.confirmed_at,
     };
 
     const effectiveAmount =
       estimatedAmount === null
-        ? diagnosis.approximate_cost
+        ? diagnosis?.approximate_cost
         : estimatedAmount;
 
     const effectiveComponents =
       requestedComponents ||
-      diagnosis.required_components ||
+      diagnosis?.required_components ||
       null;
 
     const insertResult = await client.query(
@@ -527,7 +506,7 @@ exports.create = async (req, res) => {
       [
         authorizationId,
         id,
-        diagnosis.id,
+        diagnosis?.id || null,
         req.user.id,
         requestType,
         subject,
@@ -551,6 +530,7 @@ exports.create = async (req, res) => {
     });
 
     if (order.estado === 'en_ejecucion') {
+      await require('../services/service-execution-time.service').stopSession(client,id);
       await client.query(
         `
           UPDATE service_orders

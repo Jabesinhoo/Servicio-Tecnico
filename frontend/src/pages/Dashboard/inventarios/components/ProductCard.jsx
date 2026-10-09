@@ -1,8 +1,11 @@
 // src/pages/Dashboard/inventarios/components/ProductCard.jsx
 import React, { useState } from 'react';
+import InventoryImage from './InventoryImage';
+import {inventoryImages} from '../inventoryImages';
 import { Edit, Trash2, Package, AlertTriangle, Eye, X } from 'lucide-react';
 
 const ProductCard = ({ product, onEdit, onDelete, onViewDetail, canEdit }) => {
+    const images=inventoryImages(product.imagenes);
     const [showImageModal, setShowImageModal] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
 
@@ -32,18 +35,18 @@ const ProductCard = ({ product, onEdit, onDelete, onViewDetail, canEdit }) => {
                 {/* Imagen principal */}
                 <div
                     className="h-40 bg-gray-100 dark:bg-gray-800 relative cursor-pointer group"
-                    onClick={() => product.imagenes?.[0] && openImageModal(product.imagenes[0])}
+                    onClick={() => images?.[0] && openImageModal(images[0])}
                 >
-                    {product.imagenes && product.imagenes.length > 0 ? (
+                    {images && images.length > 0 ? (
                         <>
-                            <img
-                                src={product.imagenes[0].url}
+                            <InventoryImage
+                                image={images[0]}
                                 alt={product.nombre}
                                 className="w-full h-full object-cover"
                             />
-                            {product.imagenes.length > 1 && (
+                            {images.length > 1 && (
                                 <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded">
-                                    +{product.imagenes.length - 1}
+                                    +{images.length - 1}
                                 </div>
                             )}
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -136,8 +139,8 @@ const ProductCard = ({ product, onEdit, onDelete, onViewDetail, canEdit }) => {
                         >
                             <X className="w-6 h-6" />
                         </button>
-                        <img
-                            src={selectedImage.url}
+                        <InventoryImage
+                            image={selectedImage}
                             alt="Producto"
                             className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
                         />

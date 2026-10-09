@@ -20,6 +20,7 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData }) => {
         estado: true,
     });
     const [errors, setErrors] = useState({});
+    const [saveError,setSaveError]=useState('');
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -77,6 +78,7 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData }) => {
         if (!validate()) return;
 
         setLoading(true);
+        setSaveError('');
         try {
             const dataToSubmit = {
                 ...formData,
@@ -86,6 +88,7 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData }) => {
             onClose();
         } catch (error) {
             console.error('Error submitting form:', error);
+            setSaveError(error.response?.data?.message || 'No fue posible guardar el producto');
         } finally {
             setLoading(false);
         }
@@ -117,6 +120,7 @@ const ProductForm = ({ isOpen, onClose, onSubmit, initialData }) => {
                 </div>
 
                 <form onSubmit={handleSubmit}>
+                    {saveError&&<p role="alert" className="m-4 border rounded-xl p-3 text-sm">{saveError}</p>}
                     <div className="p-4 sm:p-6 space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>

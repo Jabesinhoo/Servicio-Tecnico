@@ -15,7 +15,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId }) => {
     if(!isOpen||!clienteId)return;
     let active=true;
     const id=typeof clienteId==='object'?clienteId.id:clienteId;
-    const origin=clienteId.origin||'local';
+    const origin=clienteId?.origin||'local';
     setLoading(true);setStats(null);setProfile(null);setError('');setStatsWarning('');
     (async()=>{
       try{
@@ -92,7 +92,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId }) => {
               <div>
                 <p className="text-xs text-gray-500">Documento</p>
                 <p className="text-sm font-medium">
-                  {cliente.tipo_documento?.toUpperCase()} {cliente.documento}
+                  {String(cliente.tipo_documento ?? '').toUpperCase()} {cliente.documento}
                   {cliente.digito_verificacion && `-${cliente.digito_verificacion}`}
                 </p>
               </div>
@@ -189,7 +189,7 @@ const ClienteDetailModal = ({ isOpen, onClose, clienteId }) => {
           )}
 
           {/* Configuración Fiscal */}
-          {clienteId.origin !== 'melissa' && <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+          {clienteId?.origin !== 'melissa' && <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
               <Building className="w-4 h-4 accent-text" />
               Configuración Fiscal

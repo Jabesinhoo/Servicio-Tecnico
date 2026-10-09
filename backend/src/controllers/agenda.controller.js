@@ -298,8 +298,6 @@ exports.getDisponibilidad = async (req, res) => {
             u.apellidos
           ) AS tecnico_nombre,
           u.usuario,
-          EXISTS(SELECT 1 FROM tecnicos_horarios h WHERE h.tecnico_id=u.id AND h.activo=TRUE) AS horario_configurado,
-          COALESCE((SELECT jsonb_agg(jsonb_build_object('inicio',h.hora_inicio::text,'fin',h.hora_fin::text) ORDER BY h.hora_inicio) FROM tecnicos_horarios h WHERE h.tecnico_id=u.id AND h.activo=TRUE AND h.dia_semana=EXTRACT(DOW FROM ${dateParam}::date)::int),'[]'::jsonb) AS turnos_laborales,
           COALESCE(
             (
               SELECT jsonb_agg(
@@ -361,10 +359,10 @@ exports.getDisponibilidad = async (req, res) => {
       result.rows.map((row) => ({
         ...row,
         disponible:
-          row.horario_configurado && row.turnos_laborales.length>0 && !row.en_servicio_ahora &&
+          !row.en_servicio_ahora &&
           row.horarios_ocupados.length === 0,
         motivo:
-          !row.horario_configurado ? 'Sin horario laboral configurado' : !row.turnos_laborales.length ? 'Sin turno laboral para ese día' : row.en_servicio_ahora
+          row.en_servicio_ahora
             ? 'Actualmente en servicio'
             : row.horarios_ocupados.length > 0
               ? 'Tiene servicios programados'

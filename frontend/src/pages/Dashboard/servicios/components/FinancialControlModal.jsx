@@ -83,6 +83,7 @@ const money = (value) => {
 export default function FinancialControlModal({
   service,
   isAdmin,
+  extraOnly=false,
   onClose,
   onRefresh,
 }) {
@@ -514,7 +515,7 @@ export default function FinancialControlModal({
             </p>
 
             <h3 className="text-lg sm:text-xl font-bold">
-              Control financiero
+              {extraOnly?'Cobros de servicios extra':'Control financiero'}
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">

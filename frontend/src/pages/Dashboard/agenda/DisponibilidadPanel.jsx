@@ -67,7 +67,7 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico, onConfigureHorario }) => 
                   <div className="flex items-center gap-2 mt-1">
                     <Clock className="w-3 h-3 accent-text" />
                     <span className="text-xs accent-text">
-                      {(tecnico.turnos_laborales||[]).map(w=>`${w.inicio.slice(0,5)}–${w.fin.slice(0,5)}`).join(', ')}
+                      Sin reservas para este día
                     </span>
                   </div>
                 ) : (
@@ -81,7 +81,6 @@ const DisponibilidadPanel = ({ fecha, onSelectTecnico, onConfigureHorario }) => 
               )}
             </div>
             
-            {!tecnico.horario_configurado&&onConfigureHorario&&<button type="button" className="border rounded-lg min-h-11 p-2 mt-2 text-sm" onClick={e=>{e.stopPropagation();onConfigureHorario(tecnico);}}>Configurar horario laboral</button>}
             {tecnico.horarios_ocupados?.length > 0 && (
               <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500">Ocupado:</p>

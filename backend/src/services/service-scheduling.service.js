@@ -5,7 +5,7 @@ const { randomUUID } = require('crypto');
 const TZ = 'America/Bogota';
 const SEARCH_DAYS = 45;
 const SLOT_MINUTES = 15;
-const {chooseSlot,fitsHours}=require('../domain/service-work-calendar');
+const {chooseFreeSlot}=require('../domain/service-free-calendar');
 
 function normalizeDuration(value, fallback = 60) {
   const n = Number(value);
@@ -129,15 +129,8 @@ async function conflicts(client, technicianIds, startAt, endAt, orderId) {
   return r.rows;
 }
 
-async function workingHours(client, ids) {
- const r=await client.query('SELECT h.tecnico_id,h.dia_semana,h.hora_inicio,h.hora_fin,h.activo FROM tecnicos_horarios h WHERE h.tecnico_id=ANY($1::uuid[]) AND h.activo=TRUE',[ids]);
- const missing=ids.filter(id=>!r.rows.some(h=>h.tecnico_id===id));
- if(missing.length){const users=await client.query('SELECT id,usuario,nombre1,apellidos FROM usuarios WHERE id=ANY($1::uuid[])',[missing]);const names=missing.map(id=>{const user=users.rows.find(u=>u.id===id);return user?[...new Set([user.nombre1,user.apellidos].filter(Boolean))].join(' ')||user.usuario:id;});throw Object.assign(new Error('Falta configurar el horario laboral de: '+names.join(', ')+'. Administración: abre Agenda → Configurar horario (⚙️) para cada técnico. Una agenda sin reservas no significa que exista un turno laboral.'),{code:'WORK_HOURS_REQUIRED',status:409,missing_technician_ids:missing});}
- return r.rows;
-}
-async function assertHours(client,ids,start,end){const rows=await workingHours(client,ids);if(!fitsHours(new Date(start).getTime(),new Date(end).getTime(),ids,rows))throw Object.assign(new Error('El servicio completo debe caber en el horario laboral de todos los técnicos, en hora de Colombia.'),{code:'OUTSIDE_WORK_HOURS',status:409});}
-async function findCommonSlot(client,ids,start,duration,orderId){const rows=await workingHours(client,ids);const r=await client.query(`SELECT technician_id,start_at,end_at FROM service_order_schedule_blocks WHERE technician_id=ANY($1::uuid[]) AND status='active' AND service_order_id<>$2 AND end_at>$3::timestamptz AND start_at<$3::timestamptz+interval '45 days'`,[ids,orderId,start]);const slot=chooseSlot({start,duration,ids,rows,busy:r.rows});if(!slot)throw Object.assign(new Error('No hay un turno común que permita completar la duración del servicio en los próximos 45 días.'),{code:'NO_COMMON_SLOT',status:409});return slot;}
-async function assertExecutionWindow(client,orderId){const {order,team}=await getOrderAndTeam(client,orderId);const ids=team.map(m=>m.technician_id);const r=await client.query(`SELECT now() AS start_at, COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at,now())-started_at))/60),0) AS elapsed FROM service_execution_sessions WHERE service_order_id=$1`,[orderId]);const duration=normalizeDuration(order.duracion_estimada);const remaining=Math.max(1,duration-Number(r.rows[0].elapsed));const start=r.rows[0].start_at;const end=new Date(new Date(start).getTime()+remaining*60000).toISOString();await assertHours(client,ids,start,end);const planned=await client.query(`SELECT MIN(start_at) AS start_at FROM service_order_schedule_blocks WHERE service_order_id=$1 AND status='active'`,[orderId]);if(!planned.rows[0].start_at)throw Object.assign(new Error('Programa el servicio en Agenda antes de iniciarlo.'),{code:'SCHEDULE_REQUIRED',status:409});if(planned.rows[0].start_at && new Date(start)<new Date(planned.rows[0].start_at))throw Object.assign(new Error('El turno programado todavía no ha comenzado. Revisa la agenda en hora de Colombia.'),{code:'SCHEDULE_NOT_STARTED',status:409});if((await conflicts(client,ids,start,end,orderId)).length)throw Object.assign(new Error('El tiempo restante se cruza con otro servicio; reprograma la orden.'),{code:'SCHEDULE_CONFLICT',status:409});await client.query(`UPDATE service_order_schedule_blocks SET start_at=LEAST(start_at,$2::timestamptz),end_at=$3::timestamptz,updated_at=now() WHERE service_order_id=$1 AND status='active'`,[orderId,start,end]);return{duration_minutes:duration,remaining_minutes:remaining};}
+async function findCommonSlot(client,ids,start,duration,orderId){const r=await client.query(`SELECT technician_id,start_at,end_at FROM service_order_schedule_blocks WHERE technician_id=ANY($1::uuid[]) AND status='active' AND service_order_id<>$2 AND end_at>$3::timestamptz AND start_at<$3::timestamptz+interval '45 days'`,[ids,orderId,start]);const slot=chooseFreeSlot({start,duration,ids,busy:r.rows});if(!slot)throw Object.assign(new Error('No hay un intervalo libre para todo el equipo que permita completar la duración del servicio en los próximos 45 días.'),{code:'NO_COMMON_SLOT',status:409});return slot;}
+async function assertExecutionWindow(client,orderId){const {order,team}=await getOrderAndTeam(client,orderId);const ids=team.map(m=>m.technician_id);const r=await client.query(`SELECT now() AS start_at, COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at,now())-started_at))/60),0) AS elapsed FROM service_execution_sessions WHERE service_order_id=$1`,[orderId]);const duration=normalizeDuration(order.duracion_estimada);const remaining=Math.max(1,duration-Number(r.rows[0].elapsed));const start=r.rows[0].start_at;const end=new Date(new Date(start).getTime()+remaining*60000).toISOString();const planned=await client.query(`SELECT MIN(start_at) AS start_at FROM service_order_schedule_blocks WHERE service_order_id=$1 AND status='active'`,[orderId]);if(!planned.rows[0].start_at)throw Object.assign(new Error('Programa el servicio en Agenda antes de iniciarlo.'),{code:'SCHEDULE_REQUIRED',status:409});if(planned.rows[0].start_at && new Date(start)<new Date(planned.rows[0].start_at))throw Object.assign(new Error('El turno programado todavía no ha comenzado. Revisa la agenda en hora de Colombia.'),{code:'SCHEDULE_NOT_STARTED',status:409});if((await conflicts(client,ids,start,end,orderId)).length)throw Object.assign(new Error('El tiempo restante se cruza con otro servicio; reprograma la orden.'),{code:'SCHEDULE_CONFLICT',status:409});await client.query(`UPDATE service_order_schedule_blocks SET start_at=LEAST(start_at,$2::timestamptz),end_at=$3::timestamptz,updated_at=now() WHERE service_order_id=$1 AND status='active'`,[orderId,start,end]);return{duration_minutes:duration,remaining_minutes:remaining};}
 
 async function persistSchedule(
   client,
@@ -152,7 +145,6 @@ async function persistSchedule(
   }
 ) {
   const technicianIds = team.map((m) => m.technician_id);
-  await assertHours(client,technicianIds,startAt,endAt);
 
   await client.query(
     `UPDATE service_order_schedule_blocks

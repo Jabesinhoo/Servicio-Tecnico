@@ -1,5 +1,6 @@
 // backend/src/controllers/product.controller.js
 const pool = require('../db/pool');
+const {cleanProductImages}=require('../domain/product-images');
 
 // Obtener todos los productos
 exports.getAll = async (req, res) => {
@@ -73,11 +74,7 @@ exports.create = async (req, res) => {
     const categoriaIdValue = (categoria_id && categoria_id !== '') ? categoria_id : null;
 
     // Limpiar las imágenes para guardar solo los datos necesarios
-    const imagenesLimpias = (imagenes || []).map(img => ({
-      id: img.id,
-      url: img.url,
-      name: img.name
-    }));
+    const imagenesLimpias = cleanProductImages(imagenes);
 
     const result = await pool.query(`
       INSERT INTO products (
@@ -94,7 +91,7 @@ exports.create = async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating product:', error);
-    res.status(500).json({ message: 'Error al crear producto: ' + error.message });
+    res.status(error.status||500).json({ message: 'Error al crear producto: ' + error.message });
   }
 };
 
@@ -109,11 +106,7 @@ exports.update = async (req, res) => {
     } = req.body;
 
     // Limpiar las imágenes
-    const imagenesLimpias = (imagenes || []).map(img => ({
-      id: img.id,
-      url: img.url,
-      name: img.name
-    }));
+    const imagenesLimpias = imagenes === undefined ? null : cleanProductImages(imagenes);
 
     const result = await pool.query(`
       UPDATE products 
@@ -127,14 +120,14 @@ exports.update = async (req, res) => {
           stock_minimo = COALESCE($8, stock_minimo),
           proveedor = COALESCE($9, proveedor),
           categoria_id = $10,
-          imagenes = $11,
+          imagenes = COALESCE($11::jsonb,imagenes),
           estado = COALESCE($12, estado),
           tipo_descripcion = COALESCE($14,tipo_descripcion),
           "updatedAt" = NOW()
       WHERE id = $13
       RETURNING *
     `, [codigo, nombre, descripcion, tipo, precio_venta, costo,
-        stock_actual, stock_minimo, proveedor, categoria_id, JSON.stringify(imagenesLimpias), estado, id, typeof tipo_descripcion==='string'?tipo_descripcion.trim().slice(0,120):null]);
+        stock_actual, stock_minimo, proveedor, categoria_id, imagenesLimpias===null?null:JSON.stringify(imagenesLimpias), estado, id, typeof tipo_descripcion==='string'?tipo_descripcion.trim().slice(0,120):null]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado' });
@@ -143,7 +136,7 @@ exports.update = async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating product:', error);
-    res.status(500).json({ message: 'Error al actualizar producto: ' + error.message });
+    res.status(error.status||500).json({ message: 'Error al actualizar producto: ' + error.message });
   }
 };
 

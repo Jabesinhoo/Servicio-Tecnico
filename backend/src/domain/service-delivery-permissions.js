@@ -1,18 +1,16 @@
 'use strict';
+const CLOSED_TECHNICAL = new Set(['technical_closed', 'handed_to_direction', 'direction_received', 'validated']);
 function deliveryPermissions({admin,tech,assigned,custodyMine,closureStatus,deliveryStatus,deliveredBy,actorId}) {
- const allowedActor = admin || (tech && assigned && custodyMine);
+ const allowedActor = admin || (tech && assigned);
  const reasons = [];
- if (!admin && !(tech && assigned)) reasons.push('Solo administración o un técnico asignado a esta orden puede gestionar la entrega.');
- else if (!admin && !custodyMine) reasons.push('Debes tener la custodia del equipo para preparar y confirmar su entrega.');
- if (deliveryStatus !== 'delivered' && closureStatus !== 'validated') {
-  if (!closureStatus || closureStatus === 'draft') reasons.push('Primero registra el resultado y confirma el cierre técnico. Si el servicio está en espera, revisa la autorización del cliente.');
-  else reasons.push('Dirección Técnica debe recibir y validar el cierre antes de la entrega al cliente.');
- }
+ if (!allowedActor) reasons.push('Solo administración o un técnico asignado a esta orden puede gestionar la entrega.');
+ else if (!custodyMine && deliveryStatus !== 'delivered') reasons.push('La entrega debe confirmarla quien tiene la custodia del equipo.');
+ if (deliveryStatus !== 'delivered' && !CLOSED_TECHNICAL.has(closureStatus)) reasons.push('Primero finaliza el trabajo con su resultado y fotografías en Cierre técnico.');
  return {
-  can_prepare_delivery: (admin || (tech && assigned)) && deliveryStatus !== 'delivered',
-  can_manage_delivery: allowedActor && closureStatus === 'validated' && deliveryStatus !== 'delivered',
+  can_prepare_delivery: allowedActor && deliveryStatus !== 'delivered',
+  can_manage_delivery: allowedActor && custodyMine && CLOSED_TECHNICAL.has(closureStatus) && deliveryStatus !== 'delivered',
   can_record_satisfaction: deliveryStatus === 'delivered' && (admin || (tech && assigned && deliveredBy === actorId)),
   blocking_reasons: reasons,
  };
 }
-module.exports = {deliveryPermissions};
+module.exports = {deliveryPermissions, CLOSED_TECHNICAL};

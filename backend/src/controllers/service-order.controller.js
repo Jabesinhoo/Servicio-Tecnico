@@ -1841,8 +1841,6 @@ exports.adminWorkBoard = async (req, res) => {
         LEFT JOIN service_order_diagnostics d
           ON d.service_order_id = so.id
 
-        WHERE so.tecnico_id IS NOT NULL
-          AND so.estado::text NOT IN ('cerrada', 'cancelado', 'rechazado')
         ORDER BY
           COALESCE(so.fecha_agendada, so."createdAt") ASC,
           u.nombre1 ASC NULLS LAST

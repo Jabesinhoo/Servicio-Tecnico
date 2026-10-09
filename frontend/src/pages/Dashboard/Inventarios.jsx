@@ -129,11 +129,10 @@ const Inventarios = () => {
   const userRole = user?.rol || 'usuario';
   const canEdit = userRole === 'admin' || userRole === 'inventario';
 
+  if(workshop)return <div className="space-y-4"><button className="border rounded-xl p-3" onClick={()=>setWorkshop(false)}>Volver a crear y editar inventario</button><WorkshopPanel/></div>;
   if (loading) {
-    if(workshop)return <div className="space-y-4"><button className="border rounded-xl p-3" onClick={()=>setWorkshop(false)}>Volver a crear y editar inventario</button><WorkshopPanel/></div>;
   return (
       <div className="flex justify-center items-center h-64">
-      <button className="border rounded-xl px-4 py-3 mb-4" onClick={()=>setWorkshop(true)}>Inventario de taller · uso e historial</button>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
@@ -141,6 +140,7 @@ const Inventarios = () => {
 
   return (
     <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
+      <button className="border rounded-xl px-4 py-3" onClick={()=>setWorkshop(true)}>Inventario de taller · uso e historial</button>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">

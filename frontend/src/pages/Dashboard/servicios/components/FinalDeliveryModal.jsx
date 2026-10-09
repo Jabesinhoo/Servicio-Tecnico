@@ -1,3 +1,4 @@
+import FinancialControlModal from './FinancialControlModal';
 import ResponsiveSignaturePad from '../../../../components/ui/ResponsiveSignaturePad';
 import React, { useCallback, useEffect,  useState } from 'react';
 import {
@@ -44,6 +45,7 @@ export default function FinalDeliveryModal({
   const onCloseRef = React.useRef(onClose);
   onCloseRef.current = onClose;
   const [data, setData] = useState(null);
+  const [showExtraPayment,setShowExtraPayment]=useState(false);
   const [financialControl, setFinancialControl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -83,17 +85,10 @@ export default function FinalDeliveryModal({
       setLoading(true);
       setError('');
 
-      const [response, financialResponse] = await Promise.all([
-        api.get(`/api/service-orders/${service.id}/delivery`),
-        api
-          .get(`/api/service-orders/${service.id}/financial`)
-          .catch(() => null),
-      ]);
-
+      const response = await api.get(`/api/service-orders/${service.id}/delivery`);
       const payload = response.data?.data || null;
-      const financialPayload = financialResponse?.data?.data || null;
-
       setData(payload);
+      const financialPayload = {ready_for_delivery:payload?.extra_financial?.ready !== false};
       setFinancialControl(financialPayload);
 
       const order = payload?.order || {};
@@ -109,8 +104,7 @@ export default function FinalDeliveryModal({
       setFinalConditionVerified(Boolean(delivery.final_condition_verified));
       setAccessoriesVerified(Boolean(delivery.accessories_verified));
       setFinancialClearance(
-        Boolean(delivery.financial_clearance) ||
-          Boolean(financialPayload?.ready_for_delivery)
+        Boolean(delivery.financial_clearance)
       );
       setFinancialNote(delivery.financial_note || '');
       setThirdPartyAuthorizationNote(delivery.third_party_authorization_note || '');
@@ -179,15 +173,17 @@ export default function FinalDeliveryModal({
   const canSatisfaction = data?.permissions?.can_record_satisfaction === true;
   const custodyMine = data?.current_custody_holder === currentUserId;
 
-  const hasFinancialControl =
-    Boolean(
-      financialControl?.control
-    );
+  const financialRequired = data?.extra_financial?.required === true;
+  const financialReady = data?.extra_financial?.ready !== false;
+  const closureReady = ['technical_closed','handed_to_direction','direction_received','validated'].includes(closure?.status);
 
-  const financialReady =
-    Boolean(
-      financialControl?.ready_for_delivery
-    );
+  const whatsappUrl = () => {
+    let number = String(receiverPhone || order.client_phone || '').replace(/\D/g,'');
+    if (number.length===10 && number.startsWith('3')) number='57'+number;
+    if(number.length<10||number.length>15){setError('Revisa el teléfono del cliente para abrir WhatsApp.');return '';}
+    return 'https://wa.me/'+number+'?text='+encodeURIComponent('Hola '+(order.client_name||receiverName)+', sobre tu servicio '+(service.codigo_os||'')+'. Te compartiremos el acta de entrega.');
+  };
+  const openWhatsApp = () => {const url=whatsappUrl();if(url)window.open(url,'_blank','noopener,noreferrer');};
 
   const saveDraft = async () => {
     await api.put(`/api/service-orders/${service.id}/delivery`, {
@@ -279,6 +275,12 @@ export default function FinalDeliveryModal({
   const confirm = () =>
     run(async () => {
       await saveDraft();
+      if (hasInk && canvas) {
+        const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+        if(!blob)throw new Error('No fue posible guardar la firma.');
+        await api.post(`/api/service-orders/${service.id}/delivery/signature`,blob,{headers:{'Content-Type':'image/png'}});
+        setClearToken(value=>value+1);
+      } else if (!delivery.signature_storage_path && !signatureUrl) throw new Error('Firma el acta antes de confirmar la entrega.');
       await api.post(`/api/service-orders/${service.id}/delivery/confirm`);
     });
 
@@ -386,7 +388,7 @@ export default function FinalDeliveryModal({
             <p className="text-xs uppercase tracking-wide font-semibold accent-text">{service.codigo_os}</p>
             <h3 className="text-lg sm:text-xl font-bold">Entrega final al cliente</h3>
             <p className="text-sm text-slate-500 mt-1">
-              Notificación, receptor, firma, custodia y cierre definitivo.
+              Receptor, firma y entrega definitiva. Compartir por WhatsApp es opcional.
             </p>
           </div>
           <button type="button" onClick={onClose} className="w-10 h-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0">
@@ -408,15 +410,12 @@ export default function FinalDeliveryModal({
             <div className="py-12 text-center text-slate-500">Cargando...</div>
           ) : (
             <>
-              <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
-                  <p className="text-xs text-slate-500">Dirección Técnica</p>
-                  <p className="font-semibold mt-1">{closure?.status === 'validated' ? 'Validado' : closure?.status || 'Pendiente'}</p>
+                  <p className="text-xs text-slate-500">Cierre técnico</p>
+                  <p className="font-semibold mt-1">{closureReady ? 'Trabajo finalizado' : 'Pendiente'}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
-                  <p className="text-xs text-slate-500">Notificaciones</p>
-                  <p className="font-semibold mt-1">{notifications.length}</p>
-                </div>
+
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
                   <p className="text-xs text-slate-500">Custodia</p>
                   <p className="font-semibold mt-1">
@@ -431,95 +430,8 @@ export default function FinalDeliveryModal({
                 </div>
               </section>
 
-              {canEdit && (
-                <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
-                  <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 accent-text"/>
-                    <h4 className="font-bold">Notificar al cliente</h4>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                    <label>
-                      <span className="text-sm font-semibold">Canal</span>
-                      <select value={channel} onChange={(e) => setChannel(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3">
-                        <option value="whatsapp">WhatsApp</option>
-                        <option value="email">Correo</option>
-                        <option value="phone">Llamada</option>
-                        <option value="sms">SMS</option>
-                        <option value="in_person">Presencial</option>
-                        <option value="other">Otro</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span className="text-sm font-semibold">Nombre</span>
-                      <input value={recipientName} onChange={(e) => setRecipientName(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3"/>
-                    </label>
-                    <label>
-                      <span className="text-sm font-semibold">Contacto</span>
-                      <input value={recipientContact} onChange={(e) => setRecipientContact(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3"/>
-                    </label>
-                    <label>
-                      <span className="text-sm font-semibold">Referencia</span>
-                      <input value={notificationReference} onChange={(e) => setNotificationReference(e.target.value)} placeholder="Ej: WhatsApp 3:42 pm" className="mt-1 w-full min-h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3"/>
-                    </label>
-                  </div>
-
-                  <textarea rows={2} value={notificationNote} onChange={(e) => setNotificationNote(e.target.value)} placeholder="Observación..." className="mt-3 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2"/>
-
-                  <button type="button" disabled={saving} onClick={notifyClient} className="mt-3 w-full sm:w-auto min-h-11 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-semibold px-4 flex items-center justify-center gap-2">
-                    <Send className="w-4 h-4"/> Registrar notificación
-                  </button>
-                </section>
-              )}
-
-              <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-                <h4 className="font-bold">Historial de notificaciones</h4>
-                <div className="mt-3 space-y-2">
-                  {notifications.map((item) => (
-                    <div key={item.id} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 text-sm">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                        <strong>{item.channel}</strong>
-                        <span className="text-xs text-slate-500">{fmt(item.notified_at)}</span>
-                      </div>
-                      <p className="mt-1">{item.recipient_name || 'Cliente'} · {item.recipient_contact || 'Sin contacto'}</p>
-                      {(item.reference || item.note) && (
-                        <p className="mt-1 text-slate-500 whitespace-pre-wrap">{item.reference || item.note}</p>
-                      )}
-                    </div>
-                  ))}
-                  {notifications.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-center text-sm text-slate-500">
-                      No hay notificaciones registradas.
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {hasFinancialControl && (
-                <section
-                  className={`rounded-2xl border p-4 ${
-                    financialReady
-                      ? 'accent-border dark:accent-border accent-soft dark:accent-soft'
-                      : financialControl?.control?.clearance_status === 'blocked'
-                        ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30'
-                        : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30'
-                  }`}
-                >
-                  <p className="font-bold">
-                    Control financiero V17:{' '}
-                    {financialReady
-                      ? 'Liberado'
-                      : financialControl?.control?.clearance_status === 'blocked'
-                        ? 'Bloqueado'
-                        : 'Pendiente'}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                    {financialReady
-                      ? 'La liberación financiera ya está respaldada por el historial financiero de la OS.'
-                      : 'Debes resolver el Control financiero de la OS antes de confirmar la entrega final.'}
-                  </p>
-                </section>
-              )}
+              <section className="rounded-xl border p-4 text-sm"><p>Después de confirmar la entrega, genera el acta en Documentos PDF. Puedes descargarla y adjuntarla al chat del cliente.</p><button type="button" onClick={openWhatsApp} className="mt-3 min-h-11 border rounded-xl px-4 flex gap-2 items-center"><Send className="w-4 h-4"/>Abrir WhatsApp del cliente</button><p className="mt-2 text-xs text-slate-500">Abrir el chat no envía el acta ni registra un envío.</p></section>
+              {financialRequired && <section className="rounded-xl border p-4"><p className="font-semibold">Cobros de servicios extra: {financialReady?'Revisados':'Pendientes de revisión por administración'}</p><p className="text-sm mt-1">Este control corresponde a trabajos adicionales aprobados, no al servicio principal.</p>{isAdmin&&<button type="button" className="mt-2 underline" onClick={()=>setShowExtraPayment(true)}>Revisar cobros extra</button>}</section>}
 
               <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
                 <div className="flex items-center gap-2">
@@ -552,14 +464,6 @@ export default function FinalDeliveryModal({
                     [identityVerified,setIdentityVerified,'Identidad del receptor verificada',false],
                     [finalConditionVerified,setFinalConditionVerified,'Estado final del equipo verificado',false],
                     [accessoriesVerified,setAccessoriesVerified,'Accesorios entregados y verificados',false],
-                    [
-                      hasFinancialControl ? financialReady : financialClearance,
-                      setFinancialClearance,
-                      hasFinancialControl
-                        ? 'Liberación financiera respaldada por Control V17'
-                        : 'Liberación financiera confirmada',
-                      hasFinancialControl,
-                    ],
                   ].map(([checked,setter,label,locked]) => (
                     <label key={label} className="min-h-12 rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-start gap-3">
                       <input
@@ -574,10 +478,6 @@ export default function FinalDeliveryModal({
                   ))}
                 </div>
 
-                <label className="mt-3 block">
-                  <span className="text-sm font-semibold">Observación financiera</span>
-                  <textarea disabled={!canEdit} rows={2} value={financialNote} onChange={(e) => setFinancialNote(e.target.value)} placeholder="Caja, crédito autorizado, saldo validado..." className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 disabled:opacity-70"/>
-                </label>
 
                 {receiverType === 'third_party' && (
                   <div className="mt-4 rounded-xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
@@ -665,7 +565,7 @@ export default function FinalDeliveryModal({
                       La custodia actual pertenece a otro usuario. Debe confirmar la entrega quien tenga la custodia.
                     </div>
                   )}
-                  <button type="button" disabled={saving || !custodyMine || data?.permissions?.can_manage_delivery !== true || !(hasFinancialControl ? financialReady : financialClearance)} onClick={confirm} className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2">
+                  <button type="button" disabled={saving || !custodyMine || data?.permissions?.can_manage_delivery !== true || !financialReady} onClick={confirm} className="w-full min-h-12 rounded-xl accent-fill hover:accent-fill disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2">
                     <PackageCheck className="w-5 h-5"/> Confirmar entrega final y cerrar OS
                   </button>
                 </section>
@@ -713,12 +613,12 @@ export default function FinalDeliveryModal({
                 </>
               )}
 
-              {delivery.status !== 'delivered' && (data?.permissions?.blocking_reasons?.length > 0 || !(hasFinancialControl ? financialReady : financialClearance)) && (
+              {delivery.status !== 'delivered' && (data?.permissions?.blocking_reasons?.length > 0 || !financialReady) && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-sm text-slate-500">
-                  <p className="font-semibold">Pasos pendientes para confirmar la entrega</p><p className="mt-2">Puedes guardar los datos del receptor y la firma como borrador mientras completas los pasos pendientes.</p>{!(hasFinancialControl ? financialReady : financialClearance)&&<p className="mt-2">Control financiero debe liberar la orden antes de confirmar la entrega.</p>}
+                  <p className="font-semibold">Pasos pendientes para confirmar la entrega</p><p className="mt-2">Puedes guardar los datos del receptor y la firma como borrador mientras completas los pasos pendientes.</p>{!financialReady&&<p className="mt-2">{data?.extra_financial?.authorization_pending?'Registra la decisión del cliente sobre el servicio extra pendiente.':'Administración debe revisar los cobros de servicios extra antes de confirmar la entrega.'}</p>}
                   {service.authorization_status==='pending'&&<p className="mt-2">Está pendiente la decisión del cliente sobre la autorización solicitada. {onOpenAuthorization&&<button type="button" onClick={()=>onOpenAuthorization(service)} className="underline">Revisar autorización</button>}</p>}
                   {(data?.permissions?.blocking_reasons || ['Carga de nuevo la orden para consultar los pasos pendientes.']).map((reason,index)=><p key={index} className="mt-2">{reason}</p>)}
-                  {closure?.status!=='validated'&&onOpenClosure&&<button type="button" onClick={()=>onOpenClosure(service)} className="mt-3 min-h-11 rounded-xl border px-4 font-semibold">{isAdmin?'Revisar cierre / Dirección Técnica':'Abrir cierre técnico'}</button>}
+                  {!closureReady&&onOpenClosure&&<button type="button" onClick={()=>onOpenClosure(service)} className="mt-3 min-h-11 rounded-xl border px-4 font-semibold">Abrir cierre técnico</button>}
                 </div>
               )}
             </>
@@ -731,6 +631,7 @@ export default function FinalDeliveryModal({
           </button>
         </footer>
       </section>
+      {showExtraPayment&&<FinancialControlModal extraOnly service={service} isAdmin={isAdmin} onClose={()=>setShowExtraPayment(false)} onRefresh={load}/>}
     </div>
   );
 }

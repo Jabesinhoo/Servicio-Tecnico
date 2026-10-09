@@ -2,6 +2,8 @@
 // Actualizar la función handleFiles para comprimir imágenes
 
 import React, { useState, useCallback } from 'react';
+import InventoryImage from './InventoryImage';
+import {inventoryImages} from '../inventoryImages';
 import { X, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
 
 // Función para comprimir imagen
@@ -33,6 +35,7 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => 
         ctx.drawImage(img, 0, 0, width, height);
         
         canvas.toBlob((blob) => {
+          if(!blob){reject(new Error('No fue posible convertir la foto'));return;}
           resolve({
             blob,
             name: file.name,
@@ -48,6 +51,7 @@ const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => 
 };
 
 const ProductImageUpload = ({ images = [], onChange, disabled = false }) => {
+  images=inventoryImages(images);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -73,6 +77,7 @@ const ProductImageUpload = ({ images = [], onChange, disabled = false }) => {
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
     handleFiles(files);
+    e.target.value='';
   };
 
   const handleFiles = async (files) => {
@@ -117,13 +122,14 @@ const ProductImageUpload = ({ images = [], onChange, disabled = false }) => {
         {images.map((img, idx) => (
           <div key={img.id} className="relative group">
             <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-              <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+              <InventoryImage image={img} alt={img.name} className="w-full h-full object-cover" />
             </div>
             <button
               type="button"
               onClick={() => removeImage(idx)}
-              className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-100 transition-opacity"
               disabled={disabled}
+              aria-label={"Quitar foto "+(img.name||idx+1)}
             >
               <Trash2 className="w-3 h-3" />
             </button>

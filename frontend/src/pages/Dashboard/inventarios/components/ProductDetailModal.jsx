@@ -2,14 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package, DollarSign, AlertTriangle, Tag, Building, Image as ImageIcon, ChevronLeft, ChevronRight, Wrench } from 'lucide-react';
 import api from '../../../../services/api';
+import WorkshopPanel from '../WorkshopPanel';
+import InventoryImage from './InventoryImage';
+import {inventoryImages} from '../inventoryImages';
 
 const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
+  const [showHistory,setShowHistory]=useState(false);
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     if (isOpen && productId) {
+      setShowHistory(false);
       fetchProduct();
     }
   }, [isOpen, productId]);
@@ -49,14 +54,14 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
   };
 
   const nextImage = () => {
-    if (product?.imagenes?.length > 0) {
-      setCurrentImageIndex((prev) => (prev + 1) % product.imagenes.length);
+    if (inventoryImages(product?.imagenes).length > 0) {
+      setCurrentImageIndex((prev) => (prev + 1) % inventoryImages(product.imagenes).length);
     }
   };
 
   const prevImage = () => {
-    if (product?.imagenes?.length > 0) {
-      setCurrentImageIndex((prev) => (prev - 1 + product.imagenes.length) % product.imagenes.length);
+    if (inventoryImages(product?.imagenes).length > 0) {
+      setCurrentImageIndex((prev) => (prev - 1 + inventoryImages(product.imagenes).length) % inventoryImages(product.imagenes).length);
     }
   };
 
@@ -76,7 +81,7 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
 
   if (!product) return null;
 
-  const imagenes = product.imagenes || [];
+  const imagenes = inventoryImages(product.imagenes);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/50">
@@ -94,13 +99,14 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
           </button>
         </div>
 
+        <div className="p-4"><button type="button" className="border rounded-xl p-3" onClick={()=>setShowHistory(v=>!v)}>{showHistory?'Ocultar historial de uso':'Ver historial de uso y devoluciones'}</button>{showHistory&&<div className="mt-4"><WorkshopPanel productId={productId}/></div>}</div>
         <div className="p-4 sm:p-6 space-y-6">
           {/* Imágenes del producto */}
           {imagenes.length > 0 && (
             <div className="bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
               <div className="relative">
-                <img 
-                  src={imagenes[currentImageIndex]?.url || imagenes[0]?.url} 
+                <InventoryImage
+                  image={imagenes[currentImageIndex] || imagenes[0]} 
                   alt={product.nombre}
                   className="w-full h-64 object-contain bg-white dark:bg-gray-900"
                 />
@@ -164,6 +170,36 @@ const ProductDetailModal = ({ isOpen, onClose, productId, onRefresh }) => {
               <p className="text-sm font-medium text-gray-900 dark:text-white">
                 {product.proveedor || '—'}
               </p>
+            </div>
+          </div>
+
+          {/* Precios */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-green-600" />
+              Información de Precios
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500">Precio de Venta</p>
+                <p className="text-xl font-bold text-green-600">
+                  ${Number(product.precio_venta).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Costo</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  ${Number(product.costo).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Margen de Ganancia</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {product.precio_venta > 0 
+                    ? Math.round(((product.precio_venta - product.costo) / product.precio_venta) * 100) 
+                    : 0}%
+                </p>
+              </div>
             </div>
           </div>
 

@@ -418,12 +418,6 @@ const ServiceCard = ({
             </span>
           )}
 
-          {service.diagnosis_status && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium accent-soft accent-text dark:accent-soft dark:accent-text">
-              <FileText className="w-3.5 h-3.5" />
-              Diagnóstico {service.diagnosis_status === 'confirmed' ? 'confirmado' : 'en borrador'}
-            </span>
-          )}
 
           {service.authorization_status && (
             <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${
@@ -450,7 +444,7 @@ const ServiceCard = ({
 
           <button type="button" onClick={()=>onWorkshop(service)} className="min-h-11 border rounded-xl px-4 font-semibold">Ítems de taller y materiales</button>
           <button type="button" onClick={() => onClosure(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
-            <PackageCheck className="w-4 h-4" /> Cierre / Dirección Técnica
+            <PackageCheck className="w-4 h-4" /> Finalizar trabajo / cierre
           </button>
 
           <button type="button" onClick={() => onFinalDelivery(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
@@ -482,15 +476,10 @@ const ServiceCard = ({
               <PenLine className="w-4 h-4" /> Acta de recibo
             </button>
           )}
-          {(service.diagnosis_status || Number(service.diagnosis_evidence_count || 0) > 0) && (
-            <button type="button" onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2 sm:col-span-2">
-              <FileText className="w-4 h-4" /> Diagnóstico / resultado
-            </button>
-          )}
 
-          {service.diagnosis_status === 'confirmed' && (
+          {service.estado !== 'cerrada' && (
             <button type="button" onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold p-3 flex flex-wrap items-center justify-center gap-2 sm:col-span-2">
-              <BadgeCheck className="w-4 h-4" /> Autorización del cliente
+              <BadgeCheck className="w-4 h-4" /> Servicio extra
             </button>
           )}
         </div>
@@ -512,15 +501,11 @@ const ServiceCard = ({
 
       {!isAdmin && !service.creator_view_only && ['en_ejecucion', 'en_espera'].includes(service.estado) && service.has_custody && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" disabled={busy} onClick={() => onEvidence(service, 'diagnosis')} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
-            <Camera className="w-4 h-4" /> Evidencias diagnóstico
-          </button>
-          <button type="button" disabled={busy} onClick={() => onDiagnosis(service)} className="min-h-11 rounded-xl border accent-border dark:accent-border accent-text dark:accent-text font-semibold p-3 flex flex-wrap items-center justify-center gap-2">
-            <FileText className="w-4 h-4" /> Diagnóstico / resultado
-          </button>
-          {service.diagnosis_status === 'confirmed' && (
+
+
+          {service.estado !== 'cerrada' && (
             <button type="button" disabled={busy} onClick={() => onAuthorization(service)} className="min-h-11 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold p-3 flex flex-wrap items-center justify-center gap-2 sm:col-span-2">
-              <BadgeCheck className="w-4 h-4" /> Autorización del cliente
+              <BadgeCheck className="w-4 h-4" /> Servicio extra
             </button>
           )}
         </div>
@@ -1806,7 +1791,7 @@ const TechnicalClosureModal = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const loadClosure = useCallback(async () => {
+  const loadClosure = useCallback(async ({preserveDraft=false}={}) => {
     if (!service?.id) return;
 
     try {
@@ -1822,6 +1807,7 @@ const TechnicalClosureModal = ({
 
       const closure = payload?.closure || {};
 
+      if (!preserveDraft) {
       setChecklist((previous) => ({
         ...previous,
         ...(closure.checklist || {}),
@@ -1840,6 +1826,7 @@ const TechnicalClosureModal = ({
         closure.direction_validation_note ||
         ''
       );
+      }
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -1943,7 +1930,7 @@ const TechnicalClosureModal = ({
         }
       );
 
-      await loadClosure();
+      await loadClosure({preserveDraft:true});
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -1996,6 +1983,10 @@ const TechnicalClosureModal = ({
       setSaving(true);
       setError('');
 
+      if (endpoint === 'technical-close') {
+        await api.put(`/api/service-orders/${service.id}/closure/checklist`, {checklist, final_result:finalResult, final_notes:finalNotes});
+      }
+
       await api.post(
         `/api/service-orders/${service.id}/closure/${endpoint}`,
         body
@@ -2037,7 +2028,7 @@ const TechnicalClosureModal = ({
               {service.codigo_os}
             </p>
             <h3 className="text-lg sm:text-xl font-bold">
-              Cierre técnico y Dirección Técnica
+              Finalizar trabajo
             </h3>
             <div className="mt-2">
               <ClosureStatus
@@ -2092,7 +2083,7 @@ const TechnicalClosureModal = ({
 
               {['draft','rework_required'].includes(closure.status) && (
                 <section className="rounded-xl border accent-border accent-soft p-4 text-sm space-y-3">
-                  <p>Prepara el resultado, las verificaciones y las evidencias. Para confirmar el cierre, la orden debe estar en ejecución y tener diagnóstico confirmado y custodia vigente.</p>
+                  <p>Registra qué hiciste, cómo quedó el equipo y las fotografías finales. Al confirmar se guarda el resultado y se finaliza el trabajo; no necesitas un diagnóstico separado.</p>
                   {!editable && <p>{!isPrimary && !isAdmin ? 'Esta etapa corresponde al técnico principal o a administración.' : 'No se puede preparar el cierre en el estado actual. Revisa la asignación del técnico principal.'}</p>}
                   {editable && orderState !== 'en_ejecucion' && <button type="button" disabled={saving} onClick={resumeService} className="min-h-11 rounded-xl accent-fill px-4 font-semibold">{orderState === 'asignada' ? 'Iniciar servicio para confirmar cierre' : 'Reanudar servicio para confirmar cierre'}</button>}
                   {service.authorization_status === 'pending' && onOpenAuthorization && <button type="button" onClick={()=>onOpenAuthorization(service)} className="min-h-11 rounded-xl border px-4 font-semibold">Revisar autorización pendiente</button>}
@@ -2248,7 +2239,7 @@ const TechnicalClosureModal = ({
 
               <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
                 <h4 className="font-bold">
-                  Flujo de entrega interna
+                  Confirmación del trabajo
                 </h4>
 
                 {['draft','rework_required'].includes(closure.status)&&finalPhotoCount<1&&<p role="status" className="text-sm">Falta una fotografía final para confirmar el cierre. Tómala con la cámara o adjúntala desde tus archivos; un PDF no reemplaza la foto.</p>}
@@ -2291,6 +2282,8 @@ const TechnicalClosureModal = ({
                     </button>
                   )}
 
+                {['technical_closed','handed_to_direction','direction_received','validated'].includes(closure.status) && <div className="rounded-xl border p-3 text-sm"><p>Trabajo finalizado. Puedes generar el acta de cierre técnico y continuar con Entrega final.</p><button type="button" className="mt-2 underline" onClick={()=>{onClose();}}>Volver a la orden</button></div>}
+                <details><summary className="text-sm cursor-pointer">Entrega interna a Dirección Técnica (opcional)</summary>
                 {(isAdmin || isPrimary) &&
                   closure.status ===
                     'technical_closed' && (
@@ -2414,6 +2407,7 @@ const TechnicalClosureModal = ({
                     Dirección Técnica tiene la custodia y está validando el cierre.
                   </div>
                 )}
+                </details>
               </section>
             </>
           )}
@@ -2950,8 +2944,9 @@ const TeamWorkModal = ({
 
               <section>
                 <h4 className="font-bold">
-                  Bitácora de intervención
+                  Actividades realizadas (opcional)
                 </h4>
+                <p className="mt-2 text-sm text-slate-500">Notas de lo que hizo cada técnico: pruebas, instalación, apoyo y resultados. Sirven para consultar quién hizo cada tarea; no reemplazan el resultado final ni son obligatorias para cerrar.</p>
 
                 <div className="mt-3 space-y-2">
                   {logs.map((log) => (
@@ -2992,7 +2987,7 @@ const TeamWorkModal = ({
 
                   {logs.length === 0 && (
                     <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5 text-center text-sm text-slate-500">
-                      Todavía no hay actividades registradas.
+                      Todavía no hay notas de actividades. El técnico puede añadirlas durante la ejecución.
                     </div>
                   )}
                 </div>
@@ -3066,39 +3061,9 @@ const AuthorizationModal = ({
       setLoading(true);
       setError('');
 
-      const [authorizationResponse, diagnosisResponse] =
-        await Promise.all([
-          api.get(`/api/service-orders/${service.id}/authorizations`),
-          api.get(`/api/service-orders/${service.id}/diagnosis`),
-        ]);
-
-      const data = Array.isArray(authorizationResponse.data?.data)
-        ? authorizationResponse.data.data
-        : [];
-
-      setRecords(data);
-
-      const diagnosisData = diagnosisResponse.data?.data || null;
-      setDiagnosis(diagnosisData);
-
-      if (data.length === 0 && diagnosisData) {
-        setRequestForm((previous) => ({
-          ...previous,
-          description:
-            previous.description ||
-            diagnosisData.description ||
-            diagnosisData.functional_result ||
-            '',
-          estimated_amount:
-            previous.estimated_amount ||
-            diagnosisData.approximate_cost ||
-            '',
-          requested_components:
-            previous.requested_components ||
-            diagnosisData.required_components ||
-            '',
-        }));
-      }
+      const authorizationResponse = await api.get(`/api/service-orders/${service.id}/authorizations`);
+      setRecords(Array.isArray(authorizationResponse.data?.data) ? authorizationResponse.data.data : []);
+      setDiagnosis(null);
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -3286,7 +3251,7 @@ const AuthorizationModal = ({
               {service.codigo_os}
             </p>
             <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
-              Autorización del cliente
+              Servicio extra
             </h3>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Trabajos adicionales, reparaciones y repuestos.
@@ -3312,7 +3277,7 @@ const AuthorizationModal = ({
               {diagnosis && (
                 <section className="rounded-2xl border accent-border dark:accent-border accent-soft dark:accent-soft p-4">
                   <p className="text-xs uppercase tracking-wide font-semibold accent-text dark:accent-text">
-                    Diagnóstico confirmado
+                    Antecedente técnico (opcional)
                   </p>
                   <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
                     {diagnosis.description || diagnosis.functional_result || 'Sin descripción'}
@@ -3486,10 +3451,10 @@ const AuthorizationModal = ({
                 </div>
               )}
 
-              {!pending && diagnosis?.status === 'confirmed' && (
+              {!pending && service.estado !== 'cerrada' && (
                 <section className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-4">
                   <h4 className="font-bold text-slate-900 dark:text-white">
-                    {current ? 'Nueva solicitud revisada' : 'Solicitar autorización'}
+                    {current ? 'Nuevo servicio extra' : 'Solicitar servicio extra'}
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -3524,7 +3489,7 @@ const AuthorizationModal = ({
                   </label>
 
                   <button type="button" disabled={saving} onClick={createRequest} className="w-full min-h-12 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold">
-                    Enviar a autorización
+                    Solicitar servicio extra
                   </button>
                 </section>
               )}
@@ -3605,6 +3570,8 @@ export default function MisServicios() {
   const isTechnician = role === 'tecnico';
   const isAdmin = role === 'admin';
   const canOpenModule = isTechnician || isAdmin;
+
+  useEffect(()=>{if(isAdmin){setFilter('todos');setTechnicianFilter('todos');}},[isAdmin]);
 
   const load = useCallback(async (silent = false) => {
     if (!canOpenModule) return;
@@ -3749,6 +3716,7 @@ export default function MisServicios() {
       if (!matchesTech) return false;
 
       if (filter === 'todos') return true;
+      if (filter === 'cerrada' || filter === 'cancelado') return service.estado === filter;
       if (filter === 'pendientes') return service.estado === 'asignada';
       if (filter === 'ejecucion') return service.estado === 'en_ejecucion';
       if (filter === 'espera') return service.estado === 'en_espera';
@@ -3894,7 +3862,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
           </div>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {isAdmin
-              ? 'Consulta en qué orden está cada técnico y el avance operativo de la atención.'
+              ? 'Todos los servicios creados, incluidos cerrados, cancelados y pendientes de asignación. Puedes filtrar por técnico y estado.'
               : 'Órdenes asignadas a tu cuenta y acciones pendientes.'}
           </p>
         </div>
@@ -3979,7 +3947,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
                             <p className="text-xs text-slate-500 truncate">@{tech.usuario || 'sin-usuario'} · {tech.activo === false ? 'Inactivo' : 'Activo'}</p>
                           </div>
                           <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold">
-                            {Number(tech.active_service_count || 0)} OS
+                            {Number(tech.active_service_count || 0)} OS activas
                           </span>
                         </div>
                         <p className={`mt-1 text-[11px] ${badge.cls}`}>
@@ -4010,7 +3978,9 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
             <option value="checklist">Pendientes de checklist</option>
             <option value="ejecucion">En ejecución</option>
             <option value="espera">En espera</option>
-            <option value="todos">Todos</option>
+            <option value="todos">Todos los estados</option>
+            <option value="cerrada">Cerrados</option>
+            <option value="cancelado">Cancelados</option>
           </select>
         </div>
       </section>

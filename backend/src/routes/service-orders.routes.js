@@ -270,6 +270,8 @@ router.get(
   serviceDocumentController.getDocumentFile
 );
 
+router.delete('/service-orders/:id/documents/:documentId',allowRoles('admin','tecnico'),serviceDocumentController.deleteHistoricalDocument);
+
 router.post(
   '/service-orders/:id/documents/:documentId/manual-dispatch',
   allowRoles('admin', 'tecnico'),

@@ -1,4 +1,5 @@
 'use strict';
+const {connectionTarget,resolveTarget,connectionFailure}=require('./worldoffice-connection-config');
 
 const sql = require('mssql');
 
@@ -120,7 +121,7 @@ function assertEnabled() {
 
 function requiredEnv() {
   return [
-    'SQLSERVER_HOST',
+    ...((process.env.SQLSERVER_ADDRESS || process.env.SQLSERVER_HOST) ? [] : ['SQLSERVER_HOST']),
     'SQLSERVER_DATABASE',
     'SQLSERVER_USER',
     'SQLSERVER_PASSWORD',
@@ -173,8 +174,7 @@ function getConfig(invoiceLookup = false) {
   }
 
   return {
-    server:
-      process.env.SQLSERVER_HOST,
+    ...connectionTarget(),
 
     database:
       process.env.SQLSERVER_DATABASE,
@@ -195,9 +195,7 @@ function getConfig(invoiceLookup = false) {
       QUERY_TIMEOUT_MS,
 
     options: {
-      instanceName:
-        process.env.SQLSERVER_INSTANCE ||
-        undefined,
+      ...connectionTarget().options,
 
       encrypt:
         String(
@@ -232,10 +230,8 @@ function getConfig(invoiceLookup = false) {
 async function withConnection(
   fn, invoiceLookup = false
 ) {
-  const connection =
-    new sql.ConnectionPool(
-      getConfig(invoiceLookup)
-    );
+  const config = getConfig(invoiceLookup);
+  const connection = new sql.ConnectionPool(await resolveTarget(config));
 
   try {
     await connection.connect();
@@ -243,6 +239,8 @@ async function withConnection(
     return await fn(
       connection
     );
+  } catch (error) {
+    throw connectionFailure(error, config.server);
   } finally {
     try {
       await connection.close();

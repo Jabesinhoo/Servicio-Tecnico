@@ -1,5 +1,6 @@
 // backend/src/services/worldoffice.service.js
 const sql = require('mssql');
+const {connectionTarget,resolveTarget,connectionFailure}=require('./worldoffice-connection-config');
 const {extractClients}=require('./worldoffice-client-extraction.service');
 const {saveClientMirror}=require('./worldoffice-client-mirror.service');
 require('dotenv').config();
@@ -10,8 +11,6 @@ require('dotenv').config();
 // ============================================================
 
 const requiredSqlServerEnv = [
-    'SQLSERVER_HOST',
-    'SQLSERVER_INSTANCE',
     'SQLSERVER_DATABASE',
     'SQLSERVER_USER',
     'SQLSERVER_PASSWORD',
@@ -26,7 +25,7 @@ for (const key of requiredSqlServerEnv) {
 }
 
 const config = {
-    server: process.env.SQLSERVER_HOST,
+    ...connectionTarget(),
     database: process.env.SQLSERVER_DATABASE,
     user: process.env.SQLSERVER_USER,
     password: process.env.SQLSERVER_PASSWORD,
@@ -40,7 +39,7 @@ const config = {
     ),
 
     options: {
-        instanceName: process.env.SQLSERVER_INSTANCE,
+        ...connectionTarget().options,
 
         encrypt:
             String(process.env.SQLSERVER_ENCRYPT)
@@ -64,21 +63,31 @@ const config = {
 };
 
 let pool = null;
+let connecting = null;
 
-// Conectar a World Office
 const connect = async () => {
-    try {
-        if (pool) {
+    if (pool?.connected) return pool;
+    if (connecting) return connecting;
+    connecting = (async () => {
+        let candidate;
+        try {
+            const target = await resolveTarget(config);
+            console.log('🔄 Conectando a World Office (Melissa)...');
+            candidate = new sql.ConnectionPool(target);
+            candidate.on('error', error => { pool = null; console.error('World Office: conexión interrumpida:', error.code); });
+            await candidate.connect();
+            pool = candidate;
+            console.log('✅ Conectado a World Office');
             return pool;
-        }
-        console.log('🔄 Conectando a World Office (Melissa)...');
-        pool = await sql.connect(config);
-        console.log('✅ Conectado a World Office');
-        return pool;
-    } catch (error) {
-        console.error('❌ Error al conectar:', error.message);
-        throw error;
-    }
+        } catch (error) {
+            await candidate?.close().catch(() => {});
+            pool = null;
+            const failure = connectionFailure(error, config.server);
+            console.error('❌ Error al conectar:', failure.message);
+            throw failure;
+        } finally { connecting = null; }
+    })();
+    return connecting;
 };
 
 // ============================================================

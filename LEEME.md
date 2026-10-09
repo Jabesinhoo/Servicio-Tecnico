@@ -1,14 +1,91 @@
-# Visita, horarios laborales y fotos obligatorias al finalizar — 8 de octubre
+# Fotos de Inventario y listado de administración — 9 de octubre
 
-**Instala esta actualización acumulativa:** detén backend y frontend, extrae el ZIP en la raíz de Servicio-Tecnico y ejecuta `powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1`. Reinicia ambos y recarga el navegador.
+- Fotos: se unifica la visualización en tarjetas, detalle, edición y taller. Admite imágenes guardadas como URL, objeto o lista JSON, resuelve las rutas relativas contra el backend y consulta rutas de imágenes protegidas con la sesión. Las fotos nuevas se guardan comprimidas como contenido permanente y se conservan al editar otros datos del producto.
+- Fotos antiguas: si se guardó un enlace temporal **blob:**, el archivo ya no está disponible después de cerrar aquella sesión. Se muestra **Foto antigua: vuelve a adjuntarla**. Abre **Editar**, quita esa foto, adjunta el archivo original y pulsa **Actualizar**. No se inventa ni recupera una imagen que nunca quedó almacenada. Una ruta o archivo externo inexistente muestra **Foto no disponible**.
+- Administración: **Operación técnica** incluye todos los servicios creados, también cerrados, cancelados y sin técnico principal. Abre por defecto en **Todos los estados** y **Todos los técnicos**. Puedes filtrar activos, cerrados o cancelados. Si seleccionas un técnico solo aparecen las órdenes de ese integrante. Los contadores del directorio dicen **OS activas** para distinguirlos del total histórico. El listado de cada técnico conserva su alcance por asignación.
 
-- **En camino** y **Registrar llegada** quedan bloqueados después de registrarse correctamente y permanecen así al recargar. El servidor impide duplicar esos eventos del mismo técnico. Llegada conserva el registro sin GPS obligatorio; el botón ya no incluye «sin validación GPS».
-- **Agenda vacía no equivale a horario laboral configurado.** Antes Disponibilidad mostraba libre a un técnico sin turnos. Ahora explica si faltan horarios, si ese día no trabaja o si existe otra reserva, y muestra los turnos reales en hora de Colombia. La revisión de creación distingue esas causas y muestra los códigos OS cuando hay cruce de reservas.
-- **Para los dos técnicos del ejemplo:** como administrador entra en Agenda → Configurar horario laboral (o al engranaje de horario) y guarda los días y horas reales de **cada** técnico, principal y apoyo. También puedes hacerlo desde Equipo técnico de la creación, sin perder el formulario. El servicio completo, con la suma de duración de sus tipos, debe caber en un turno común. No se inventa un horario ni se eliminan reservas para permitir iniciar fuera de turno.
-- Guardar horarios intenta programar las órdenes ya asignadas y sin reserva que usan ese técnico. Si todavía falta configurar a otro integrante o no existe un espacio común, la orden sigue pendiente de agenda. Si la programación automática no puede completarse por otro error, el horario ya guardado se conserva. Después de configurar todo el equipo, revisa la fecha reservada en Agenda. Cambia una fecha manual que esté fuera del turno; iniciar mantiene las reglas de tiempo y disponibilidad.
-- **Finalizar trabajo → Evidencias finales:** es obligatoria al menos una fotografía del trabajo terminado (JPG, PNG o WEBP). Usa **Tomar foto** para abrir la cámara cuando el dispositivo lo permita o **Adjuntar archivos** para seleccionar una o varias fotos guardadas. Puedes añadir PDF como soporte; no sustituye la foto. El servidor también exige la fotografía antes de confirmar, y rechaza archivos cuya cabecera no coincide con el formato declarado. Las fotos iniciales de recepción no sustituyen las finales. Después de un reproceso se exige una foto nueva.
+Instalación: detén backend y frontend, extrae el ZIP en la raíz de Servicio-Tecnico y ejecuta:
 
-Validación de esta actualización: **115 pruebas backend aprobadas** y frontend compilado. PostgreSQL embebido: eventos de visita sin duplicados, reserva en hora de Colombia, duración, límites laborales y reparación sin duplicar bloques. Navegador con API simulada: botones persistentes tras recarga; configuración y actualización del horario visible; a 390 px, PDF insuficiente, cámara, selección múltiple y cierre habilitado después de cargar una foto. Estos controles no verifican la base de datos de tu computador; la instalación y configuración de los turnos reales siguen siendo necesarias.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
+```
+
+Reinicia ambos y recarga el navegador. Las correcciones de fotos/listado no requieren una nueva migración SQL; el instalador conserva las migraciones anteriores. Verificación: 135 pruebas de backend, compilación de producción e integración PostgreSQL del tablero con órdenes activas/cerradas/canceladas/sin asignar. Las funciones de historial y evidencias de devolución de la actualización anterior siguen incluidas.
+
+# Historial de herramientas y evidencias de devolución — 9 de octubre
+
+Esta actualización se concentra en Inventario y la explicación de la bitácora. Conserva la confirmación de cierre, custodia y devolución existentes.
+
+- En **Inventario → Inventario de taller · uso e historial** consulta responsable, orden de servicio, asignaciones, cantidades devueltas/consumidas y pendientes. El botón permanece visible después de cargar.
+- En el detalle de un artículo, pulsa **Ver historial de uso y devoluciones**. La consulta se limita a ese artículo y muestra quién registró la devolución y quién tenía la herramienta.
+- Al **Devolver**, puedes adjuntar fotografías o usar **Tomar foto**. La foto se guarda vinculada al movimiento, al servicio y al usuario que la adjuntó. También puedes **Adjuntar evidencia** o **Tomar foto** en una devolución histórica. **Ver foto de devolución** abre la imagen desde el servidor con acceso autenticado.
+- Las fotos son opcionales y las devoluciones anteriores siguen funcionando. Cuando no se adjuntó una imagen se muestra **Sin foto de devolución registrada**. Añadir una fotografía a una devolución histórica no altera su fecha ni vuelve a aumentar stock. Los archivos aceptados son JPG, PNG o WEBP de hasta 10 MB.
+- Excel conserva los datos de uso/devolución y añade responsable y cantidad de fotografías (no incrusta las imágenes).
+- En **Equipo y bitácora**, **Actividades realizadas (opcional)** explica su propósito: notas de cada técnico sobre pruebas, instalación, apoyo y resultados. Se registran durante la ejecución, no sustituyen el resultado final y no son obligatorias para cerrar.
+
+Instalación: detén backend y frontend, extrae el ZIP en la raíz de Servicio-Tecnico y ejecuta:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
+```
+
+El instalador aplica la nueva tabla de fotos y metadata de movimientos sin borrar historial. Reinicia ambos y recarga el navegador. Verificación: 130 pruebas de backend, compilación frontend y prueba de integración con PostgreSQL local de asignación, consumo, devolución y fotografía histórica con permisos. Incluye las correcciones anteriores descritas debajo.
+
+# Finalizar trabajo y entrega al cliente — 8 de octubre
+
+Esta versión simplifica el flujo y sustituye los requisitos anteriores de diagnóstico obligatorio, entrega a Dirección Técnica, notificación al cliente y liberación financiera del servicio principal.
+
+1. Técnico → **Finalizar trabajo**: marca las comprobaciones, escribe el resultado y adjunta al menos una foto final. Pulsa **Confirmar cierre técnico**. El botón guarda también el resultado y checklist; no necesitas guardarlos por separado. Si finalizas antes de la duración estimada, explica el motivo.
+2. **Documentos PDF**: ya puedes generar el **Acta de cierre técnico**.
+3. **Entrega final al cliente**: verifica identidad, estado del equipo y accesorios. Completa receptor, firma y pulsa **Confirmar entrega final y cerrar OS**. La firma recién dibujada se guarda al confirmar. Debe hacerlo quien tenga la custodia; las herramientas prestadas deben estar devueltas/regularizadas. Para un tercero conserva el soporte de autorización.
+4. **Documentos PDF**: genera el **Acta de entrega final**. El técnico asignado puede generarla después de confirmar la entrega.
+
+**Servicio extra** es opcional y no exige diagnóstico previo. Se usa para trabajo adicional que necesita aprobación. Una solicitud pendiente de aprobación bloquea finalizar; un extra aprobado con costo requiere revisión financiera posterior a su aprobación antes de entregar. No se muestra «Control financiero V17» ni observación financiera en la entrega del servicio principal y tampoco se declara pagada una factura por omitir ese paso.
+
+**WhatsApp:** abre el chat usando el contacto del cliente y un mensaje preparado. Descarga el PDF y adjúntalo manualmente; abrir el chat no envía archivos ni registra que los hayas enviado.
+
+**Versiones:** el icono de papelera elimina únicamente actas históricas sustituidas, con confirmación. Puede hacerlo administración o quien generó esa versión. La versión vigente se conserva y se registra la eliminación en el historial.
+
+Validación: 125 pruebas de backend; flujo con PostgreSQL y generación real de PDF de cierre y entrega mediante Chromium; prueba de cierre en celular que conserva el resultado al adjuntar evidencia. El paquete contiene también las correcciones anteriores.
+
+# Equipo sin horarios personales, actas y clientes — 8 de octubre
+
+**Esta versión sustituye la exigencia anterior de configurar horarios laborales individuales.** Todos los técnicos de una orden viajan juntos: la reserva se hace para todo el equipo, por toda la duración de sus tipos de servicio, en hora de Colombia y sin cruces con otras órdenes. No se requiere configurar días ni turnos personales. Se retiró «Horario laboral del equipo» del formulario y la configuración de turnos de Agenda. Una reserva de cualquier integrante impide usar ese integrante en otra orden durante el intervalo. El inicio respeta la fecha programada y evita cruces por tiempo restante; no exige horario laboral individual. El instalador intenta reservar las órdenes asignadas que siguen sin agenda.
+
+**Instalación:** detén backend y frontend, extrae el ZIP en la raíz de Servicio-Tecnico y ejecuta:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALAR_MEJORAS.ps1
+```
+
+Reinicia ambos y recarga el navegador.
+
+- Actas: se quitó `equipment_id` de la consulta de autorizaciones de entrega, pues esos soportes pertenecen al receptor y la tabla existente no tiene esa columna. Las evidencias de recepción conservan su relación con el equipo. No se requiere añadir una columna ficticia a la tabla de entrega.
+- Detalles del cliente: World Office puede devolver el tipo de identificación como número. La vista ya no intenta llamar `toUpperCase()` sobre ese número. También tolera listas de relaciones y firmas vacías o con registros inválidos, para que abrir el ojito no derribe la página.
+- En camino y Registrar llegada siguen bloqueándose después de registrarlos, incluso al recargar; el servidor evita duplicados. El GPS sigue opcional.
+- Finalizar trabajo exige al menos una foto final JPG, PNG o WEBP, tomada con **Tomar foto** o adjuntada desde archivos. Se admiten varias y PDF adicional. El servidor también exige la foto, y un reproceso requiere una nueva.
+
+## Conexión World Office: ENOTFOUND tecnoserver
+
+El error indica que el computador no resuelve el nombre del servidor; no es un resultado vacío de la búsqueda ni un cambio del número de factura. El paquete conserva las credenciales y el host actual de `.env`. Ambas consultas (sincronización y facturas) usan la misma resolución de dirección. Si DNS falla en Windows, se intenta la resolución LAN/NetBIOS que usa `ping.exe`. Si tampoco encuentra el servidor, es necesario estar en la red/VPN con acceso a TECNOSERVER o indicar una IP real accesible.
+
+Desde backend ejecuta:
+
+```powershell
+node .\scripts\diagnose-worldoffice-connection.js --save
+```
+
+Comprueba conexión, autenticación y permiso de lectura de facturas en Melissa, Power_ON y SAS. **Solo si logra conectar** guarda la dirección comprobada en `SQLSERVER_ADDRESS`, con respaldo local de `.env`; conserva usuario, contraseña y demás ajustes. Reinicia backend después de un guardado exitoso. Si imprime que no encuentra el servidor, sustituye `IP_DEL_SERVIDOR` por la IP real de TECNOSERVER y ejecuta:
+
+```powershell
+node .\scripts\diagnose-worldoffice-connection.js --address IP_DEL_SERVIDOR --save
+```
+
+Si conoces el puerto TCP real de la instancia, añade `--port PUERTO_REAL`; no se supone 1433 para una instancia nombrada. Al indicar un puerto, la conexión es TCP directa y no depende de SQL Server Browser. Sin puerto se conserva `SQLSERVER_INSTANCE`. Si falla la autenticación o conexión no se guardan cambios. No publica la contraseña. La factura sigue opcional y el formulario informa desconexión en lugar de fingir que no hay resultados.
+
+**Límite de comprobación:** no hay acceso desde este entorno al servidor SQL Server de tu red. No se inventó su IP ni se puede confirmar aquí que la red/VPN actual llegue a TECNOSERVER. El diagnóstico verifica eso en tu computador.
+
+Validación: **119 pruebas backend aprobadas**, frontend compilado; PostgreSQL embebido sin tabla de horarios personales, dos técnicos reservados al mismo tiempo, cruce del apoyo rechazado con rollback, programación automática/reparación e inicio; snapshot del acta contra una tabla de evidencias de entrega sin `equipment_id`; navegador a 390 px con tipo de documento numérico, teléfono y relaciones irregulares sin excepción, y Agenda sin configurar horarios. Las pruebas de conexión usan resolución simulada; la conectividad real se comprueba con el diagnóstico anterior.
 
 # Corrección de materiales, fotos, agenda y GPS — 8 de octubre
 
@@ -17,8 +94,8 @@ Validación de esta actualización: **115 pruebas backend aprobadas** y frontend
 - Solicitar materiales guarda el técnico responsable exigido por la tabla existente. Se comprobó con `tecnico_id NOT NULL`, conservando la restricción. Acepta uno o varios artículos del inventario o externos en el mismo servicio.
 - En Solicitar material, elige el artículo o escribe el externo y usa **Añadir a lista**; repite para los demás y pulsa **Solicitar**. Puedes quitar entradas antes del envío. Máximo 50 artículos por envío, cada uno con cantidad, unidad/especificaciones y observaciones. El envío es una transacción: si uno no se puede registrar, no queda una lista parcial. El creador recibe el detalle y decide por artículo; pedir o aprobar no descuenta stock.
 - Las fotos nuevas del inventario se comprimen y guardan como imagen persistente. Antes se guardaba una URL `blob:` del navegador, que expiraba al recargar. También se conservan todas las fotos seleccionadas juntas. **Las fotos antiguas cuyo enlace temporal ya venció deben volver a adjuntarse editando el producto**, pues esos enlaces no contienen una copia recuperable de la imagen. El taller muestra Foto no disponible para esos enlaces y resuelve rutas relativas contra el backend.
-- Agenda usa los bloques activos como reserva real y muestra fecha/hora de Colombia. La migración recupera la fecha faltante de las reservas existentes. El instalador intenta programar las órdenes **asignadas** que carecen de bloque, usando duración de los tipos, horario laboral, todo el equipo y evitando cruces. No altera servicios en ejecución ni cancelados. Si falta horario o no hay turno común, muestra **Agenda pendiente OS-...: ...** con el motivo; configura los horarios en Técnicos y programa la orden desde Agenda o repite el instalador. No se inventan horarios. Las nuevas aprobaciones ya no terminan como asignadas si fracasa la reserva: informan el motivo y la orden permanece pendiente de aprobar/programar. La solicitud y el acta ya creadas se conservan para reintentar.
-- Llegada y custodia no exigen GPS preciso, aunque el entorno anterior conserve `CUSTODY_REQUIRE_PRECISE_LOCATION=true`. Se registra llegada declarada cuando no se puede validar el punto y llegada validada cuando sí se confirma. La custodia sigue exigiendo técnico asignado, aceptación y que no la tenga otro usuario. Iniciar trabajo conserva las reglas de agenda, horario y recepción necesarias.
+- Agenda usa los bloques activos como reserva real y muestra fecha/hora de Colombia. La migración recupera la fecha faltante de las reservas existentes. El instalador intenta programar las órdenes **asignadas** que carecen de bloque, usando duración de los tipos, todo el equipo y evitando cruces. No altera servicios en ejecución ni cancelados. Si no hay intervalo libre común, muestra **Agenda pendiente OS-...: ...** con el motivo; programa la orden desde Agenda o repite el instalador. Las nuevas aprobaciones ya no terminan como asignadas si fracasa la reserva: informan el motivo y la orden permanece pendiente de aprobar/programar. La solicitud y el acta ya creadas se conservan para reintentar.
+- Llegada y custodia no exigen GPS preciso, aunque el entorno anterior conserve `CUSTODY_REQUIRE_PRECISE_LOCATION=true`. Se registra llegada declarada cuando no se puede validar el punto y llegada validada cuando sí se confirma. La custodia sigue exigiendo técnico asignado, aceptación y que no la tenga otro usuario. Iniciar trabajo conserva las reglas de agenda, cruces y recepción necesarias.
 - Los avisos nuevos traducen en_camino y los estados de materiales y no repiten nombre/segundo nombre/apellido si los campos son idénticos. Los avisos antiguos conservan su registro original.
 
 Validación: 108 pruebas backend; compilación de frontend; PostgreSQL embebido con esquema que exige técnico, solicitudes mixtas de varios artículos, rollback de lista inválida, notificaciones e historial; reserva real con fecha/hora de Colombia, duración y horarios; reparación de agenda sin duplicar reservas; llegada y custodia sin GPS con sus controles de permisos. Navegador con API simulada a 320, 390, 768, 1366, 1920 y 3840 px; fecha del turno visible, custodia habilitada sin GPS, lista mixta y aprobación; dos fotos comprimidas conservadas tras JSON y recarga.

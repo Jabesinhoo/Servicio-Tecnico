@@ -459,7 +459,6 @@ async function loadSnapshot(
         SELECT
           original_name,
           category,
-          equipment_id,
           note,
           created_at
         FROM
@@ -687,18 +686,6 @@ function assertPrerequisites(
     documentType ===
     'final_delivery'
   ) {
-    if (!isAdmin(req)) {
-      const error =
-        new Error(
-          'Solo administración puede generar el acta formal de entrega final.'
-        );
-
-      error.code =
-        'ADMIN_REQUIRED';
-
-      throw error;
-    }
-
     if (
       snapshot.delivery
         ?.status !==
@@ -793,8 +780,7 @@ exports.listDocuments =
         data: {
           order,
           dispatches: dispatches.rows,
-          documents:
-            result.rows,
+          documents: result.rows.map(document=>({...document,can_delete:document.status==='superseded'&&(isAdmin(req)||document.generated_by===req.user.id)})),
           branding_options:brandingOptions(),
           delivery_status:(await client.query('SELECT status FROM service_order_deliveries WHERE service_order_id=$1',[order.id])).rows[0]?.status||'draft',
           closure_status:(await client.query('SELECT status FROM service_order_closures WHERE service_order_id=$1',[order.id])).rows[0]?.status||'draft',
@@ -1496,4 +1482,27 @@ exports.previewDocument = async (req, res) => {
   console.error('Error preparing service document preview:', error);
   return res.status(error.status || 500).json({message:error.status ? error.message : 'No fue posible preparar la vista previa. Revisa el error del backend.'});
  } finally { client.release(); }
+};
+
+exports.deleteHistoricalDocument = async (req,res) => {
+ const client=await pool.connect();let filePath;
+ try {
+  await client.query('BEGIN');
+  const order=await getOrder(client,req.params.id);
+  if(!order)return res.status(404).json({message:'Orden no encontrada'});
+  if(!(await canReadOrder(client,req,order)))return res.status(403).json({message:'No autorizado para esta orden'});
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[order.id+':documents']);
+  const result=await client.query('SELECT * FROM service_order_documents WHERE id=$1 AND service_order_id=$2 FOR UPDATE',[req.params.documentId,order.id]);
+  const document=result.rows[0];
+  if(!document)return res.status(404).json({message:'Documento no encontrado'});
+  if(document.status!=='superseded')return res.status(409).json({code:'CURRENT_DOCUMENT_PROTECTED',message:'Solo puedes eliminar versiones anteriores. La versión vigente se conserva.'});
+  if(!isAdmin(req)&&document.generated_by!==req.user.id)return res.status(403).json({message:'Solo administración o quien generó esta versión puede eliminarla'});
+  filePath=safeStoredPath(DOCUMENT_DIR,document.storage_path);
+  await client.query(`INSERT INTO service_order_document_events(id,service_order_id,document_id,event_type,actor_user_id,metadata,created_at) VALUES($1,$2,NULL,'historical_version_deleted',$3,$4::jsonb,NOW())`,[randomUUID(),order.id,req.user.id,JSON.stringify({document_id:document.id,document_type:document.document_type,version:document.version,sha256:document.sha256,original_name:document.original_name})]);
+  await client.query('DELETE FROM service_order_documents WHERE id=$1',[document.id]);
+  await client.query('COMMIT');
+  try{await fsp.unlink(filePath);}catch(error){if(error.code!=='ENOENT')console.warn('PDF eliminado del listado; no fue posible quitar archivo:',error.code);}
+  return res.json({success:true,message:'Versión anterior eliminada; acción conservada en el historial'});
+ }catch(error){await client.query('ROLLBACK').catch(()=>{});console.error('Error deleting historical PDF:',error);return res.status(500).json({message:'No fue posible eliminar la versión anterior'});}
+ finally{await client.query('ROLLBACK').catch(()=>{});client.release();}
 };
