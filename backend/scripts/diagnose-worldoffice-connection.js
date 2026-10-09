@@ -13,16 +13,18 @@ const option = name => { const index = args.indexOf(name); if (index < 0) return
     const address = option('--address'), port = option('--port');
     const target = connectionTarget({ ...process.env, ...(address ? { SQLSERVER_ADDRESS: address } : {}), ...(port ? { SQLSERVER_PORT: port } : {}) });
     console.log('Servidor configurado:', target.server, target.port ? 'TCP ' + target.port : 'instancia ' + (target.options.instanceName || 'predeterminada'));
-    const resolved = await resolveTarget(target);
+    const resolved = await resolveTarget({...target, database:process.env.SQLSERVER_DATABASE, user:process.env.SQLSERVER_USER, password:process.env.SQLSERVER_PASSWORD, options:{...target.options, encrypt:process.env.SQLSERVER_ENCRYPT === 'true', trustServerCertificate:process.env.SQLSERVER_TRUST_CERTIFICATE !== 'false'}});
     if (resolved.server !== target.server) console.log('Windows encontró el servidor en:', resolved.server);
     connection = new sql.ConnectionPool({ ...resolved, database: process.env.SQLSERVER_DATABASE, user: process.env.SQLSERVER_USER, password: process.env.SQLSERVER_PASSWORD, connectionTimeout: 15000, requestTimeout: 15000, options: { ...resolved.options, encrypt: process.env.SQLSERVER_ENCRYPT === 'true', trustServerCertificate: process.env.SQLSERVER_TRUST_CERTIFICATE !== 'false', enableArithAbort: true } });
     await connection.connect();
     const result = await connection.request().query('SELECT DB_NAME() AS database_name');
     console.log('OK: conexión SQL Server y autenticación. Base:', result.recordset[0].database_name);
+    let readable = 0;
     for (const company of ['Melissa', 'Power_ON', 'SAS']) {
-      try { await connection.request().query(`SELECT TOP (1) [Numero_Documento] FROM [${company}].[dbo].[Vista_Auxiliar_Movimientos_Inventario]`); console.log('OK: lectura de facturas en', company); }
+      try { await connection.request().query(`SELECT TOP (1) [Numero_Documento] FROM [${company}].[dbo].[Vista_Auxiliar_Movimientos_Inventario]`); readable++; console.log('OK: lectura de facturas en', company); }
       catch (error) { console.log('AVISO: no se pudo leer facturas de', company, '- código:', error.code || 'SQL_ERROR'); }
     }
+    if (!readable) throw new Error('La conexión funciona, pero no se pudo leer facturas de ninguna empresa. Revisa permisos SQL; no se guardará esta configuración.');
     if (args.includes('--save')) {
       const envPath = path.resolve(__dirname, '../.env');
       const changes = { SQLSERVER_ADDRESS: resolved.server, ...(resolved.port ? { SQLSERVER_PORT: String(resolved.port) } : {}) };

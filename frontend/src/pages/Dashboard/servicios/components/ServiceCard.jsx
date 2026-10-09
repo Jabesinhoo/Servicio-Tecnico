@@ -1,9 +1,9 @@
 import React from 'react';
-import { Calendar, Clock, Edit, Eye, Trash2, UserRound, UsersRound, Wrench } from 'lucide-react';
+import { Calendar, Clock, Edit, Eye, Trash2, UserRound, UsersRound, Wrench, UserCheck } from 'lucide-react';
 import StatusBadge from '../StatusBadge';
 import { formatDateOnly, serviceSchedule, formatTime } from '../serviceFormatters';
 
-export default function ServiceCard({ servicio, onViewDetail, onEdit, onDelete, canEdit }) {
+export default function ServiceCard({ servicio, onViewDetail, onEdit, onDelete, canEdit, onAssignTech }) {
   return (
     <article className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -15,6 +15,7 @@ export default function ServiceCard({ servicio, onViewDetail, onEdit, onDelete, 
         </div>
         <div className="flex-wrap flex gap-1">
           <button onClick={() => onViewDetail(servicio.id)} className="icon-action accent-text" title="Ver" aria-label="Ver"><Eye className="w-4 h-4" /></button>
+          {canEdit && ['aprobado','asignada','cancelado'].includes(servicio.estado) && <button onClick={()=>onAssignTech(servicio.id)} className="icon-action accent-text" title={servicio.estado==='cancelado'?'Reactivar y asignar':'Asignar / reasignar técnico'} aria-label={servicio.estado==='cancelado'?'Reactivar y asignar':'Asignar / reasignar técnico'}><UserCheck className="w-4 h-4" /></button>}
           {canEdit && <button onClick={() => onEdit(servicio)} className="icon-action accent-text" title="Editar" aria-label="Editar"><Edit className="w-4 h-4" /></button>}
           {canEdit && !['cerrada', 'rechazado', 'cancelado'].includes(servicio.estado) && (
             <button onClick={() => onDelete(servicio)} className="icon-action text-red-600" title="Eliminar / cancelar" aria-label="Eliminar / cancelar"><Trash2 className="w-4 h-4" /></button>

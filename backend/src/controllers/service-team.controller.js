@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../db/pool');
+const {prepareReactivation}=require('../services/service-reactivation.service');
 const { randomUUID } = require('crypto');
 const {
   SERVICE_ORDER_STATES,
@@ -951,9 +952,19 @@ exports.assignPrimary = async (req, res) => {
 
     const reassignmentAllowed =
       order.estado === SERVICE_ORDER_STATES.ASIGNADA &&
-      latest?.status === 'impedimento';
+      ['impedimento','revocada'].includes(latest?.status);
 
-    if (!normalAllowed && !reassignmentAllowed) {
+    const reactivating = req.body?.reactivate === true;
+    if (reactivating) await prepareReactivation(client, order, req.body.reason);
+    if (reactivating || reassignmentAllowed) {
+      const custody = await client.query('SELECT holder_user_id FROM service_order_current_custody WHERE service_order_id=$1 FOR UPDATE',[id]);
+      if (custody.rows[0] && custody.rows[0].holder_user_id !== technicianId) {
+        await rollback(client);
+        return res.status(409).json({message:'Transfiere la custodia al nuevo técnico antes de reasignar esta orden, o selecciona al responsable actual.'});
+      }
+    }
+
+    if (!normalAllowed && !reassignmentAllowed && !reactivating) {
       await rollback(client);
       return res.status(409).json({
         message:
@@ -1094,9 +1105,11 @@ exports.assignPrimary = async (req, res) => {
 
     await addEvent(client, {
       serviceOrderId: id,
-      eventType: 'primary_technician_assigned',
+      eventType: reactivating ? 'service_reactivated' : 'primary_technician_assigned',
       actorUserId: req.user.id,
       metadata: {
+        previous_state: order.estado,
+        reason: String(req.body?.reason || '').trim(),
         technician_id: technicianId,
       },
     });
@@ -1112,6 +1125,7 @@ exports.assignPrimary = async (req, res) => {
     await rollback(client);
 
     console.error('Error assigning primary technician:', error);
+    if (error.status) return res.status(error.status).json({message:error.message});
 
     if (
       [

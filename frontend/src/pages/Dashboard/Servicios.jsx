@@ -84,7 +84,7 @@ export default function Servicios() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {loading ? <p className="text-sm text-gray-500">Cargando...</p> : servicios.map((servicio) => (
-            <ServiceCard key={servicio.id} servicio={servicio} onViewDetail={setDetailId} onEdit={setEditService} onDelete={handleDelete} canEdit={isAdmin} />
+            <ServiceCard key={servicio.id} servicio={servicio} onViewDetail={setDetailId} onEdit={setEditService} onDelete={handleDelete} canEdit={isAdmin} onAssignTech={setAssignId} />
           ))}
         </div>
       )}
@@ -114,7 +114,7 @@ export default function Servicios() {
           userRole={userRole}
         />
       )}
-      <AssignTechModal isOpen={Boolean(assignId)} servicioId={assignId} onClose={() => setAssignId(null)} onSubmit={assignTech} />
+      <AssignTechModal isOpen={Boolean(assignId)} servicioId={assignId} servicio={servicios.find(s => s.id === assignId)} onClose={() => setAssignId(null)} onSubmit={assignTech} />
 
       <DeleteServiceModal
         service={deleteTarget}

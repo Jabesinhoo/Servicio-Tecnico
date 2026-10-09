@@ -99,8 +99,8 @@ export default function ServicioTable({
                       <Edit className="w-4 h-4" />
                     </button>
                   )}
-                  {isAdmin && !servicio.tecnico_id && !['cancelado', 'cerrada', 'rechazado'].includes(servicio.estado) && (
-                    <button onClick={() => onAssignTech(servicio.id)} className="icon-action rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Asignar técnico" aria-label="Asignar técnico">
+                  {isAdmin && ['aprobado','asignada','cancelado'].includes(servicio.estado) && (
+                    <button onClick={() => onAssignTech(servicio.id)} className="icon-action rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title={servicio.estado === 'cancelado' ? 'Reactivar y asignar' : 'Asignar / reasignar técnico'} aria-label={servicio.estado === 'cancelado' ? 'Reactivar y asignar' : 'Asignar / reasignar técnico'}>
                       <UserCheck className="w-4 h-4" />
                     </button>
                   )}

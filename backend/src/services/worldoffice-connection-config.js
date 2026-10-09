@@ -31,12 +31,23 @@ function connectionFailure(error, server) {
   if (error?.code === 'ENOTFOUND' || /getaddrinfo ENOTFOUND/i.test(text)) {
     return Object.assign(new Error('World Office no está disponible: no se encuentra su servidor en la red. Puedes continuar sin factura y vincularla después.'), { status: 503, code: 'WORLDOFFICE_HOST_NOT_FOUND', server, cause: error });
   }
+  if (['EINSTLOOKUP','ETIMEOUT','ESOCKET'].includes(error?.code)) {
+    return Object.assign(new Error('World Office no está disponible: revisa la red o VPN y el puerto TCP del servidor. Ejecuta node scripts/diagnose-worldoffice-connection.js --save desde backend. Puedes continuar sin factura.'), {status:503, code:'WORLDOFFICE_CONNECTION_UNAVAILABLE', server, cause:error});
+  }
   return error;
 }
 
-async function resolveTarget(config, { lookup = dns.lookup, netbiosLookup = windowsAddress, platform = process.platform } = {}) {
+async function resolveTarget(config, { lookup = dns.lookup, netbiosLookup = windowsAddress, platform = process.platform, nativeResolve = nativeTcpTarget } = {}) {
+  // Native Windows SQL Client can resolve LAN names and named-instance TCP ports
+  // that Node DNS/SQL Browser cannot. No credentials are placed in arguments.
+  if (platform === 'win32' && config.options?.instanceName && config.user && config.password) {
+    try {
+      const target = await nativeResolve(config);
+      return { ...config, server: target.server, port: target.port, options: {...config.options, instanceName: undefined} };
+    } catch (_) { /* Preserve the normal Node connection path and its error. */ }
+  }
   if (net.isIP(config.server)) return config;
-  try { await lookup(config.server); return config; }
+  try { const resolved = await lookup(config.server); return { ...config, server: resolved.address || config.server }; }
   catch (error) {
     if (error.code !== 'ENOTFOUND') throw error;
     if (platform === 'win32') {
@@ -46,4 +57,43 @@ async function resolveTarget(config, { lookup = dns.lookup, netbiosLookup = wind
     throw connectionFailure(error, config.server);
   }
 }
-module.exports = { connectionTarget, resolveTarget, connectionFailure };
+const nativeTargets = new Map();
+async function nativeTcpTarget(config) {
+  const key = JSON.stringify([config.server, config.options?.instanceName, config.database, config.user, config.password, config.options?.encrypt, config.options?.trustServerCertificate]);
+  const cached = nativeTargets.get(key);
+  if (cached && cached.expires > Date.now()) return cached.target;
+  const script = `
+$ErrorActionPreference='Stop'
+try {
+ Add-Type -AssemblyName System.Data
+ $b=New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+ $b.DataSource=$env.WO_TARGET
+ $b.InitialCatalog=$env.WO_DATABASE
+ $b.UserID=$env.WO_USER
+ $b.Password=$env.WO_PASSWORD
+ $b.ConnectTimeout=8
+ $b.Encrypt=($env.WO_ENCRYPT -eq 'true')
+ $b.TrustServerCertificate=($env.WO_TRUST -eq 'true')
+ $c=New-Object System.Data.SqlClient.SqlConnection($b.ConnectionString)
+ $c.Open()
+ $q=$c.CreateCommand()
+ $q.CommandTimeout=8
+ $q.CommandText="SELECT CONVERT(varchar(48),CONNECTIONPROPERTY('local_net_address')), CONVERT(int,CONNECTIONPROPERTY('local_tcp_port'))"
+ $reader=$q.ExecuteReader()
+ if ($reader.Read()) { @{server=$reader.GetString(0);port=$reader.GetInt32(1)} | ConvertTo-Json -Compress }
+} catch { [Console]::Error.WriteLine('Native SQL TCP discovery failed'); exit 1 }
+finally { if ($c) { $c.Dispose() } }
+`;
+  const result = await execute('powershell.exe', ['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')], {
+    timeout:20000, windowsHide:true,
+    env:{...process.env, WO_TARGET:'tcp:'+config.server+'\\'+config.options.instanceName,
+      WO_DATABASE:config.database || 'master', WO_USER:config.user, WO_PASSWORD:config.password,
+      WO_ENCRYPT:String(Boolean(config.options.encrypt)), WO_TRUST:String(Boolean(config.options.trustServerCertificate))}
+  });
+  const target=JSON.parse(result.stdout.trim().replace(/^\uFEFF/,''));
+  if (!net.isIP(target.server) || !Number.isInteger(target.port) || target.port<1 || target.port>65535) throw new Error('Invalid native SQL TCP target');
+  if (nativeTargets.size>8) nativeTargets.clear();
+  nativeTargets.set(key,{target,expires:Date.now()+60000});
+  return target;
+}
+module.exports = { connectionTarget, resolveTarget, connectionFailure, nativeTcpTarget };

@@ -7,7 +7,7 @@ if (!(Test-Path (Join-Path $ProjectPath 'backend\package.json')) -or !(Test-Path
 }
 $ProjectPath = (Resolve-Path $ProjectPath).Path
 $packageFiles = @(
-  @{ path = 'backend\scripts\diagnose-worldoffice-connection.js'; hash = 'bc4abadc46bb63fe33a5b68aa014b09a224451494c3fbee2189b97ab41462f21' },
+  @{ path = 'backend\scripts\diagnose-worldoffice-connection.js'; hash = 'a727528419708868b641c6d801cd2fb6b876cb8a5da3eb28585ab21c0a3619b0' },
   @{ path = 'backend\scripts\diagnose-worldoffice-invoices.js'; hash = '9e82edee411d61e6cfebd810a6a1699754362fa142cf57ac2f9c42ef03310956' },
   @{ path = 'backend\scripts\install-client-profiles-service-sites.js'; hash = '7db4a1b5fc6c3603b67d720268213b2d74610a785145e13948fb9069686e4a65' },
   @{ path = 'backend\scripts\install-service-activity-signatures.js'; hash = 'e36ba0d7e64ffca83cb2927568db51239cdbbbb0baa0c57a66159b26190502b5' },
@@ -44,7 +44,7 @@ $packageFiles = @(
   @{ path = 'backend\src\controllers\service-document.controller.js'; hash = '725774894b643f12881a7f91ce2507a4ea0b664ae808651de422e9378695139f' },
   @{ path = 'backend\src\controllers\service-intake.controller.js'; hash = '0764f316eab5ab60d3e018188d4ad5c0558e12619ff27ac2a4292eb46eea7a65' },
   @{ path = 'backend\src\controllers\service-order.controller.js'; hash = '8f237e8b72f5c45127dcdc31a4ec47787d1f8bb7e67081e719d57efa332dccad' },
-  @{ path = 'backend\src\controllers\service-team.controller.js'; hash = 'a4220d38fae7227c3011e8fc4fbd904dab438a87757b5f74fcd1c0ed89cfd53c' },
+  @{ path = 'backend\src\controllers\service-team.controller.js'; hash = 'f1cf7e4b6c80eab99b50d92b3cf8b1a10834308f0a6db6a5276a4842e3e91455' },
   @{ path = 'backend\src\controllers\sync.controller.js'; hash = '66231a9dd2652ef130c0f966b1281904289cd2f6325dff964bf77f4fe28ee22f' },
   @{ path = 'backend\src\controllers\tipo-servicio.controller.js'; hash = 'd95985282d4b30702c055d158b3f52da55b4d3ef6e5c28cf28d9b02160da692f' },
   @{ path = 'backend\src\controllers\workshop.controller.js'; hash = '15cf9a98be75b522d8be179c86c67d22f2c513f995837b4a5c9ca8891701173c' },
@@ -83,12 +83,13 @@ $packageFiles = @(
   @{ path = 'backend\src\services\service-document-template.service.js'; hash = '1624fa28d50b491e5d7bf0f39648e6da16a0eafdb3a57016312b260a340da479' },
   @{ path = 'backend\src\services\service-execution-time.service.js'; hash = '336cef1c101c04005b2e774c851e2e2ef31d67a26f085549da7083685f1cfd2e' },
   @{ path = 'backend\src\services\service-geocoding.service.js'; hash = 'c3a210cc6c3db2fa73500eef271f0189da63d7360df4d33d06c98844d09c6883' },
+  @{ path = 'backend\src\services\service-reactivation.service.js'; hash = '831dc6fc8d8d7f6c8b29aa3382d900cba08b3aa14000561cf434bd84a9e6a076' },
   @{ path = 'backend\src\services\service-scheduling.service.js'; hash = '1157a818b94329a71e0fdf6c5d950d70002c1b69e904eed7e6c1d45972da2c4e' },
   @{ path = 'backend\src\services\service-site.service.js'; hash = '9057f347804e56c382c547cc040417552c8d2c2eed9df2966fe2b84fe9d34af3' },
   @{ path = 'backend\src\services\service-type-inventory.service.js'; hash = '92a746e6ab782ffdd76a3437591235d991e9bba6fc149045fc7b53ec8dbb60da' },
   @{ path = 'backend\src\services\worldoffice-client-extraction.service.js'; hash = 'b6f842ecff55eb83f22c68c9f19a671a578e902708b97945623d55c7992399d8' },
   @{ path = 'backend\src\services\worldoffice-client-mirror.service.js'; hash = '7d5d8239d2dd1c3bb4df91eafa0fd2c1cf957cd0fe4927c3ae5422bb71623cf7' },
-  @{ path = 'backend\src\services\worldoffice-connection-config.js'; hash = 'e20840f22efa4b031070d5a474e4bb1266a4af58b8d74bc560256bb7470231e8' },
+  @{ path = 'backend\src\services\worldoffice-connection-config.js'; hash = '8e325742b6773ddf26f65f8813407647ef819aeb8768fe7377a9adf85f6990fe' },
   @{ path = 'backend\src\services\worldoffice-financial-readonly.service.js'; hash = '6b32145fe2b5f965148c9ad2588781534da95b331bc061a34a47a81f1b02b8dc' },
   @{ path = 'backend\src\services\worldoffice-invoices.service.js'; hash = 'f94bfbf50b81529583558191fd928066d0a1eac70ca1b8ddb0b911880db7ee9f' },
   @{ path = 'backend\src\services\worldoffice.service.js'; hash = 'b487bc0ef0f7fa818d467fe4743f360a77ec0841d3211889577336f015e55bd6' },
@@ -109,6 +110,7 @@ $packageFiles = @(
   @{ path = 'backend\tests\service-invoice-edit.test.js'; hash = 'cec4cb5f49bcd370562181d325d2149d00ad07e0e78e5cd9d342a86650105b26' },
   @{ path = 'backend\tests\service-invoice-optional.test.js'; hash = '5a5bd84a7aa91d68fd68a06baa689a79a95f39397eb536cad22c27c4fdc1f652' },
   @{ path = 'backend\tests\service-multiple-equipment.test.js'; hash = 'bac55fe8db58a1de755c0e18f1b47ca34d1664dfdb4ffce88bc04b498c3d3007' },
+  @{ path = 'backend\tests\service-reactivation.test.js'; hash = 'e2e3c18d2126d4d7219bf8473540a7febeea84a9040c699d78bba525f746dfa1' },
   @{ path = 'backend\tests\service-reception-documents.test.js'; hash = '49ed6065cb461c88306613d073ef913b13a61e539b35d06ecd3c93d904c32fc4' },
   @{ path = 'backend\tests\service-simple-completion.test.js'; hash = '20cbc7a73167e09e0bf5a8f7cfff9136d3641b5c42d7df422a7abb50c5e9e551' },
   @{ path = 'backend\tests\service-type-inventory.test.js'; hash = '3d14bfc89b4d6b73bba0d6ca7283a7b639e347f46cf796894376e5190b700243' },
@@ -146,7 +148,7 @@ $packageFiles = @(
   @{ path = 'frontend\src\pages\Dashboard\Inventarios.jsx'; hash = '7bef50f0416c591b986815ebc072f29514081e748c8c8d6ea8ee0093cfde4eee' },
   @{ path = 'frontend\src\pages\Dashboard\MisServicios.jsx'; hash = '35bb83703358803bc81b2335a4baa70f5a708911cff883297043e46e39a5f67f' },
   @{ path = 'frontend\src\pages\Dashboard\Reportes.jsx'; hash = 'c3533c7ebdbe16e856c32c71ef969a2ab2228185c8de38651a3fbaf9fccc5138' },
-  @{ path = 'frontend\src\pages\Dashboard\Servicios.jsx'; hash = 'a8881774f5bc91aad27abf8409519fcdaaa2b692a46f23bdf9be1243b0368667' },
+  @{ path = 'frontend\src\pages\Dashboard\Servicios.jsx'; hash = '5b5c790d10ef9e833c45ca3caf2226501f718da43bada999c05c76dc20d24e74' },
   @{ path = 'frontend\src\pages\Dashboard\Tecnicos.jsx'; hash = '902be714755b55f176596e3996b48b672282bbdcfee42404c98cc8e98ce34e50' },
   @{ path = 'frontend\src\pages\Dashboard\TiposServicio.jsx'; hash = '96c7e727057800f889bb34c8738faa9c6f2162826218c8532c603b41696e7c8c' },
   @{ path = 'frontend\src\pages\Dashboard\agenda\AgendarModal.jsx'; hash = '4e05e9a9ace5343674ccb40f58b47f4f0644aec43e2aeb61b96f13f7fa03d254' },
@@ -168,14 +170,14 @@ $packageFiles = @(
   @{ path = 'frontend\src\pages\Dashboard\inventarios\inventoryImages.js'; hash = '3775980ad6ec19964cee4b5b3e2e78da3524f327df45b7bd94503e9ec7313a89' },
   @{ path = 'frontend\src\pages\Dashboard\reportes\QualityDashboardPanel.jsx'; hash = '8563d8914568a9b6ca487d5a6b2485ff9ae73fa3de6d681a627b14b9f32d450d' },
   @{ path = 'frontend\src\pages\Dashboard\reportes\TechnicalStatisticsPanel.jsx'; hash = '41ae43643d2858d653bf086379b851ca26753d91b8bad965f1d455ac45cea4fb' },
-  @{ path = 'frontend\src\pages\Dashboard\servicios\AssignTechModal.jsx'; hash = '2db7c099c3a4624a517afbf21d93c29341e4117ce524930d914c730a393a489e' },
+  @{ path = 'frontend\src\pages\Dashboard\servicios\AssignTechModal.jsx'; hash = 'b116108e7a4de45b21d45aa953a70263feb1306ae660c9847d3fcd1f5a4571de' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\DeleteServiceModal.jsx'; hash = '50880cb7e26fa30cfec4c7f2fbce42a4a586cd155ad70251eac024e4a2a5bf6a' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\ServicioCreateWizard.jsx'; hash = 'b1b59d01205bcd7b139cb727d92bd19d7324a12d46e7dd96dd7e00668c5b3911' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\ServicioDetail.jsx'; hash = 'f64b0d0ad697519de1dad8d9a647d872b46f4af00cbd0d38287fc2097e0c46f9' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\ServicioEditModal.jsx'; hash = '6a641c7481b3998f7a3e3f97ea4bbef650401917e5408f5367fba3aed5f1ac46' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\ServicioFilters.jsx'; hash = 'ed0c9547289c7f6ff1ab49304c0bedfa2198aecd88404a3fca5808c401578a70' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\ServicioForm.jsx'; hash = '17994e5bf972f867c98fd70c277c4980657f579cc97f34f3fe41d1bc45e2a540' },
-  @{ path = 'frontend\src\pages\Dashboard\servicios\ServicioTable.jsx'; hash = '9adc6793206a9cea9a6e8ed372a309f127f79154f3c75a0b61788501e3aaf848' },
+  @{ path = 'frontend\src\pages\Dashboard\servicios\ServicioTable.jsx'; hash = '20b22671a35023c30255552974a82f30ca2dd343869c7d34b4ccd37a7ca41e5f' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\StatusBadge.jsx'; hash = '2dc1e30aa06ccac6090769c7e99f40ac4d8f410e5cab05280ec8ee5a754aa9ee' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\acceptanceFiles.js'; hash = '008b7ea1685b6b65a90a87b777adb730a21576a8ed741a334e812001b22b32df' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\AcceptanceEvidenceFiles.jsx'; hash = '4d28d36cd4ed883b19b86caef9be05993afb582495528993937cd3a3b878e7f0' },
@@ -194,7 +196,7 @@ $packageFiles = @(
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\InvoiceRecord.jsx'; hash = 'db0fed44fe8dda09a6f575b191d18ba6708753eb22326014dea9da8c7c3cf1ee' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\MaterialesPanel.jsx'; hash = '59a1e058d96bd171e684ecbb37084c4e8b0bfd6050223fff8bbb3f4f59dfb0df' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceActivityModal.jsx'; hash = '5f51993f07b71f574956307e1364206b4ba192c16e3bf54bcc4835590694d39f' },
-  @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceCard.jsx'; hash = 'e1114a9dce32c851f786c3717e12aeba1327ed9b7107a1c515d2f477e5d7088b' },
+  @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceCard.jsx'; hash = 'b0bb9789bbfa3bda8ba98e1cd79f7a90b7c6de3575b2adebbfbacc908425640f' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceClientSnapshot.jsx'; hash = '7dcb7d696867bea20797d28f792147bdc71ffdaa8ce184d693c56a9e56ba4018' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceDocumentsModal.jsx'; hash = '133e7f5929ad01d752f6c0c895c71868d585ca8dcfd9dcd9b0309d7fd4d41e0f' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceIntakeBoard.jsx'; hash = '296b24dd240cbcbb21bd6d6d4468c9c9fe758b2397ea3acd6cdbc2fbb6a67c67' },
@@ -203,6 +205,7 @@ $packageFiles = @(
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceSiteModal.jsx'; hash = '213a295b86c5a05e6d2a83ed805e1366e235e06b7541cac0c417879ae7563f3c' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\ServiceTypePicker.jsx'; hash = '8a9cf5be1d9fcad7c24ecc7b1b6703e18d39cdadda404af0883a6fa64802b378' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\components\WorldOfficeDiscoveryModal.jsx'; hash = '30ea126a597df942096eea08123f92740b1a67be0e476d6a919274f526096625' },
+  @{ path = 'frontend\src\pages\Dashboard\servicios\hooks\useServicios.js'; hash = 'f5c1f2d12979b9b4a0650685746bc72fc8fbe6541c4ec614906398c35b73e735' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\intakeCreationFiles.js'; hash = '792c7bdfca822551037b338190765555e8e3d5d13814d5eff7d6f5db149376b8' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\serviceFormatters.js'; hash = '48d03afac6b0a9621149c22c1da6091f5d8ead1a41c0bcb9e99f95fd37bc5178' },
   @{ path = 'frontend\src\pages\Dashboard\servicios\serviceLocation.js'; hash = 'b8752e000163f3bbf5572d05c485cd8bc09c31935c4ae53e8bd12829250f3836' },
@@ -278,7 +281,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Fallo SQL de taller, tiempos y dashboard. No inicies el servidor hasta resolver el error.' }
   & node scripts/install-service-creation-v2.js
   if ($LASTEXITCODE -ne 0) { throw 'Fallo SQL de creación, firmas e inventario. No inicies el servidor hasta resolver el error.' }
-  & node --test tests/service-equipment-intake.test.js tests/service-reception-documents.test.js tests/service-document-access.test.js tests/service-acceptance-file.test.js tests/client-profiles-service-sites.test.js tests/service-activity-branding.test.js tests/service-delivery-permissions.test.js tests/service-work-calendar.test.js tests/operations-excel.test.js tests/service-creation-v2.test.js tests/service-intake-draft-signing.test.js tests/worldoffice-invoices.test.js tests/service-invoice-edit.test.js tests/service-type-inventory.test.js tests/service-acceptance-inventory.test.js tests/service-invoice-optional.test.js tests/order-service-types.test.js tests/service-multiple-equipment.test.js tests/technician-material-requests.test.js tests/technician-location-optional.test.js tests/service-approval-agenda.test.js tests/service-work-hours-feedback.test.js tests/final-photo-evidence.test.js tests/worldoffice-connection-config.test.js tests/service-document-schema.test.js tests/service-simple-completion.test.js tests/workshop-history-evidence.test.js tests/inventory-images-admin-board.test.js
+  & node --test tests/service-equipment-intake.test.js tests/service-reception-documents.test.js tests/service-document-access.test.js tests/service-acceptance-file.test.js tests/client-profiles-service-sites.test.js tests/service-activity-branding.test.js tests/service-delivery-permissions.test.js tests/service-work-calendar.test.js tests/operations-excel.test.js tests/service-creation-v2.test.js tests/service-intake-draft-signing.test.js tests/worldoffice-invoices.test.js tests/service-invoice-edit.test.js tests/service-type-inventory.test.js tests/service-acceptance-inventory.test.js tests/service-invoice-optional.test.js tests/order-service-types.test.js tests/service-multiple-equipment.test.js tests/technician-material-requests.test.js tests/technician-location-optional.test.js tests/service-approval-agenda.test.js tests/service-work-hours-feedback.test.js tests/final-photo-evidence.test.js tests/worldoffice-connection-config.test.js tests/service-document-schema.test.js tests/service-simple-completion.test.js tests/workshop-history-evidence.test.js tests/inventory-images-admin-board.test.js tests/service-reactivation.test.js
   if ($LASTEXITCODE -ne 0) { throw 'Fallaron las pruebas del backend' }
 } finally { Pop-Location }
 Push-Location (Join-Path $ProjectPath 'frontend')

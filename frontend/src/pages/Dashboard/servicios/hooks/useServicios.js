@@ -90,9 +90,10 @@ export const useServicios = () => {
     return response.data;
   }, [fetchServicios]);
 
-  const assignTech = useCallback(async (id, tecnicoId) => {
+  const assignTech = useCallback(async (id, tecnicoId, options = {}) => {
     const response = await api.patch(`/api/service-orders/${id}/assign`, {
       tecnico_id: tecnicoId,
+      ...options,
     });
     await fetchServicios();
     return response.data;
