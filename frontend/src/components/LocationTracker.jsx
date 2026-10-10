@@ -195,7 +195,7 @@ const LocationTracker = () => {
 
     clearWatch();
     setStatus('requesting');
-    setMessage('Obteniendo ubicación');
+    setMessage('');
     reportedAccuracyRef.current=null;setAccuracy(null);setPrecisionTier(null);
     acquisitionTimerRef.current=setTimeout(()=>{
       if(!mountedRef.current||reportedAccuracyRef.current!==null)return;
@@ -269,8 +269,6 @@ const LocationTracker = () => {
     </div>
     {showHelp&&<div className="fixed left-3 right-3 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full mt-2 z-50 w-auto sm:w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-white dark:bg-gray-900 p-3 shadow-xl text-sm">
       <p className="font-semibold">Ubicación del dispositivo</p><p className="mt-2">{message}</p>
-      <p className="mt-2">Remoto y en el local permiten tomar custodia sin GPS. Las visitas externas necesitan una lectura reciente y precisa.</p>
-      <p className="mt-2">Si solo obtienes una ubicación aproximada, abre la plataforma en un celular, habilita ubicación precisa para el navegador y reintenta. El sitio debe usar HTTPS o localhost.</p>
       <button type="button" onClick={()=>setShowHelp(false)} className="mt-2 underline">Cerrar</button>
     </div>}
     </div>

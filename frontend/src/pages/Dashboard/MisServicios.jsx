@@ -165,15 +165,15 @@ const integrityBadge = (tech) => {
   const status = tech?.location_integrity_status || 'unverified';
   const network = tech?.network_trust_status || 'unknown';
   const device = tech?.device_trust_status || 'unknown';
-  if (!tech?.last_location_at) return { label: 'Sin GPS reciente', cls: 'text-slate-500' };
+  if (!tech?.last_location_at) return { label: '', cls: 'text-slate-500' };
   if (network === 'blocked' || tech?.network_vpn || tech?.network_proxy || tech?.network_tor) {
     return { label: 'Red anónima bloqueada', cls: 'text-red-600 dark:text-red-400' };
   }
-  if (device === 'pending') return { label: 'Dispositivo pendiente', cls: 'text-amber-600 dark:text-amber-400' };
-  if (status === 'trusted') return { label: 'GPS validado', cls: 'accent-text dark:accent-text' };
-  if (status === 'suspicious') return { label: 'GPS para revisar', cls: 'text-amber-600 dark:text-amber-400' };
-  if (status === 'rejected') return { label: 'GPS rechazado', cls: 'text-red-600 dark:text-red-400' };
-  return { label: 'GPS sin validar', cls: 'text-slate-500' };
+  if (device === 'pending') return { label: '', cls: 'text-amber-600 dark:text-amber-400' };
+  if (status === 'trusted') return { label: '', cls: 'accent-text dark:accent-text' };
+  if (status === 'suspicious') return { label: '', cls: 'text-amber-600 dark:text-amber-400' };
+  if (status === 'rejected') return { label: '', cls: 'text-red-600 dark:text-red-400' };
+  return { label: '', cls: 'text-slate-500' };
 };
 
 const getActionState = (service) => {
@@ -3862,8 +3862,8 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
           </div>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {isAdmin
-              ? 'Todos los servicios creados, incluidos cerrados, cancelados y pendientes de asignación. Puedes filtrar por técnico y estado.'
-              : 'Órdenes asignadas a tu cuenta y acciones pendientes.'}
+              ? ''
+              : ''}
           </p>
         </div>
 
@@ -3909,9 +3909,7 @@ Hay un dispositivo pendiente. ¿Autorizarlo?`);
               </div>
 
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-950/60 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
-                  <span>{technicians.length} técnico(s) registrados en la base de datos</span>
-                  {selectedTechnician && (
+                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-950/60 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">                  {selectedTechnician && (
                     <button type="button" onClick={() => setTechnicianFilter('todos')} className="font-semibold accent-text dark:accent-text">
                       Quitar filtro
                     </button>
