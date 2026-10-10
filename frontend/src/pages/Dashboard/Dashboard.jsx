@@ -1,21 +1,380 @@
-import React,{useCallback,useEffect,useState} from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../services/api';
-const money=v=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(v)||0);
-const today=()=>new Date(Date.now()-5*3600000).toISOString().slice(0,10);
-function Bars({title,rows,value,label,currency=false}){const max=Math.max(1,...rows.map(r=>Number(r[value])||0));return <section className="border rounded-2xl p-4 bg-white dark:bg-slate-900"><h2 className="font-bold mb-3">{title}</h2>{!rows.length?<p className="text-gray-500">No hay datos en este período.</p>:<div className="space-y-3">{rows.slice(0,12).map((r,i)=><div key={i} title={`${r[label]}: ${currency?money(r[value]):r[value]}`}><div className="flex justify-between text-sm gap-3"><span className="truncate">{r[label]}</span><strong>{currency?money(r[value]):r[value]}</strong></div><div className="bg-gray-100 dark:bg-gray-800 h-3 rounded mt-1"><div className="accent-fill h-3 rounded" style={{width:`${Math.max(0,Number(r[value]))/max*100}%`}}/></div></div>)}</div>}</section>;}
-function Table({title,rows,columns}){return <section className="border rounded-2xl p-4 bg-white dark:bg-slate-900"><h2 className="font-bold mb-3">{title}</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{columns.map(([key,label])=><th key={key} className="text-left p-2 border-b whitespace-nowrap">{label}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={r.id||i}>{columns.map(([key,,format])=><td key={key} className="p-2 border-b">{format?format(r[key],r):r[key]??'—'}</td>)}</tr>)}</tbody></table>{!rows.length&&<p className="py-4 text-gray-500">No hay registros.</p>}</div></section>;}
-export default function Dashboard(){const[range,setRange]=useState({from:new Date(Date.now()-5*3600000-29*86400000).toISOString().slice(0,10),to:today()});const[data,setData]=useState(null);const[error,setError]=useState('');const[loading,setLoading]=useState(false);const[exporting,setExporting]=useState(false);
-const load=useCallback(async(signal)=>{setLoading(true);setError('');try{const r=await api.get('/api/dashboard/operations',{params:range,signal});setData(r.data.data);}catch(e){if(e.code!=='ERR_CANCELED')setError(e.response?.data?.message||'No fue posible cargar el dashboard');}finally{if(!signal?.aborted)setLoading(false);}},[range]);
-useEffect(()=>{const c=new AbortController();const t=setTimeout(()=>load(c.signal),200);return()=>{clearTimeout(t);c.abort();};},[load]);
-const excel=async()=>{setExporting(true);try{const r=await api.get('/api/dashboard/operations/excel',{params:range,responseType:'blob'});const url=URL.createObjectURL(r.data);const a=document.createElement('a');a.href=url;a.download=`Dashboard-${range.from}-${range.to}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){let message='No fue posible exportar';try{message=JSON.parse(await e.response.data.text()).message||message;}catch{ /* El error de red puede no contener JSON. */ }setError(message);}finally{setExporting(false);}};
-return <main className="workflow-theme space-y-5"><header className="flex flex-wrap justify-between gap-4"><div><h1 className="text-2xl font-bold">Dashboard operativo</h1><p className="text-sm text-gray-500">Servicios, rendimiento, finanzas e inventarios · Hora de Colombia</p></div><div className="flex flex-wrap items-end gap-2"><label className="text-sm">Desde<input aria-label="Desde" type="date" value={range.from} onChange={e=>setRange({...range,from:e.target.value})} className="block border rounded-xl p-2 bg-transparent"/></label><label className="text-sm">Hasta<input aria-label="Hasta" type="date" value={range.to} onChange={e=>setRange({...range,to:e.target.value})} className="block border rounded-xl p-2 bg-transparent"/></label><button disabled={loading} onClick={()=>load()} className="border rounded-xl p-3">Actualizar</button><button disabled={loading||exporting||!data} onClick={excel} className="accent-fill rounded-xl p-3">{exporting?'Exportando…':'Exportar Excel con gráficas'}</button></div></header>{error&&<p role="alert" className="text-red-600 border rounded-xl p-3">{error}</p>}{loading&&<p role="status">Actualizando indicadores…</p>}{data&&<>
-<p className="text-sm text-gray-500">{data.scope} · Órdenes creadas entre {data.range.from} y {data.range.to}. Los resultados y facturas corresponden a esas órdenes. Inventario: estado actual.</p>
-<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">{[['Servicios',data.totals.orders],['Activos',data.totals.active],['Trabajos finalizados',data.totals.technical_finished],['Entregados',data.totals.delivered],['Reprocesos',data.totals.reworks]].map(([label,value])=><article key={label} className="border rounded-2xl p-4"><p className="text-sm">{label}</p><strong className="text-2xl accent-text">{value}</strong></article>)}</div>
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><Bars title="Servicios por mes de creación" rows={data.months} value="orders" label="month"/><Bars title="Trabajos finalizados por técnico" rows={data.technicians} value="finished" label="technician"/></div>
-<Table title="Rendimiento de técnicos" rows={data.technicians} columns={[["technician","Técnico"],["orders","Servicios"],["finished","Finalizados"],["reworks","Reprocesos"],["timed","Con tiempo medido"],["on_time","Dentro del estimado"],["actual","Minutos activos",v=>Math.round(v)]]}/><p className="text-xs text-gray-500">Los tiempos activos se registran desde esta actualización; las pausas se excluyen. Los servicios anteriores sin medición no cuentan para el cumplimiento de duración.</p>
-{data.financial&&<><section className="border rounded-2xl p-4"><h2 className="font-bold">Financieros</h2><div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">{[['Valor facturado',money(data.financial.invoiced)],['Valor previsto, no cobrado',money(data.financial.expected)],['Controles financieros pendientes',data.financial.pending]].map(([k,v])=><div key={k}><p className="text-sm">{k}</p><strong className="text-xl">{v}</strong></div>)}</div><p className="text-xs mt-3 text-gray-500">Facturado corresponde a facturas registradas y no anuladas. No equivale a pagos recibidos.</p></section><div className="grid lg:grid-cols-2 gap-4"><Bars title="Clientes que más generan · valor facturado" rows={data.clients} value="invoiced" label="client" currency/><Table title="Clientes principales" rows={data.clients} columns={[["client","Cliente"],["orders","Servicios"],["invoiced","Facturado",money]]}/></div></>}
-<section className="border rounded-2xl p-4"><h2 className="font-bold">Inventarios</h2><p>Ítems activos: {data.inventoryTotals.items} · Bajo mínimo: {data.inventoryTotals.low_stock} · Unidades de taller en uso: {data.inventoryTotals.in_use}</p>{data.financial&&<p>Valor disponible a costo: {money(data.inventoryTotals.available_value)}</p>}</section>
-{data.inventory.length>0&&<Table title="Inventario por debajo del mínimo" rows={data.inventory.filter(p=>Number(p.stock_actual)<=Number(p.stock_minimo))} columns={[["codigo","Código"],["nombre","Ítem"],["stock_actual","Disponible"],["stock_minimo","Mínimo"],["in_use","En uso"]]}/>}
-<Table title="Ítems de taller en manos de técnicos" rows={data.holdings} columns={[["nombre","Ítem"],["codigo_os","Servicio"],["holder","Técnico"],["quantity","Cantidad"]]}/>
-<Table title="Servicios del período · últimos 50 en pantalla" rows={data.services.slice(0,50)} columns={[["codigo_os","Orden"],["client_name","Cliente"],["technician","Técnico"],["estado","Estado"],["actual_minutes","Tiempo activo",v=>v===null?'Sin medición':Math.round(v)+' min']]}/><p className="text-xs text-gray-500">Excel incluye todos los servicios del período (máximo 10.000), sus indicadores, inventario y gráficas editables.</p>
-</>}</main>;}
+
+// ─── Utilidades ───────────────────────────────────────────────────────────────
+
+const money = (v) =>
+  new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(Number(v) || 0);
+
+const today = () =>
+  new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
+
+// ─── Componentes auxiliares ───────────────────────────────────────────────────
+
+function Bars({ title, rows, value, label, currency = false }) {
+  const max = Math.max(1, ...rows.map((r) => Number(r[value]) || 0));
+
+  return (
+    <section className="border rounded-2xl p-4 bg-white dark:bg-slate-900">
+      <h2 className="font-bold mb-3">{title}</h2>
+      {!rows.length ? (
+        <p className="text-gray-500">No hay datos en este período.</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.slice(0, 12).map((r, i) => (
+            <div
+              key={i}
+              title={`${r[label]}: ${currency ? money(r[value]) : r[value]}`}
+            >
+              <div className="flex justify-between text-sm gap-3">
+                <span className="truncate">{r[label]}</span>
+                <strong>{currency ? money(r[value]) : r[value]}</strong>
+              </div>
+              <div className="bg-gray-100 dark:bg-gray-800 h-3 rounded mt-1">
+                <div
+                  className="accent-fill h-3 rounded"
+                  style={{
+                    width: `${(Math.max(0, Number(r[value])) / max) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Table({ title, rows, columns }) {
+  return (
+    <section className="border rounded-2xl p-4 bg-white dark:bg-slate-900">
+      <h2 className="font-bold mb-3">{title}</h2>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              {columns.map(([key, label]) => (
+                <th
+                  key={key}
+                  className="text-left p-2 border-b whitespace-nowrap"
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.id || i}>
+                {columns.map(([key, , format]) => (
+                  <td key={key} className="p-2 border-b">
+                    {format ? format(r[key], r) : r[key] ?? '—'}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!rows.length && (
+          <p className="py-4 text-gray-500">No hay registros.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
+
+export default function Dashboard() {
+  const [range, setRange] = useState({
+    from: new Date(Date.now() - 5 * 3600000 - 29 * 86400000)
+      .toISOString()
+      .slice(0, 10),
+    to: today(),
+  });
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // ─── Carga de datos ─────────────────────────────────────────────────────────
+
+  const load = useCallback(
+    async (signal) => {
+      setLoading(true);
+      setError('');
+      try {
+        const r = await api.get('/api/dashboard/operations', {
+          params: range,
+          signal,
+        });
+        setData(r.data.data);
+      } catch (e) {
+        if (e.code !== 'ERR_CANCELED')
+          setError(
+            e.response?.data?.message ||
+              'No fue posible cargar el dashboard'
+          );
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [range]
+  );
+
+  useEffect(() => {
+    const c = new AbortController();
+    const t = setTimeout(() => load(c.signal), 200);
+    return () => {
+      clearTimeout(t);
+      c.abort();
+    };
+  }, [load]);
+
+  // ─── Exportar a Excel ───────────────────────────────────────────────────────
+
+  const excel = async () => {
+    setExporting(true);
+    try {
+      const r = await api.get('/api/dashboard/operations/excel', {
+        params: range,
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Dashboard-${range.from}-${range.to}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      let message = 'No fue posible exportar';
+      try {
+        message =
+          JSON.parse(await e.response.data.text()).message || message;
+      } catch {
+        /* El error de red puede no contener JSON. */
+      }
+      setError(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <main className="workflow-theme space-y-5">
+      {/* Encabezado y filtros */}
+      <header className="flex flex-wrap justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard operativo</h1>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-sm">
+            Desde
+            <input
+              aria-label="Desde"
+              type="date"
+              value={range.from}
+              onChange={(e) => setRange({ ...range, from: e.target.value })}
+              className="block border rounded-xl p-2 bg-transparent"
+            />
+          </label>
+          <label className="text-sm">
+            Hasta
+            <input
+              aria-label="Hasta"
+              type="date"
+              value={range.to}
+              onChange={(e) => setRange({ ...range, to: e.target.value })}
+              className="block border rounded-xl p-2 bg-transparent"
+            />
+          </label>
+          <button
+            disabled={loading}
+            onClick={() => load()}
+            className="border rounded-xl p-3"
+          >
+            Actualizar
+          </button>
+          <button
+            disabled={loading || exporting || !data}
+            onClick={excel}
+            className="accent-fill rounded-xl p-3"
+          >
+            {exporting ? 'Exportando…' : 'Exportar Excel con gráficas'}
+          </button>
+        </div>
+      </header>
+
+      {/* Alertas y estados */}
+      {error && (
+        <p role="alert" className="text-red-600 border rounded-xl p-3">
+          {error}
+        </p>
+      )}
+      {loading && <p role="status">Actualizando indicadores…</p>}
+
+      {/* Contenido principal */}
+      {data && (
+        <>
+          <p className="text-sm text-gray-500">
+            {data.scope} · Órdenes creadas entre {data.range.from} y{' '}
+            {data.range.to}. 
+          </p>
+
+          {/* Totales */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+            {[
+              ['Servicios', data.totals.orders],
+              ['Activos', data.totals.active],
+              ['Trabajos finalizados', data.totals.technical_finished],
+              ['Entregados', data.totals.delivered],
+              ['Reprocesos', data.totals.reworks],
+            ].map(([label, value]) => (
+              <article key={label} className="border rounded-2xl p-4">
+                <p className="text-sm">{label}</p>
+                <strong className="text-2xl accent-text">{value}</strong>
+              </article>
+            ))}
+          </div>
+
+          {/* Gráficas */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Bars
+              title="Servicios por mes de creación"
+              rows={data.months}
+              value="orders"
+              label="month"
+            />
+            <Bars
+              title="Trabajos finalizados por técnico"
+              rows={data.technicians}
+              value="finished"
+              label="technician"
+            />
+          </div>
+
+          {/* Rendimiento de técnicos */}
+          <Table
+            title="Rendimiento de técnicos"
+            rows={data.technicians}
+            columns={[
+              ['technician', 'Técnico'],
+              ['orders', 'Servicios'],
+              ['finished', 'Finalizados'],
+              ['reworks', 'Reprocesos'],
+              ['timed', 'Con tiempo medido'],
+              ['on_time', 'Dentro del estimado'],
+              ['actual', 'Minutos activos', (v) => Math.round(v)],
+            ]}
+          />
+
+          {/* Financieros */}
+          {data.financial && (
+            <>
+              <section className="border rounded-2xl p-4">
+                <h2 className="font-bold">Financieros</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                  {[
+                    ['Valor facturado', money(data.financial.invoiced)],
+                    ['Valor previsto, no cobrado', money(data.financial.expected)],
+                    ['Controles financieros pendientes', data.financial.pending],
+                  ].map(([k, v]) => (
+                    <div key={k}>
+                      <p className="text-sm">{k}</p>
+                      <strong className="text-xl">{v}</strong>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <div className="grid lg:grid-cols-2 gap-4">
+                <Bars
+                  title="Clientes que más generan · valor facturado"
+                  rows={data.clients}
+                  value="invoiced"
+                  label="client"
+                  currency
+                />
+                <Table
+                  title="Clientes principales"
+                  rows={data.clients}
+                  columns={[
+                    ['client', 'Cliente'],
+                    ['orders', 'Servicios'],
+                    ['invoiced', 'Facturado', money],
+                  ]}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Inventarios */}
+          <section className="border rounded-2xl p-4">
+            <h2 className="font-bold">Inventarios</h2>
+            <p>
+              Ítems activos: {data.inventoryTotals.items} · Bajo mínimo:{' '}
+              {data.inventoryTotals.low_stock} · Unidades de taller en uso:{' '}
+              {data.inventoryTotals.in_use}
+            </p>
+            {data.financial && (
+              <p>
+                Valor disponible a costo:{' '}
+                {money(data.inventoryTotals.available_value)}
+              </p>
+            )}
+          </section>
+
+          {data.inventory.length > 0 && (
+            <Table
+              title="Inventario por debajo del mínimo"
+              rows={data.inventory.filter(
+                (p) => Number(p.stock_actual) <= Number(p.stock_minimo)
+              )}
+              columns={[
+                ['codigo', 'Código'],
+                ['nombre', 'Ítem'],
+                ['stock_actual', 'Disponible'],
+                ['stock_minimo', 'Mínimo'],
+                ['in_use', 'En uso'],
+              ]}
+            />
+          )}
+
+          <Table
+            title="Ítems de taller en manos de técnicos"
+            rows={data.holdings}
+            columns={[
+              ['nombre', 'Ítem'],
+              ['codigo_os', 'Servicio'],
+              ['holder', 'Técnico'],
+              ['quantity', 'Cantidad'],
+            ]}
+          />
+
+          <Table
+            title="Servicios del período · últimos 50 en pantalla"
+            rows={data.services.slice(0, 50)}
+            columns={[
+              ['codigo_os', 'Orden'],
+              ['client_name', 'Cliente'],
+              ['technician', 'Técnico'],
+              ['estado', 'Estado'],
+              [
+                'actual_minutes',
+                'Tiempo activo',
+                (v) => (v === null ? 'Sin medición' : Math.round(v) + ' min'),
+              ],
+            ]}
+          />
+        </>
+      )}
+    </main>
+  );
+}
