@@ -47,7 +47,7 @@ export default function Servicios() {
       <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Órdenes de Servicio</h1>
-          <p className="text-sm text-gray-500 mt-1">{total} orden(es) · búsqueda, filtros, edición, agenda y detalle operativo.</p>
+          <p className="text-sm text-gray-500 mt-1">{total} orden(es)</p>
         </div>
         <div className="service-toolbar flex flex-wrap gap-2 min-w-0">
           <div className="flex-wrap flex rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden">
