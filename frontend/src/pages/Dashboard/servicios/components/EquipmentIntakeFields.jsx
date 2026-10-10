@@ -38,7 +38,7 @@ export default function EquipmentIntakeFields({ value, onChange, readOnly = fals
   if(descriptionOnly)return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{field('equipment_type','Equipo del servicio *',150)}{field('brand','Marca',120)}{field('model','Modelo',120)}{field('serial_number','Serial (opcional)',160)}{area('technical_observations','Observaciones del equipo')}</div>;
   return (
     <div className="space-y-5">
-      <p className="text-sm text-gray-600 dark:text-gray-300">Registra las condiciones en las que ingresa el equipo. El técnico verificará estos datos al recibirlo.</p>
+      <p className="text-sm text-gray-600 dark:text-gray-300">Registra las condiciones en las que ingresa el equipo.</p>
       {readOnly && <p className="text-sm text-gray-500">Datos registrados al crear el servicio. Las verificaciones posteriores se realizan en el checklist de recepción.</p>}
       {!hideReceivedToggle&&<label className="flex items-center gap-3 text-sm font-semibold">
         <input type="checkbox" checked={Boolean(data.equipment_received)} disabled={readOnly} onChange={(e) => update('equipment_received', e.target.checked)} />
@@ -75,7 +75,7 @@ export default function EquipmentIntakeFields({ value, onChange, readOnly = fals
             </label>)}
           </div>
           {area('technical_observations', 'Observaciones de ingreso')}
-          <p className="text-sm text-gray-500">La falla reportada se registra en Solicitud. La solución se documenta después del diagnóstico.</p>
+          <p className="text-sm text-gray-500"></p>
         </>
       )}
     </div>

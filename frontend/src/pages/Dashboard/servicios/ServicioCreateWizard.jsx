@@ -898,15 +898,15 @@ export default function ServicioCreateWizard({
         <header className="shrink-0 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide accent-text">
-              {isEdit ? 'Edición controlada de servicio' : 'Creación controlada de servicio'}
+              {isEdit ? '' : ''}
             </p>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {isEdit ? `Editar ${editDetail?.codigo_os || service?.codigo_os || 'Orden de Servicio'}` : 'Nueva Orden de Servicio'}
             </h2>
             <p className="wizard-description text-sm text-gray-500 mt-1">
               {isEdit
-                ? 'Mismos datos de creación, precargados para edición segura.'
-                : 'Solicitud → equipo recibido → clasificación → condiciones → aceptación → facturación.'}
+                ? ''
+                : ''}
             </p>
           </div>
 
@@ -1099,8 +1099,6 @@ export default function ServicioCreateWizard({
                 >
                   <p className="font-bold">Revisión / diagnóstico</p>
                   <p className="text-sm text-gray-500 mt-1">
-                    Se determina la falla y posteriormente puede requerir
-                    autorización adicional.
                   </p>
                 </button>
 
@@ -1115,7 +1113,7 @@ export default function ServicioCreateWizard({
                 >
                   <p className="font-bold">Servicio específico</p>
                   <p className="text-sm text-gray-500 mt-1">
-                    Trabajo conocido con alcance y tarifa definidos.
+                    
                   </p>
                 </button>
               </div>
