@@ -23,6 +23,10 @@ ACTIVE=0
 ROLLBACK="$BACKUPS/rollback-$STAMP.json"
 finish() {
   local result=$?
+  if [[ "$result" == 0 && "$ACTIVE" == 1 ]]; then
+    echo 'ERROR: el script terminó antes de completar el deploy.'
+    result=1
+  fi
   trap - EXIT INT TERM
   if [[ "$result" -ne 0 && "$ACTIVE" == 1 ]]; then
     echo 'Deploy fallido. Intentando recuperar las imágenes anteriores; se conserva la base de datos.'
@@ -73,7 +77,7 @@ ACTIVE=1
 "${DC[@]}" run --rm --no-deps -T \
   -v "$PROJECT_DIR/backend/scripts/migrate-production.cjs:/tmp/migrate-production.cjs:ro" \
   -v "$PROJECT_DIR/backend/migrations/production:/tmp/production-migrations:ro" \
-  backend node /tmp/migrate-production.cjs /tmp/production-migrations
+  backend node /tmp/migrate-production.cjs /tmp/production-migrations < /dev/null
 "${DC[@]}" up -d --no-deps --no-build --force-recreate backend frontend
 
 wait_http() {
@@ -97,18 +101,18 @@ const c=new Client({host:process.env.DB_HOST,port:Number(process.env.DB_PORT||54
  connectionTimeoutMillis:10000});
 (async()=>{try{await c.connect();const r=await c.query("SELECT current_database() AS name");
  if(r.rows[0].name!=="tecnicos")throw new Error("Base inesperada");console.log("PostgreSQL OK");
- }finally{await c.end();}})().catch(e=>{console.error(e.message);process.exitCode=1;});'
+ }finally{await c.end();}})().catch(e=>{console.error(e.message);process.exitCode=1;});' < /dev/null
 "${DC[@]}" exec -T backend node -e '
 const {syncPermissionsToDatabase}=require("./src/services/permissionsRegistry");
 syncPermissionsToDatabase().then(p=>{console.log("Permisos:",p.length);process.exit(0);})
- .catch(e=>{console.error(e.message);process.exit(1);});'
+ .catch(e=>{console.error(e.message);process.exit(1);});' < /dev/null
 wait_http http://127.0.0.1:8082/ Frontend
 # Check API routing, not just a frontend HTML page that returns 200.
 "${DC[@]}" exec -T backend node -e '
 (async()=>{const r=await fetch("https://tecnicos.tecnonacho.com/api/health",{signal:AbortSignal.timeout(15000)});
  if(!r.ok)throw new Error("API HTTPS: "+r.status);const data=await r.json();
  if(data.ok!==true)throw new Error("La ruta HTTPS no devuelve la salud de la API");
- console.log("API HTTPS OK");})().catch(e=>{console.error(e.message);process.exitCode=1;});'
+ console.log("API HTTPS OK");})().catch(e=>{console.error(e.message);process.exitCode=1;});' < /dev/null
 curl --fail --silent --show-error --max-time 15 https://tecnicos.tecnonacho.com/ > /dev/null
 ACTIVE=0
 printf '%s\n' "$SHA" > "$CONFIG_DIR/last-successful-commit"

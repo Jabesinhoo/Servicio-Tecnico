@@ -120,3 +120,14 @@ este workflow conserva los montajes existentes, pero no crea uno si faltaba.
 Validado localmente: sintaxis Bash/Python/Node, YAML del workflow, manejo de migraciones
 (repetición, checksum y rollback de una migración fallida) y rutas principales del deploy con
 Docker simulado. El primer deploy real y la conexión desde la web deben verificarse en tu VPS.
+
+## Corrección del 10 de octubre: backend detenido al desplegar
+
+Sustituye `deploy/deploy-vps.sh` por esta versión y haz commit junto con el arreglo
+de `frontend/src/services/api.js` indicado en la conversación. Los comandos Docker
+`run -T` y `exec -T` ahora reciben `/dev/null`, para evitar que consuman el resto
+del script enviado por SSH. Si el script termina antes de completar el deploy,
+se registra como fallo y se intenta recuperar el backend.
+
+No vuelvas a ejecutar configurar-produccion.py: la configuración privada ya existe.
+Probado pasando el script por stdin como lo hace SSH y simulando que Docker lee stdin.
