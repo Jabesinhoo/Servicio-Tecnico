@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ClipboardList, LayoutGrid, Plus, RefreshCw, Table2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import ServicioCreateWizard from './servicios/ServicioCreateWizard';
+import ClosedInvoiceEditor from './servicios/components/ClosedInvoiceEditor';
 import ServicioDetail from './servicios/ServicioDetail';
 import ServicioFilters from './servicios/ServicioFilters';
 import ServicioTable from './servicios/ServicioTable';
@@ -47,7 +48,7 @@ export default function Servicios() {
       <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Órdenes de Servicio</h1>
-          <p className="text-sm text-gray-500 mt-1">{total} orden(es)</p>
+          <p className="text-sm text-gray-500 mt-1">{total} orden(es) · búsqueda, filtros, edición, agenda y detalle operativo.</p>
         </div>
         <div className="service-toolbar flex flex-wrap gap-2 min-w-0">
           <div className="flex-wrap flex rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden">
@@ -103,7 +104,8 @@ export default function Servicios() {
       <ServiceIntakeBoard isOpen={showIntakes} onClose={() => setShowIntakes(false)} onActivated={fetchServicios} />
 
       {detailId && <ServicioDetail isOpen servicioId={detailId} onClose={() => setDetailId(null)} onRefresh={fetchServicios} />}
-      {editService && (
+      {editService?.estado==='cerrada' && <ClosedInvoiceEditor service={editService} onClose={()=>setEditService(null)} onSaved={fetchServicios}/> }
+      {editService && editService.estado!=='cerrada' && (
         <ServicioCreateWizard
           isOpen
           mode="edit"

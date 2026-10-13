@@ -3267,10 +3267,14 @@ exports.update = async (req, res) => {
     const current = currentResult.rows[0];
 
     if (isTerminalState(current.estado)) {
+      if(current.estado==='cerrada'){
+        const {updateClosedInvoice}=require('../services/closed-order-invoice.service');
+        const updated=await updateClosedInvoice(client,{current,body,userId,isAdmin},()=>require('./service-creation.controller').invoiceSource());
+        await client.query('COMMIT');
+        return res.json(updated);
+      }
       await safeRollback(client);
-      return res.status(409).json({
-        message: 'No se puede modificar una orden que ya está finalizada',
-      });
+      return res.status(409).json({message:'No se puede modificar una orden cancelada o rechazada.'});
     }
 
     if (userRole === 'tecnico') {

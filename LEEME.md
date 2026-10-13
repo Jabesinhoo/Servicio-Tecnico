@@ -1,31 +1,28 @@
-# Corregir sincronización de clientes en producción
+# Cambiar la factura de una orden cerrada
 
-El error ocurre porque la sincronización borraba sync_clientes antes de insertarlos
-de nuevo. solicitudes_alquiler tiene una FK que impide ese borrado.
+Copia backend y frontend del ZIP en la raíz de tu proyecto. Reinicia el backend local,
+recarga la web y haz commit/push para aplicar el cambio en producción. No requiere SQL
+ni migraciones nuevas.
 
-Copia backend/src/services/worldoffice-client-mirror.service.js del ZIP sobre el archivo
-con el mismo nombre en tu proyecto de Windows. Haz commit y push a main y espera que
-Actions termine correctamente. Luego ejecuta en el VPS:
+En Servicios, como administrador, pulsa Editar sobre una OS cerrada. Se abrirá un modal
+exclusivo para su factura: busca el documento, selecciónalo, revisa su resumen y pulsa
+Guardar factura. La API vuelve a verificarlo contra el cliente original de la orden.
 
-```bash
-docker exec tecnicos_backend node scripts/sync-client-profiles.js
-```
+Se permite añadir o sustituir la factura de World Office. No permite escribir una
+referencia inventada ni cambiar el cliente, técnicos, agenda, inventario, diagnóstico,
+cierre, entrega o estado. Una petición que mezcle esos campos se rechaza por completo.
+Las órdenes canceladas o rechazadas mantienen su bloqueo de edición.
 
-La nueva implementación actualiza por id_externo y agrega los nuevos, conservando los
-IDs internos y las relaciones de alquiler. Refresca los campos completos y la fecha de
-sincronización. Conserva clientes históricos que ya no llegan de World Office y respeta
-los contactos completados manualmente en clients. Se usa también por el scheduler.
-No requiere migración SQL, borrar registros, cambiar constraints ni recrear contenedores
-a mano. Si una fila falla, revierte la transacción completa.
+El cambio actualiza el documento vinculado y la referencia del control financiero.
+Se registra actor, factura anterior y factura nueva en el historial. No modifica las
+actas ya emitidas ni confirma pagos. Si se sustituye la factura, se retira el PDF de
+soporte de creación perteneciente a la factura anterior para evitar mostrarlo como
+soporte del documento nuevo; las actas emitidas se conservan.
 
-Validación local con PostgreSQL embebido (PGlite): referencias a id e id_externo,
-IDs estables, nuevos clientes sin duplicados, históricos conservados, preservación del
-contacto manual y rollback completo ante un error a mitad de sincronización.
+Para una OS antigua sin solicitud de origen se crea únicamente el vínculo de origen
+necesario para guardar la factura, asociado a la misma OS y cliente, sin reabrirla.
+Con el paquete del dashboard financiero, el total leerá el documento nuevo al actualizar.
 
-Tras la sincronización, vuelve a abrir el formulario y selecciona el cliente. Si todavía
-faltan datos, revisa el perfil y los campos originales: la sincronización no inventa
-información ausente en World Office.
-
-Una limpieza independiente de los datos de prueba debe conservar usuarios, roles,
-permissions y las relaciones de permisos, además de las tablas de n8n presentes en la
-misma base. Este paquete no realiza esa limpieza.
+Validado: restricciones de rol/campos, cliente diferente rechazado, estado y datos
+originales inmutables, historial, vinculación de OS antiguas y compilación del frontend.
+Falta comprobar el flujo visual y la consulta real desde tu instalación.

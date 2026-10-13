@@ -224,3 +224,32 @@ exports.markAsPaid = async (req, res) => {
     });
   }
 };
+// Persisted, verified documents linked to actual orders (including World Office).
+exports.getLinkedServices = async (req,res) => {
+  try {
+    const {loadLinkedInvoices}=require('../services/linked-service-invoices.service');
+    const pool=require('../db/pool');
+    const {period}=require('../services/operations-dashboard.service');
+    const {fecha_inicio,fecha_fin,estado}=req.query;
+    const range=fecha_inicio&&fecha_fin?period({from:fecha_inicio,to:fecha_fin}):null;
+    for(const value of [fecha_inicio,fecha_fin].filter(Boolean))if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number.isNaN(Date.parse(value))||new Date(value).toISOString().slice(0,10)!==value)throw Object.assign(new Error('Fecha no válida.'),{status:400});
+    let invoices=await loadLinkedInvoices(pool);
+    if(fecha_inicio||fecha_fin)invoices=invoices.filter(r=>r.date&&(!fecha_inicio||r.date>=fecha_inicio)&&(!fecha_fin||r.date<=fecha_fin));
+    if(estado)invoices=invoices.filter(r=>r.status===estado);
+    res.json({data:invoices});
+  }catch(error){res.status(error.status||500).json({message:error.status?error.message:'No fue posible cargar las facturas vinculadas.'});}
+};
+
+exports.exportLinkedServices=async(req,res)=>{
+ const adapter={status(code){res.status(code);return this;},json(payload){
+   if(!payload.data)return res.json(payload);
+   try{const XLSX=require('xlsx');const {formatExcel,typedRows}=require('../services/excel-format.service');const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(typedRows(payload.data.map(r=>({Factura:r.reference,Empresa:r.company,Cliente:r.record.client_name||r.services[0]?.client,Servicios:r.services.map(s=>s.code).join(', '),Fecha:r.date,Importe:r.total,Moneda:r.currency,Estado:r.status,Exclusión:r.excluded_reason||''}))),{cellDates:true}),'Facturas vinculadas');
+    wb.Sheets['Facturas vinculadas']['!cols']=[{wch:24},{wch:18},{wch:35},{wch:35},{wch:15},{wch:20},{wch:15},{wch:15},{wch:45}];
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition','attachment; filename="Facturas-vinculadas.xlsx"');
+    res.send(formatExcel(XLSX.write(wb,{type:'buffer',bookType:'xlsx'}),wb));
+   }catch(error){res.status(500).json({message:'No fue posible exportar las facturas.'});}
+ }};
+ await exports.getLinkedServices(req,adapter);
+};

@@ -1,156 +1,26 @@
-// src/pages/Dashboard/Facturas.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import React,{useState,useEffect,useCallback} from 'react';
+import {Eye,RefreshCw,Plus,X} from 'lucide-react';
+import {useAuth} from '../../hooks/useAuth';
 import api from '../../services/api';
-import ConfirmModal from '../../components/ui/ConfirmModal';
-import FacturaTable from './facturas/components/FacturaTable';
-import FacturaFilters from './facturas/components/FacturaFilters';
 import FacturarModal from './facturas/FacturarModal';
 import FacturaDetail from './facturas/FacturaDetail';
-import { RefreshCw, Plus, FileText } from 'lucide-react';
-
-const Facturas = () => {
-  const { user } = useAuth();
-  const [facturas, setFacturas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ estado: '', fecha_inicio: '', fecha_fin: '' });
-  const [showFacturarModal, setShowFacturarModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [selectedFactura, setSelectedFactura] = useState(null);
-  const [selectedFacturaId, setSelectedFacturaId] = useState(null);
-
-  const fetchFacturas = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (filters.estado) params.append('estado', filters.estado);
-      if (filters.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio);
-      if (filters.fecha_fin) params.append('fecha_fin', filters.fecha_fin);
-      
-      const res = await api.get(`/api/invoices?${params.toString()}`);
-      setFacturas(res.data || []);
-    } catch (error) {
-      console.error('Error fetching facturas:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
-
-  useEffect(() => {
-    fetchFacturas();
-  }, [fetchFacturas]);
-
-  const handleViewDetail = (id) => {
-    setSelectedFacturaId(id);
-    setShowDetailModal(true);
-  };
-
-  const handleCancel = (factura) => {
-    setSelectedFactura(factura);
-    setShowConfirmModal(true);
-  };
-
-  const handleConfirmCancel = async () => {
-    if (!selectedFactura) return;
-    try {
-      await api.patch(`/api/invoices/${selectedFactura.id}/cancel`);
-      await fetchFacturas();
-      setShowConfirmModal(false);
-      setSelectedFactura(null);
-    } catch (error) {
-      console.error('Error canceling factura:', error);
-    }
-  };
-
-  const handleMarkPaid = async (id) => {
-    try {
-      await api.patch(`/api/invoices/${id}/paid`);
-      await fetchFacturas();
-    } catch (error) {
-      console.error('Error marking as paid:', error);
-    }
-  };
-
-  const userRole = user?.rol || 'usuario';
-  const canEdit = userRole === 'admin' || userRole === 'facturacion';
-
-  return (
-    <div className="responsive-page min-w-0 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Facturas</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Gestiona las facturas emitidas</p>
-        </div>
-        <div className="flex-wrap flex gap-3">
-          <button
-            onClick={fetchFacturas}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Actualizar
-          </button>
-          {canEdit && (
-            <button
-              onClick={() => setShowFacturarModal(true)}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Nueva Factura
-            </button>
-          )}
-        </div>
-      </div>
-
-      <FacturaFilters
-        filters={filters}
-        onFilterChange={setFilters}
-        onClearFilters={() => setFilters({ estado: '', fecha_inicio: '', fecha_fin: '' })}
-        onSearch={fetchFacturas}
-      />
-
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
-        <FacturaTable
-          facturas={facturas}
-          loading={loading}
-          onViewDetail={handleViewDetail}
-          onCancel={handleCancel}
-          onMarkPaid={handleMarkPaid}
-          canEdit={canEdit}
-        />
-      </div>
-
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        onClose={() => {
-          setShowConfirmModal(false);
-          setSelectedFactura(null);
-        }}
-        onConfirm={handleConfirmCancel}
-        title="Anular Factura"
-        message={`¿Estás seguro de anular la factura "${selectedFactura?.numero_factura}"? Esta acción no se puede deshacer.`}
-        confirmText="Anular"
-        cancelText="Cancelar"
-        variant="danger"
-      />
-
-      <FacturarModal
-        isOpen={showFacturarModal}
-        onClose={() => setShowFacturarModal(false)}
-        onSuccess={fetchFacturas}
-      />
-
-      <FacturaDetail
-        isOpen={showDetailModal}
-        onClose={() => {
-          setShowDetailModal(false);
-          setSelectedFacturaId(null);
-        }}
-        facturaId={selectedFacturaId}
-        onRefresh={fetchFacturas}
-      />
-    </div>
-  );
-};
-
-export default Facturas;
+import InvoiceRecord from './servicios/components/InvoiceRecord';
+const money=v=>v===null?'Sin verificar':new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(v);
+export default function Facturas(){
+ const {user}=useAuth();const [rows,setRows]=useState([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
+ const [filters,setFilters]=useState({fecha_inicio:'',fecha_fin:'',estado:''});
+ const [selected,setSelected]=useState(null),[creating,setCreating]=useState(false);
+ const canEdit=['admin','facturacion'].includes(user?.role?.name||user?.rol);
+ const load=useCallback(async signal=>{setLoading(true);setError('');try{const r=await api.get('/api/invoices/linked-services',{params:filters,signal});setRows(r.data.data||[]);}catch(e){if(e.code!=='ERR_CANCELED')setError(e.response?.data?.message||'No fue posible cargar las facturas vinculadas');}finally{if(!signal?.aborted)setLoading(false);}},[filters]);
+ useEffect(()=>{const c=new AbortController();load(c.signal);return()=>c.abort();},[load]);
+ const exportExcel=async()=>{try{const r=await api.get('/api/invoices/linked-services/excel',{params:filters,responseType:'blob'});const url=URL.createObjectURL(r.data);const a=document.createElement('a');a.href=url;a.download='Facturas-vinculadas.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{setError('No fue posible exportar las facturas');}};
+ return <main className="workflow-theme responsive-page space-y-4 min-w-0"><header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Facturas vinculadas a servicios</h1><p className="text-sm text-gray-500">World Office y facturas del sistema asociadas a una OS.</p></div><div className="flex flex-wrap gap-2"><button onClick={()=>load()} className="border rounded-xl px-3 py-2 flex items-center gap-2"><RefreshCw size={16}/>Actualizar</button><button disabled={loading} onClick={exportExcel} className="border rounded-xl px-3 py-2">Exportar Excel</button>{canEdit&&<button onClick={()=>setCreating(true)} className="accent-fill rounded-xl px-3 py-2 flex items-center gap-2"><Plus size={16}/>Nueva factura local</button>}</div></header>
+ <section className="flex flex-wrap gap-3 border rounded-xl p-3">{[['fecha_inicio','Desde'],['fecha_fin','Hasta']].map(([key,label])=><label key={key} className="text-sm">{label}<input className="block border rounded-lg p-2 bg-transparent" type="date" value={filters[key]} onChange={e=>setFilters({...filters,[key]:e.target.value})}/></label>)}<label className="text-sm">Estado<select className="block border rounded-lg p-2 bg-transparent" value={filters.estado} onChange={e=>setFilters({...filters,estado:e.target.value})}><option value="">Todos</option><option value="emitida">Emitida</option><option value="pagada">Pagada</option><option value="anulada">Anulada</option></select></label></section>
+ {error&&<p role="alert" className="border rounded-xl p-3">{error}</p>}{loading&&<p role="status">Cargando facturas…</p>}
+ <div className="responsive-table-wrap overflow-x-auto border rounded-xl"><table className="responsive-table w-full text-sm"><thead><tr>{['Factura / empresa','Cliente','Servicio(s)','Fecha','Importe','Estado','Detalle'].map(t=><th key={t} className="text-left p-3 border-b">{t}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id}><td data-label="Factura / empresa" className="p-3 border-b">{r.reference}<small className="block">{r.company}</small></td><td data-label="Cliente" className="p-3 border-b">{r.record.client_name||r.services[0]?.client}</td><td data-label="Servicios" className="p-3 border-b">{r.services.map(s=>s.code).join(', ')}</td><td data-label="Fecha" className="p-3 border-b">{r.date||'Sin fecha'}</td><td data-label="Importe" className="p-3 border-b">{r.currency==='COP'||!r.currency?money(r.total):`${r.total??'Sin verificar'} ${r.currency}`}{r.excluded_reason&&<small className="block">{r.excluded_reason}</small>}</td><td data-label="Estado" className="p-3 border-b">{r.status}</td><td data-label="Detalle" className="p-3 border-b"><button type="button" className="border rounded-lg p-2" aria-label={`Ver factura ${r.reference}`} title="Ver factura" onClick={()=>setSelected(r)}><Eye size={18}/></button></td></tr>)}</tbody></table>{!loading&&!rows.length&&<p className="p-4">No hay facturas vinculadas en este filtro.</p>}</div>
+ <p className="text-xs text-gray-500">Los documentos de World Office se consultan desde la información guardada al vincularlos; sus pagos y anulaciones se gestionan en World Office. Una factura con varias OS aparece una sola vez.</p>
+ <FacturarModal isOpen={creating} onClose={()=>setCreating(false)} onSuccess={()=>load()}/>
+ {selected?.source==='local'&&<FacturaDetail isOpen onClose={()=>setSelected(null)} facturaId={selected.local_id} onRefresh={()=>load()}/>}
+ {selected?.source==='worldoffice'&&<div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-5" onClick={()=>setSelected(null)}><section role="dialog" aria-modal="true" aria-labelledby="linked-invoice-title" className="workflow-theme bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl max-h-[90dvh] overflow-auto p-4" onClick={e=>e.stopPropagation()}><header className="flex items-center justify-between gap-3 mb-4"><h2 id="linked-invoice-title" className="font-bold">Factura {selected.reference}</h2><button aria-label="Cerrar detalle" className="border p-2 rounded-lg" onClick={()=>setSelected(null)}><X size={18}/></button></header><p className="text-sm mb-3">Servicios: {selected.services.map(s=>s.code).join(', ')}</p><InvoiceRecord record={selected.record} reference={selected.reference}/></section></div>}
+ </main>;
+}

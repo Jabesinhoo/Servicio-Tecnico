@@ -3,6 +3,7 @@ const sql = require('mssql');
 const {connectionTarget,resolveTarget,connectionFailure}=require('./worldoffice-connection-config');
 const {extractClients}=require('./worldoffice-client-extraction.service');
 const {saveClientMirror}=require('./worldoffice-client-mirror.service');
+const {saveExternalMirror}=require('./worldoffice-mirror-write.service');
 require('dotenv').config();
 
 // Configuración de conexión a World Office
@@ -192,74 +193,12 @@ const syncAllData = async (pgPool) => {
         // ============================================================
         // 2. PRODUCTOS
         // ============================================================
-        if (productos.length > 0) {
-            await pgPool.query('DELETE FROM sync_productos');
-
-            for (const producto of productos) {
-                const esActivo = producto.Activo === -1 || producto.Activo === true;
-
-                await pgPool.query(`
-                    INSERT INTO sync_productos (
-                        id_externo, codigo, nombre, precio_venta, iva, activo, datos_completos
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-                `, [
-                    producto.IdInventario,
-                    producto.Codigo,
-                    producto.Nombre,
-                    producto.Precio || 0,
-                    producto.Iva || 0,
-                    esActivo,
-                    JSON.stringify(producto)
-                ]);
-            }
-            results.productos = productos.length;
-            console.log(`✅ Productos: ${results.productos}`);
-        }
-
-        // ============================================================
-        // 3. SERIALES
-        // ============================================================
-        if (seriales.length > 0) {
-            await pgPool.query('DELETE FROM sync_seriales');
-
-            for (const serial of seriales) {
-                await pgPool.query(`
-                    INSERT INTO sync_seriales (
-                        id_externo, serial, id_producto_externo, datos_completos
-                    ) VALUES ($1, $2, $3, $4)
-                `, [
-                    serial.IdSerial,
-                    serial.Serial,
-                    serial.IdInventario,
-                    JSON.stringify(serial)
-                ]);
-            }
-            results.seriales = seriales.length;
-            console.log(`✅ Seriales: ${results.seriales}`);
-        }
-
-        // ============================================================
-        // 4. ALQUILERES
-        // ============================================================
-        if (alquileres.length > 0) {
-            await pgPool.query('DELETE FROM sync_alquileres');
-
-            for (const alquiler of alquileres) {
-                await pgPool.query(`
-                    INSERT INTO sync_alquileres (
-                        id_externo, id_cliente_externo, id_producto_externo, cantidad, datos_completos
-                    ) VALUES ($1, $2, $3, $4, $5)
-                `, [
-                    alquiler.Id,
-                    alquiler.IdCliente,
-                    alquiler.IdInventario,
-                    alquiler.cant || 0,
-                    JSON.stringify(alquiler)
-                ]);
-            }
-            results.alquileres = alquileres.length;
-            console.log(`✅ Alquileres: ${results.alquileres}`);
-        }
+        results.productos=await saveExternalMirror(pgPool,'sync_productos',productos.map(p=>[p.IdInventario,p.Codigo,p.Nombre,p.Precio||0,p.Iva||0,p.Activo===-1||p.Activo===true||p.Activo===1,JSON.stringify(p)]));
+        console.log(`✅ Productos: ${results.productos}`);
+        results.seriales=await saveExternalMirror(pgPool,'sync_seriales',seriales.map(s=>[s.IdSerial,s.Serial,s.IdInventario,JSON.stringify(s)]));
+        console.log(`✅ Seriales: ${results.seriales}`);
+        results.alquileres=await saveExternalMirror(pgPool,'sync_alquileres',alquileres.map(a=>[a.Id,a.IdCliente,a.IdInventario,a.cant,JSON.stringify(a)]));
+        console.log(`✅ Alquileres: ${results.alquileres}`);
 
         // ============================================================
         // 5. ACTUALIZAR CONTROL

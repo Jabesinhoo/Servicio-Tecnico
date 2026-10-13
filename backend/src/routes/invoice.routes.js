@@ -20,6 +20,9 @@ router.get(
   invoiceController.getAll
 );
 
+router.get('/invoices/linked-services/excel', allowRoles('admin', 'facturacion'), invoiceController.exportLinkedServices);
+router.get('/invoices/linked-services', allowRoles('admin', 'facturacion'), invoiceController.getLinkedServices);
+
 // Obtener factura por ID
 router.get(
   '/invoices/:id',
