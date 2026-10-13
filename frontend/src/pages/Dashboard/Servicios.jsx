@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { ClipboardList, LayoutGrid, Plus, RefreshCw, Table2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import ServicioCreateWizard from './servicios/ServicioCreateWizard';
-import ClosedInvoiceEditor from './servicios/components/ClosedInvoiceEditor';
 import ServicioDetail from './servicios/ServicioDetail';
 import ServicioFilters from './servicios/ServicioFilters';
 import ServicioTable from './servicios/ServicioTable';
@@ -104,8 +103,7 @@ export default function Servicios() {
       <ServiceIntakeBoard isOpen={showIntakes} onClose={() => setShowIntakes(false)} onActivated={fetchServicios} />
 
       {detailId && <ServicioDetail isOpen servicioId={detailId} onClose={() => setDetailId(null)} onRefresh={fetchServicios} />}
-      {editService?.estado==='cerrada' && <ClosedInvoiceEditor service={editService} onClose={()=>setEditService(null)} onSaved={fetchServicios}/> }
-      {editService && editService.estado!=='cerrada' && (
+      {editService && (
         <ServicioCreateWizard
           isOpen
           mode="edit"

@@ -95,7 +95,7 @@ export default function ServicioTable({
                     <Eye className="w-4 h-4" />
                   </button>
                   {isAdmin && (
-                    <button onClick={() => onEdit(servicio)} className="icon-action rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title={servicio.estado==='cerrada'?'Editar factura':'Editar'} aria-label={servicio.estado==='cerrada'?'Editar factura':'Editar'}>
+                    <button onClick={() => onEdit(servicio)} className="icon-action rounded-lg accent-text hover:accent-soft dark:hover:accent-soft" title="Editar servicio" aria-label="Editar servicio">
                       <Edit className="w-4 h-4" />
                     </button>
                   )}

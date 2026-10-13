@@ -3251,8 +3251,7 @@ exports.update = async (req, res) => {
     await client.query('BEGIN');
 
     const currentResult = await client.query(
-      `SELECT id, codigo_os, estado, tecnico_id, client_id,
-              fecha_agendada, hora_inicio_agendada, duracion_estimada
+      `SELECT *
        FROM service_orders
        WHERE id = $1
        FOR UPDATE`,
@@ -3266,15 +3265,10 @@ exports.update = async (req, res) => {
 
     const current = currentResult.rows[0];
 
-    if (isTerminalState(current.estado)) {
-      if(current.estado==='cerrada'){
-        const {updateClosedInvoice}=require('../services/closed-order-invoice.service');
-        const updated=await updateClosedInvoice(client,{current,body,userId,isAdmin},()=>require('./service-creation.controller').invoiceSource());
-        await client.query('COMMIT');
-        return res.json(updated);
-      }
+    const editingClosed=current.estado==='cerrada';
+    if(isTerminalState(current.estado)&&!(isAdmin&&editingClosed)){
       await safeRollback(client);
-      return res.status(409).json({message:'No se puede modificar una orden cancelada o rechazada.'});
+      return res.status(isAdmin?409:403).json({message:editingClosed?'Solo administración puede editar una orden finalizada.':'No se puede modificar una orden cancelada o rechazada.'});
     }
 
     if (userRole === 'tecnico') {
@@ -3387,13 +3381,18 @@ exports.update = async (req, res) => {
       [id]
     );
     intake = intakeResult.rows[0] || null;
+    if(editingClosed&&isAdmin&&!intake){
+      intake=(await client.query(`INSERT INTO service_order_intakes(id,client_id,created_by,service_order_id,status)
+       VALUES($1,$2,$3,$4,'activated') RETURNING *`,[randomUUID(),body.client_id||current.client_id,userId,id])).rows[0];
+    }
+    const editBefore=editingClosed?{order:current,intake}:null;
 
     if(isAdmin && body.service_type_ids!==undefined){
       const helper=require('../services/order-service-types.service');
       const oldIds=intake?.service_types?.length?intake.service_types.map(t=>t.id):(await client.query('SELECT tipo_servicio_id FROM service_order_services WHERE service_order_id=$1',[id])).rows.map(t=>t.tipo_servicio_id).filter(Boolean);
       const newIds=helper.validateTypeIds(body.service_type_ids);
       serviceTypesChanged=oldIds.length!==newIds.length||oldIds.some(id=>!newIds.includes(id));
-      if(serviceTypesChanged){const allocated=await client.query('SELECT 1 FROM service_inventory_allocations WHERE service_order_id=$1',[id]);if(allocated.rows.length)throw Object.assign(new Error('El técnico ya recibió el inventario. Conserva los tipos de esta orden y registra los trabajos adicionales por separado.'),{status:409});}
+      if(serviceTypesChanged&&!editingClosed){const allocated=await client.query('SELECT 1 FROM service_inventory_allocations WHERE service_order_id=$1',[id]);if(allocated.rows.length)throw Object.assign(new Error('El técnico ya recibió el inventario. Conserva los tipos de esta orden y registra los trabajos adicionales por separado.'),{status:409});}
       selectedServices=await helper.prepareServiceTypes(client,body,intake);
       if(intake)await helper.saveIntakeTypes(client,intake.id,selectedServices);
       if(serviceTypesChanged){await helper.replaceOrderServices(client,id,selectedServices,body);changedFields.push('service_types');}
@@ -3402,6 +3401,13 @@ exports.update = async (req, res) => {
 
     if (isAdmin && intake) {
       const intakeUpdates = [];
+      if(editingClosed&&body.equipment_intake!==undefined){
+        const normalized=require('../domain/service-equipment-intake').normalizeEquipmentIntake(body.equipment_intake);
+        if(normalized.errors.length)throw Object.assign(new Error(normalized.errors.join('. ')),{status:400});
+        if(normalized.value?.equipments?.length)await require('../services/order-equipment.service').storeOrderEquipment(client,id,normalized.value.equipments);
+        await client.query('UPDATE service_order_intakes SET equipment_intake=$1::jsonb WHERE id=$2',[JSON.stringify(normalized.value),intake.id]);
+        changedFields.push('equipment_intake');
+      }
       const intakeParams = [];
       const pushIntake = (column, value, logicalName = column, cast = '') => {
         intakeParams.push(value);
@@ -3628,13 +3634,13 @@ exports.update = async (req, res) => {
           await client.query(
             `UPDATE service_order_team_members
              SET member_role = $1,
-                 member_status = 'assigned',
+                 member_status = CASE WHEN $3::boolean AND member_status<>'removed' THEN member_status ELSE 'assigned' END,
                  assigned_at = COALESCE(assigned_at, NOW()),
                  removed_at = NULL,
                  removal_note = NULL,
                  updated_at = NOW()
              WHERE id = $2`,
-            [member.member_role, existing.rows[0].id]
+            [member.member_role, existing.rows[0].id,editingClosed]
           );
         } else {
           await client.query(
@@ -3670,7 +3676,7 @@ exports.update = async (req, res) => {
         [primaryTechnicianId, id]
       );
 
-      if (primaryTechnicianId !== current.tecnico_id) {
+      if (!editingClosed && primaryTechnicianId !== current.tecnico_id) {
         await client.query(
           `UPDATE service_order_assignments
            SET status = 'revocada', updated_at = NOW()
@@ -3695,7 +3701,7 @@ exports.update = async (req, res) => {
     let schedule = null;
     let scheduleWarning = null;
 
-    if (isAdmin && (body.reschedule === true || serviceTypesChanged)) {
+    if (isAdmin && !editingClosed && (body.reschedule === true || serviceTypesChanged)) {
       const mode = String(body.scheduling_mode || intake?.scheduling_mode || 'auto');
       const duration = Number(body.estimated_duration || body.duracion_estimada || current.duracion_estimada || 60);
 
@@ -3743,6 +3749,13 @@ exports.update = async (req, res) => {
       }
     }
 
+    if(editingClosed&&isAdmin&&body.scheduling_mode==='manual'){
+      if(!body.scheduled_date||!body.scheduled_time)throw Object.assign(new Error('Indica fecha y hora de la programación corregida.'),{status:400});
+      await client.query(`UPDATE service_orders SET fecha_agendada=$2::date,hora_inicio_agendada=$3::time,
+       duracion_estimada=$4::int WHERE id=$1`,[id,body.scheduled_date,body.scheduled_time,Number(body.estimated_duration||body.duracion_estimada||current.duracion_estimada||60)]);
+      changedFields.push('historical_schedule');
+    }
+
     if (isAdmin && body.service_site !== undefined) {
       const site = normalizeServiceSite(body.service_site);
       if (!site) throw Object.assign(new Error('Lugar de atención no válido'),{status:400});
@@ -3755,6 +3768,15 @@ exports.update = async (req, res) => {
       await client.query('UPDATE service_order_intakes SET client_snapshot=$1::jsonb WHERE id=$2',[JSON.stringify(profile),intake.id]);
     }
 
+    if(isAdmin&&intake&&body.client_id!==undefined&&body.client_id!==current.client_id&&!body.worldoffice_invoice){
+      const previousInvoice=(await client.query('SELECT invoice_reference,record FROM service_intake_worldoffice_invoices WHERE intake_id=$1',[intake.id])).rows[0];
+      if(editBefore)editBefore.invoice=previousInvoice||null;
+      await client.query('DELETE FROM service_intake_worldoffice_invoices WHERE intake_id=$1',[intake.id]);
+      await client.query('UPDATE service_order_intakes SET invoice_reference=NULL WHERE id=$1',[intake.id]);
+      await client.query("DELETE FROM service_intake_creation_files WHERE intake_id=$1 AND kind='invoice_support'",[intake.id]);
+      changedFields.push('invoice_unlinked_after_client_change');
+    }
+
     if (body.worldoffice_invoice) {
       if (!isAdmin || !intake) throw Object.assign(new Error('Administración vincula facturas a órdenes con solicitud de origen.'), {status:403});
       const selected=body.worldoffice_invoice;
@@ -3764,12 +3786,13 @@ exports.update = async (req, res) => {
       const result=await source.query({invoiceReference:selected.reference,sourceCompany:selected.source_company,sourceId:selected.source_id,clientDocument:customer.documento,clientExternalId:customer.codigo_worldoffice});
       if(result.client_match_count!==1)throw Object.assign(new Error('La factura no corresponde inequívocamente al cliente de esta orden.'),{status:409});
       const record=result.rows[0];const reference=record.invoice_reference;
-      const previous=(await client.query('SELECT record FROM service_intake_worldoffice_invoices WHERE intake_id=$1',[intake.id])).rows[0];
+      const previous=(await client.query('SELECT invoice_reference,record FROM service_intake_worldoffice_invoices WHERE intake_id=$1',[intake.id])).rows[0];
       if(previous?.record?.source_company!==record.source_company||previous?.record?.source_id!==record.source_id)await client.query("DELETE FROM service_intake_creation_files WHERE intake_id=$1 AND kind='invoice_support'",[intake.id]);
       await client.query(`INSERT INTO service_intake_worldoffice_invoices(intake_id,mapping_id,invoice_reference,record,linked_by) VALUES($1,$2,$3,$4::jsonb,$5)
        ON CONFLICT(intake_id) DO UPDATE SET mapping_id=EXCLUDED.mapping_id,invoice_reference=EXCLUDED.invoice_reference,record=EXCLUDED.record,linked_by=EXCLUDED.linked_by,linked_at=now()`,[intake.id,source.id,reference,JSON.stringify(record),userId]);
       await client.query('UPDATE service_order_intakes SET invoice_reference=$1 WHERE id=$2',[reference,intake.id]);
       changedFields.push('worldoffice_invoice');
+      if(editBefore)editBefore.invoice=previous||null;
     }
 
     if (intake) {
@@ -3807,6 +3830,7 @@ exports.update = async (req, res) => {
           userId || null,
           JSON.stringify({
             fields: [...new Set(changedFields)].sort(),
+            ...(editingClosed?{closed_order:true,summary:'Corrigió los datos de la orden finalizada',before:editBefore}:{}),
             scheduling_mode: body.scheduling_mode || intake?.scheduling_mode || null,
             schedule_warning: scheduleWarning,
             ...(serviceTypesChanged?{service_type_ids:selectedServices.map(t=>t.id),summary:'Actualizó los tipos del servicio: '+selectedServices.map(t=>t.nombre).join(', ')}:{}),
@@ -3818,7 +3842,7 @@ exports.update = async (req, res) => {
     await client.query('COMMIT');
 
     const refreshed = await pool.query(
-      `SELECT so.*,
+      `SELECT so.*, i.id AS intake_id,
               COALESCE(i.priority, 'normal') AS prioridad,
               i.classification,
               i.service_type_id,

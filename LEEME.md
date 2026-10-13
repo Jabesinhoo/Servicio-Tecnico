@@ -1,28 +1,26 @@
-# Cambiar la factura de una orden cerrada
+# Editar el formulario completo de una orden finalizada
 
-Copia backend y frontend del ZIP en la raíz de tu proyecto. Reinicia el backend local,
-recarga la web y haz commit/push para aplicar el cambio en producción. No requiere SQL
-ni migraciones nuevas.
+Este paquete reemplaza el cambio anterior que limitaba la edición a la factura.
 
-En Servicios, como administrador, pulsa Editar sobre una OS cerrada. Se abrirá un modal
-exclusivo para su factura: busca el documento, selecciónalo, revisa su resumen y pulsa
-Guardar factura. La API vuelve a verificarlo contra el cliente original de la orden.
+## Instalar
 
-Se permite añadir o sustituir la factura de World Office. No permite escribir una
-referencia inventada ni cambiar el cliente, técnicos, agenda, inventario, diagnóstico,
-cierre, entrega o estado. Una petición que mezcle esos campos se rechaza por completo.
-Las órdenes canceladas o rechazadas mantienen su bloqueo de edición.
+1. Copia las carpetas backend y frontend de este paquete sobre las del proyecto Servicio-Tecnico.
+2. En localhost reinicia el backend y actualiza el navegador.
+3. Para producción sube estos cambios a GitHub y deja terminar el deploy. Recarga el navegador después.
+4. No necesitas ejecutar SQL ni reinstalar dependencias.
 
-El cambio actualiza el documento vinculado y la referencia del control financiero.
-Se registra actor, factura anterior y factura nueva en el historial. No modifica las
-actas ya emitidas ni confirma pagos. Si se sustituye la factura, se retira el PDF de
-soporte de creación perteneciente a la factura anterior para evitar mostrarlo como
-soporte del documento nuevo; las actas emitidas se conservan.
+## Validar
 
-Para una OS antigua sin solicitud de origen se crea únicamente el vínculo de origen
-necesario para guardar la factura, asociado a la misma OS y cliente, sin reabrirla.
-Con el paquete del dashboard financiero, el total leerá el documento nuevo al actualizar.
+Desde administración abre Servicios, busca una orden cerrada y pulsa el lápiz de editar. Se abre el formulario completo: cliente, solicitud, equipos y fotos de ingreso, tipos de servicio, alcance, condiciones, datos de aceptación, técnicos, fecha histórica y facturación. Cambia los campos necesarios y guarda. Vuelve a abrir para comprobar los datos y revisa el historial.
 
-Validado: restricciones de rol/campos, cliente diferente rechazado, estado y datos
-originales inmutables, historial, vinculación de OS antiguas y compilación del frontend.
-Falta comprobar el flujo visual y la consulta real desde tu instalación.
+La orden permanece cerrada y conserva su fecha real de finalización. Cambiar tipos, técnicos o programación en una orden cerrada corrige sus datos sin asignar inventario nuevamente, crear trabajo pendiente ni reservar a los técnicos. Los movimientos de materiales ya realizados se conservan.
+
+La factura seleccionada se comprueba contra World Office y debe corresponder al cliente. Si cambias de cliente y no eliges una factura nueva, se desvincula la anterior para no atribuirla al cliente equivocado. Una factura inválida revierte la edición de datos.
+
+Las firmas y las actas emitidas conservan su contenido original. Corregir las condiciones o el cliente del formulario no modifica retroactivamente lo que se firmó. Las correcciones de datos y adjuntos quedan registradas en la bitácora.
+
+Solo administración puede corregir órdenes cerradas. Órdenes canceladas o rechazadas conservan su flujo de reactivación existente.
+
+## Verificación realizada
+
+Prueba de integración del controlador sobre el esquema PostgreSQL exportado: edición completa, factura, fecha histórica, conservación del cierre y del técnico aceptado, sin nuevas reservas ni asignaciones pendientes, cambio de tipo con inventario previamente asignado, rechazo a técnico, rollback de factura inválida y desvinculación al cambiar cliente. Compilación Vite correcta y sintaxis JSX/backend validada. Falta comprobar visualmente en tu instalación.

@@ -76,6 +76,7 @@ export default function ServicioCreateWizard({
 }) {
   const isAdmin = userRole === 'admin';
   const isEdit = mode === 'edit' && Boolean(serviceId || service?.id);
+  const editingClosed=isEdit&&service?.estado==='cerrada';
   const targetServiceId = serviceId || service?.id || null;
   const [step, setStep] = useState(0);
   const [clientQuery, setClientQuery] = useState('');
@@ -256,6 +257,7 @@ export default function ServicioCreateWizard({
         if(!active)return;
         setInvoiceChanged(false);
         setInvoiceLinked(documents.data?.invoice?{reference:documents.data.invoice.invoice_reference,record:documents.data.invoice.record}:null);
+        setSavedPhotos((documents.data?.files||[]).filter(f=>f.kind==='reception_photo').map(f=>({...f,intake_id:documents.data.intake_id})));
         const currentTeam = Array.isArray(row.equipo) ? row.equipo : [];
 
         const client = {
@@ -593,7 +595,7 @@ export default function ServicioCreateWizard({
     if(!intake?.id)throw new Error('No se recibió la solicitud.');
     return intake;
   };
-  const removeSavedPhoto=async id=>{try{await api.delete(`/api/service-orders/intakes/${createdIntakeRef.current.id}/creation-documents/${id}`);setSavedPhotos(p=>p.filter(f=>f.id!==id));}catch(e){setError(e.response?.data?.message||'No se pudo quitar la foto.');}};
+  const removeSavedPhoto=async id=>{try{await api.delete(`/api/service-orders/intakes/${(editDetail?.intake?.id||createdIntakeRef.current?.id)}/creation-documents/${id}`);setSavedPhotos(p=>p.filter(f=>f.id!==id));}catch(e){setError(e.response?.data?.message||'No se pudo quitar la foto.');}};
   const uploadCreationFiles=async id=>{await uploadIntakeFiles(id,ingressPhotos,'reception_photo',key=>setIngressPhotos(p=>p.filter(f=>f.key!==key)));if(invoiceFile){await uploadIntakeFiles(id,[invoiceFile],'invoice_support',()=>setInvoiceFile(null));}const r=await api.get(`/api/service-orders/intakes/${id}/creation-documents`);setSavedPhotos((r.data.files||[]).filter(f=>f.kind==='reception_photo').map(f=>({...f,intake_id:id})));};
 
   const validateStep = (targetStep=step) => {
@@ -691,7 +693,7 @@ export default function ServicioCreateWizard({
     try {
       setSaving(true);
       setError('');
-      if(isAdmin&&schedulingMode==='manual'){
+      if(isAdmin&&!editingClosed&&schedulingMode==='manual'){
         const r=await api.post('/api/service-orders/creation-availability',{date:form.scheduled_date,time:form.scheduled_time,typeIds:form.service_type_ids,typeId:form.service_type_id,technicians:[primaryTechnicianId,...supportTechnicianIds],excludeOrder:isEdit?targetServiceId:null});
         if(!r.data.available)throw new Error(r.data.technicians.filter(t=>!t.available).map(t=>{const tech=technicians.find(x=>x.id===t.technician_id);return [tech?.nombre1,tech?.apellidos].filter(Boolean).join(' ')+': '+t.reason;}).join(' '));
       }
@@ -725,6 +727,7 @@ export default function ServicioCreateWizard({
           `/api/service-orders/${targetServiceId}`,
           {
             client_id: selectedClient?.id || null,
+            ...(editingClosed?{equipment_intake:form.equipment_intake}:{}),
             ...(form.service_site?{service_site:form.service_site}:{}),
             request_description: form.request_description,
             descripcion_inicial: form.request_description,
@@ -763,11 +766,11 @@ export default function ServicioCreateWizard({
             scheduled_time:
               schedulingMode === 'manual' ? form.scheduled_time || null : null,
             team: teamPayload,
-            reschedule: scheduleChanged,
+            reschedule: !editingClosed&&scheduleChanged,
           }
         );
 
-        const intakeId = initial.intakeId || editDetail?.intake?.id;
+        const intakeId = initial.intakeId || editDetail?.intake?.id || updateResponse.data?.intake?.id || updateResponse.data?.intake_id;
         if (
           isAdmin &&
           form.billing_mode === 'prepaid' &&
@@ -782,7 +785,7 @@ export default function ServicioCreateWizard({
           });
         }
 
-        if (intakeId) await uploadEvidence(intakeId);
+        if (intakeId) {await uploadEvidence(intakeId);if(editingClosed)await uploadCreationFiles(intakeId);}
 
         if (updateResponse.data?.schedule_warning) {
           setError(
@@ -898,15 +901,16 @@ export default function ServicioCreateWizard({
         <header className="shrink-0 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide accent-text">
-              {isEdit ? '' : ''}
+              {isEdit ? 'Edición controlada de servicio' : 'Creación controlada de servicio'}
             </p>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {isEdit ? `Editar ${editDetail?.codigo_os || service?.codigo_os || 'Orden de Servicio'}` : 'Nueva Orden de Servicio'}
             </h2>
+            {editingClosed&&<p className="text-sm mt-2">Puedes corregir todo el formulario. La orden permanece cerrada; se conserva el historial y las actas emitidas.</p>}
             <p className="wizard-description text-sm text-gray-500 mt-1">
               {isEdit
-                ? ''
-                : ''}
+                ? 'Mismos datos de creación, precargados para edición segura.'
+                : 'Solicitud → equipo recibido → clasificación → condiciones → aceptación → facturación.'}
             </p>
           </div>
 
@@ -1080,9 +1084,9 @@ export default function ServicioCreateWizard({
           )}
 
           {step === 1 && (
-            isEdit && !form.equipment_intake ? (
+            isEdit && !editingClosed && !form.equipment_intake ? (
               <p className="text-sm text-gray-500">Este servicio se creó antes del registro de equipo en la solicitud. Consulta su checklist de recepción.</p>
-            ) : <EquipmentIntakeList value={form.equipment_intake} onChange={value=>update('equipment_intake',value)} readOnly={isEdit} files={ingressPhotos} onPhotosChange={setIngressPhotos} existing={savedPhotos} onRemoveExisting={removeSavedPhoto}/>
+            ) : <EquipmentIntakeList value={form.equipment_intake} onChange={value=>update('equipment_intake',value)} readOnly={isEdit&&!editingClosed} files={ingressPhotos} onPhotosChange={setIngressPhotos} existing={savedPhotos} onRemoveExisting={removeSavedPhoto}/>
           )}
 
           {step === 2 && (
@@ -1099,6 +1103,8 @@ export default function ServicioCreateWizard({
                 >
                   <p className="font-bold">Revisión / diagnóstico</p>
                   <p className="text-sm text-gray-500 mt-1">
+                    Se determina la falla y posteriormente puede requerir
+                    autorización adicional.
                   </p>
                 </button>
 
@@ -1113,7 +1119,7 @@ export default function ServicioCreateWizard({
                 >
                   <p className="font-bold">Servicio específico</p>
                   <p className="text-sm text-gray-500 mt-1">
-                    
+                    Trabajo conocido con alcance y tarifa definidos.
                   </p>
                 </button>
               </div>
@@ -1489,7 +1495,7 @@ export default function ServicioCreateWizard({
                           type="date"
                           value={form.scheduled_date}
                           onChange={(event) => update('scheduled_date', event.target.value)}
-                          min={bogotaDateInput()}
+                          min={editingClosed?undefined:bogotaDateInput()}
                           className="mt-1 w-full min-h-11 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3"
                         />
                       </div>
